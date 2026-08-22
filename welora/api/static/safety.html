@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Cổng An Toàn</title>
+<style>body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:700;font-size:13px}
+.pass{background:#14532d;color:#86efac}.fail{background:#7f1d1d;color:#fecaca}
+.bar{height:8px;background:#243041;border-radius:4px;overflow:hidden;margin:6px 0}
+.bar>i{display:block;height:100%;background:#3b82f6}
+input,button{width:100%;padding:12px;border-radius:10px;border:1px solid #243041;box-sizing:border-box;margin-top:8px}
+button{background:#3b82f6;color:#fff;border:0;font-weight:600}
+.muted{color:#8b9bb4;font-size:13px}</style></head>
+<body>
+<h1>Cổng An Toàn</h1>
+<p class="muted">Ngưỡng cứng ≥ 3 tháng · Health Score không bypass Gate</p>
+<div class="card" id="gate"><span class="badge fail" id="badge">…</span>
+  <p id="months" class="muted"></p>
+  <ul id="reasons"></ul>
+</div>
+<div class="card" id="hs"><b>Health Score</b> <span id="score">—</span>/1000
+  <div id="bars"></div>
+  <p class="muted">can_bypass_gate_with_score = false</p>
+</div>
+<div class="card">
+  <label class="muted">Cập nhật số dư quỹ (VND)</label>
+  <input id="amt" type="number" placeholder="30000000"/>
+  <button id="save">Lưu tiến độ</button>
+  <p id="msg" class="muted"></p>
+</div>
+<p><a href="/app/chat" style="color:#93c5fd">→ Chat Agent</a></p>
+<script>
+const qs=new URLSearchParams(location.search); let uid=qs.get('user_id');
+const j=async(u,o)=>{const r=await fetch(u,o);return r.json()};
+async function load(){
+  if(!uid){const a=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'safety-'+Date.now()})});uid=a.user_id}
+  const g=await j('/users/'+uid+'/safety-gate');
+  const badge=document.getElementById('badge'); badge.textContent=g.status; badge.className='badge '+(g.status==='passed'?'pass':'fail');
+  document.getElementById('months').textContent='months_covered='+(g.months_covered||0)+' / target='+(g.target_months||3);
+  document.getElementById('reasons').innerHTML=(g.reasons||[]).map(r=>'<li>'+r+'</li>').join('')||'<li>OK</li>';
+  const h=await j('/users/'+uid+'/health-score');
+  document.getElementById('score').textContent=h.score;
+  const bars=document.getElementById('bars'); bars.innerHTML='';
+  const comps=h.components||{}; for(const [k,v] of Object.entries(comps)){
+    const max=k==='cashflow'?200:k.includes('emergency')||k==='debt'?250:150;
+    bars.innerHTML+='<div class="muted">'+k+' '+v.score+'</div><div class="bar"><i style="width:'+(100*v.score/max)+'%"></i></div>';
+  }
+  window.__uid=uid; const goals=await j('/goals?user_id='+encodeURIComponent(uid)); window.__gid=(goals.items&&goals.items[0]&&goals.items[0].goal_id)||null;
+}
+document.getElementById('save').onclick=async()=>{
+  const amt=+document.getElementById('amt').value; if(!window.__gid){document.getElementById('msg').textContent='Chưa có Goal';return}
+  await j('/goals/'+window.__gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:amt})});
+  document.getElementById('msg').textContent='Đã cập nhật'; load();
+};
+load();
+</script>
+</body></html>

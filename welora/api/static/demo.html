@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Welora Demo E2E</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0b0f14;color:#e8eef7;margin:0;padding:16px}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin-bottom:12px}
+.ok{color:#3dd68c}.deny{color:#ff6b6b}.muted{color:#8b9bb4;font-size:13px}
+button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:600}
+pre{white-space:pre-wrap;font-size:12px;background:#0b0f14;padding:10px;border-radius:8px;overflow:auto}
+</style>
+</head>
+<body>
+<h1>Welora · Demo E2E</h1>
+<p class="muted">Auth → Onboard → Goal → Deny → Fund → Gate pass → R01 still denies</p>
+<div class="card"><button id="run">Chạy demo 8 bước</button></div>
+<div class="card"><pre id="log">Sẵn sàng…</pre></div>
+<script>
+const log=document.getElementById('log');
+const out=(s)=>{log.textContent+=s+'\n'};
+const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={raw:t}};return {status:r.status,d}};
+document.getElementById('run').onclick=async()=>{
+  log.textContent='';
+  const device='demo-'+Date.now();
+  let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
+  out('1. Auth '+r.status+' user='+(r.d.user_id||''));
+  const uid=r.d.user_id;
+  r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
+  const sid=r.d.session_id; out('2. Session '+sid);
+  await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:'young_single',income_stability:'stable',family_context:'alone'})});
+  await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:false,near_term_priority:'safety'})});
+  await j('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
+  await j('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  r=await j('/onboarding/session/'+sid+'/complete',{method:'POST'}); out('3. Complete DNA ok');
+  r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
+  const gid=r.d.goal_id; out('4. Goal '+gid);
+  r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Tôi muốn all-in ETF ngay'})});
+  out('5. Deny path → '+r.d.guardrail_result+' rule='+r.d.rule_hit);
+  r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
+  out('6. Fund set 3 months');
+  r=await j('/users/'+uid+'/safety-gate'); out('7. Gate '+r.d.status+' months='+r.d.months_covered);
+  r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Rút quỹ khẩn cấp để đầu tư cổ phiếu'})});
+  out('8. R01 still deny → '+r.d.guardrail_result+' rule='+r.d.rule_hit);
+  out('DONE');
+};
+</script>
+</body>
+</html>

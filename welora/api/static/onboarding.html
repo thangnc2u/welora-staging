@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora Onboarding</title>
+<style>body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
+label{display:block;margin:8px 0 4px;color:#8b9bb4;font-size:13px}
+input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;box-sizing:border-box}
+button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
+.muted{color:#8b9bb4;font-size:13px}</style></head>
+<body>
+<h1>Hiến pháp Cá nhân</h1>
+<p class="muted">B0–B5 · DNA Self · CTA Goal 3 tháng</p>
+<div class="card" id="step0">
+  <p>Đăng nhập thiết bị (pilot)</p>
+  <button id="auth">Bắt đầu</button>
+</div>
+<div class="card" id="form" style="display:none">
+  <label>Life stage</label><select id="life_stage"><option>young_single</option><option>family</option></select>
+  <label>Chi tiêu thiết yếu / tháng (VND)</label><input id="essential" type="number" value="10000000"/>
+  <label>Đã có nợ nguy hiểm?</label><select id="debt"><option value="false">Không</option><option value="true">Có</option></select>
+  <button id="go">Hoàn tất → Tạo Goal quỹ</button>
+  <pre id="out" class="muted"></pre>
+</div>
+<script>
+let uid=null;
+const out=document.getElementById('out');
+document.getElementById('auth').onclick=async()=>{
+  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'mob-'+Date.now()})});
+  const d=await r.json(); uid=d.user_id; document.getElementById('form').style.display='block'; out.textContent='user='+uid;
+};
+document.getElementById('go').onclick=async()=>{
+  let r=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
+  let d=await r.json(); const sid=d.session_id;
+  const essential=+document.getElementById('essential').value;
+  await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:document.getElementById('life_stage').value,income_stability:'stable',family_context:'alone'})});
+  await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:essential,emergency_fund_months_self:'0',has_dangerous_debt_self:document.getElementById('debt').value==='true',near_term_priority:'safety'})});
+  await fetch('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
+  await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  r=await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'}); d=await r.json();
+  r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,essential_expense_monthly:essential,current_amount:0,linked_from_onboarding:true})});
+  d=await r.json(); out.textContent='Goal created '+d.goal_id; location.href='/app/safety?user_id='+encodeURIComponent(uid);
+};
+</script>
+</body></html>

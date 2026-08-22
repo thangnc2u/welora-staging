@@ -1,0 +1,1 @@
+"""Welora FastAPI package."""

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Welora — Parser CSV</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 16px; background: #f6f7f9; }
+    h1 { font-size: 1.2rem; }
+    textarea { width: 100%; min-height: 140px; font-size: 13px; border-radius: 10px; border: 1px solid #e5e7eb; padding: 10px; }
+    button { background: #0f766e; color: #fff; border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 700; width: 100%; margin-top: 10px; }
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-top: 14px; border: 1px solid #e5e7eb; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .err { color: #b91c1c; }
+    a { color: #0f766e; }
+    pre { font-size: 11px; overflow: auto; max-height: 200px; background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <p><a href="/app/safety">← An Toàn</a></p>
+  <h1>Parser CSV ngân hàng</h1>
+  <p class="muted">Gợi ý chi tiêu thiết yếu — <strong>không</strong> ghi đè Goal/DNA tự động, không bypass Cổng.</p>
+  <textarea id="csv" placeholder="Dán CSV (date,amount,description)…"></textarea>
+  <button id="go">Phân tích</button>
+  <div id="out"></div>
+  <script>
+    const sample = `date,amount,description
+01/07/2026,-3500000,Thuê nhà tháng 7
+05/07/2026,-450000,Điện EVN
+10/07/2026,25000000,Lương
+12/07/2026,-1200000,WinMart
+15/07/2026,-2000000,Học phí
+01/08/2026,-3500000,Thuê nhà tháng 8
+10/08/2026,25000000,Lương`;
+    document.getElementById("csv").value = sample;
+    document.getElementById("go").onclick = async () => {
+      const text = document.getElementById("csv").value;
+      const out = document.getElementById("out");
+      out.innerHTML = "…";
+      try {
+        const r = await fetch("/parser/csv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, filename: "paste.csv" }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) {
+          out.innerHTML = `<div class="card err">${j.error || r.statusText}<br/>${j.hint || ""}</div>`;
+          return;
+        }
+        const s = j.suggestion || {};
+        out.innerHTML = `
+          <div class="card">
+            <div><strong>${j.count}</strong> giao dịch · ${j.months_detected} tháng dữ liệu</div>
+            <div class="muted">Chi: ${Number(j.totals.outflow).toLocaleString("vi-VN")} · Thu: ${Number(j.totals.inflow).toLocaleString("vi-VN")}</div>
+            <p style="margin:12px 0 4px"><strong>Gợi ý chi tiêu thiết yếu / tháng</strong></p>
+            <div style="font-size:1.4rem;font-weight:800;color:#0f766e">${Number(s.essential_expense_monthly).toLocaleString("vi-VN")} đ</div>
+            <div class="muted">${s.method} · confidence: ${s.confidence}</div>
+            <p class="muted" style="margin-top:8px">${s.note}</p>
+            <p><a href="/app/safety">Mở An Toàn → tạo Goal với số này (nhập tay)</a></p>
+          </div>
+          <div class="card"><div class="muted">categories</div><pre>${JSON.stringify(j.category_counts, null, 2)}</pre></div>`;
+      } catch (e) {
+        out.innerHTML = `<div class="card err">${e.message}</div>`;
+      }
+    };
+  </script>
+</body>
+</html>

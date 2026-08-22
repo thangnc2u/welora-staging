@@ -1,15 +1,30 @@
-# Render Blueprint — Welora Staging
+# Render Blueprint — Welora Staging (tối ưu)
+# https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: welora-staging
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn welora.api.app:app --host 0.0.0.0 --port $PORT
+    region: singapore
+    buildCommand: |
+      pip install --upgrade pip
+      pip install --no-cache-dir -r requirements.txt
+    startCommand: >
+      uvicorn welora.api.app:app
+      --host 0.0.0.0
+      --port $PORT
+      --workers 1
+      --proxy-headers
+      --forwarded-allow-ips='*'
+      --timeout-keep-alive 5
     healthCheckPath: /health
     envVars:
       - key: PYTHONPATH
         value: .
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
       - key: WELORA_STORE
         value: sqlite
       - key: WELORA_DB_URL
@@ -18,3 +33,5 @@ services:
         value: stub
       - key: WELORA_ENV
         value: staging
+      - key: UVICORN_LOG_LEVEL
+        value: warning

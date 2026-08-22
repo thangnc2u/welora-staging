@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Welora — Nội dung</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#0b1220;color:#e8eefc}
+.card{background:#141c2e;border-radius:12px;padding:16px;margin-bottom:12px}
+a{color:#7dd3fc}
+</style>
+</head>
+<body>
+<h1>Nội dung Welora</h1>
+<p id="key"></p>
+<div class="card" id="body">Đang tải…</div>
+<script>
+const params=new URLSearchParams(location.search);
+const key=params.get('key')||'SAFE-02';
+document.getElementById('key').textContent='principle_key: '+key;
+fetch('/content/'+encodeURIComponent(key)).then(r=>r.json()).then(d=>{
+  const el=document.getElementById('body');
+  if(d.error){el.textContent=d.error;return;}
+  el.innerHTML='<h2>'+(d.title||key)+'</h2><pre style="white-space:pre-wrap">'+JSON.stringify(d,null,2)+'</pre>';
+}).catch(e=>{document.getElementById('body').textContent=String(e);});
+</script>
+</body>
+</html>

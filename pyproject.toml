@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "welora-agent"
+version = "0.2.0"
+description = "Welora Agent — Safety Gate, Goals, Onboarding, Pre-Rule, FastAPI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Welora" }]
+dependencies = []
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.27"]
+dev = ["fastapi>=0.110", "uvicorn>=0.27", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["welora*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

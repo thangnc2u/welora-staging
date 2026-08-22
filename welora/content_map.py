@@ -1,0 +1,225 @@
+"""
+Welora P1-E8 — Content deep-link from principle_key / Deny CTA
+
+Maps Hard Guardrail keys → WP (Pedia) + WA (Academy).
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any, Optional
+
+CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
+    "SAFE-01": {
+        "title": "Quỹ khẩn cấp là lớp sống còn",
+        "module": "02",
+        "wp": ["WP-02-01", "WP-02-02"],
+        "wa": ["WA-02-01"],
+        "path_wp": "WP-02-01-quy-khan-cap-la-gi.md",
+        "path_wa": "WA-02-01-xay-dung-quy-khan-cap.md",
+    },
+    "SAFE-02": {
+        "title": "Chỉ dùng quỹ cho sự cố bất ngờ",
+        "module": "02",
+        "wp": ["WP-02-03"],
+        "wa": ["WA-02-02"],
+        "path_wp": "WP-02-03-khi-nao-duoc-dung-quy-khan-cap.md",
+        "path_wa": "WA-02-02-nguyen-tac-su-dung-quy-khan-cap.md",
+    },
+    "SAFE-03": {
+        "title": "Quỹ thanh khoản cao & tách biệt",
+        "module": "02",
+        "wp": ["WP-02-04"],
+        "wa": ["WA-02-03"],
+        "path_wp": "WP-02-04-nen-de-quy-khan-cap-o-dau.md",
+        "path_wa": "WA-02-03-lua-chon-noi-giu-quy-khan-cap.md",
+    },
+    "DEBT-01": {
+        "title": "Nợ tốt vs Nợ xấu",
+        "module": "02",
+        "wp": ["WP-02-06"],
+        "wa": ["WA-02-05"],
+        "path_wp": "WP-02-06-no-tot-va-no-xau.md",
+        "path_wa": "WA-02-05-nhan-dien-no-tot-no-xau.md",
+    },
+    "DEBT-02": {
+        "title": "Phương pháp trả nợ",
+        "module": "02",
+        "wp": ["WP-02-05", "WP-02-07"],
+        "wa": ["WA-02-04", "WA-02-06"],
+        "path_wp": "WP-02-05-snowball-va-avalanche.md",
+        "path_wa": "WA-02-04-chon-phuong-phap-tra-no.md",
+    },
+    "DEBT-03": {
+        "title": "An Toàn trước đầu tư",
+        "module": "02",
+        "wp": ["WP-02-08"],
+        "wa": ["WA-02-07"],
+        "path_wp": "WP-02-08-co-nen-tra-het-no-truoc-khi-dau-tu.md",
+        "path_wa": "WA-02-07-sap-xep-uu-tien-tra-no-va-dau-tu.md",
+    },
+    "CORE-01": {
+        "title": "Trách nhiệm tuyệt đối",
+        "module": "01",
+        "wp": ["WP-01-01"],
+        "wa": ["WA-01-01"],
+        "path_wp": "WP-01-01-tu-duy-ve-tien-la-gi.md",
+        "path_wa": "WA-01-01-xay-dung-tu-duy-ve-tien.md",
+    },
+    "CORE-05": {
+        "title": "Cảm xúc không ra quyết định",
+        "module": "01",
+        "wp": ["WP-01-07"],
+        "wa": ["WA-01-06"],
+        "path_wp": "WP-01-07-muc-tieu-tai-chinh.md",
+        "path_wa": "WA-01-06-dat-muc-tieu-tai-chinh.md",
+    },
+    "CORE-07": {
+        "title": "Phòng thủ đi trước tăng trưởng",
+        "module": "02",
+        "wp": ["WP-02-01", "WP-02-08"],
+        "wa": ["WA-02-01", "WA-02-07"],
+        "path_wp": "WP-02-01-quy-khan-cap-la-gi.md",
+        "path_wa": "WA-02-01-xay-dung-quy-khan-cap.md",
+    },
+}
+
+CTA_CONTENT: dict[str, dict[str, str]] = {
+    "keep_emergency_fund": {
+        "principle_key": "SAFE-02",
+        "href": "/app/content?key=SAFE-02",
+        "label": "Đọc: Khi nào được dùng quỹ",
+    },
+    "create_emergency_fund_goal": {
+        "principle_key": "SAFE-01",
+        "href": "/app/safety",
+        "label": "Tạo Goal quỹ 3 tháng",
+    },
+    "create_invest_goal_surplus_only": {
+        "principle_key": "DEBT-03",
+        "href": "/app/content?key=DEBT-03",
+        "label": "Học: Chỉ đầu tư tiền thừa ngoài quỹ",
+    },
+    "view_safety_gate": {
+        "principle_key": "CORE-07",
+        "href": "/app/safety",
+        "label": "Xem checklist Cổng An Toàn",
+    },
+    "create_debt_payoff_goal": {
+        "principle_key": "DEBT-01",
+        "href": "/app/content?key=DEBT-01",
+        "label": "Học: Nợ tốt vs Nợ xấu",
+    },
+    "create_savings_goal": {
+        "principle_key": "SAFE-02",
+        "href": "/app/safety",
+        "label": "Tạo Goal tiết kiệm riêng",
+    },
+    "view_options_framework": {
+        "principle_key": "CORE-01",
+        "href": "/app/content?key=CORE-01",
+        "label": "Đọc: Bạn chịu trách nhiệm quyết định",
+    },
+}
+
+_CTA_LABELS = {
+    "keep_emergency_fund": "Giữ nguyên quỹ khẩn cấp",
+    "create_emergency_fund_goal": "Tạo Goal quỹ khẩn cấp 3 tháng",
+    "create_invest_goal_surplus_only": "Tạo Goal đầu tư (tiền ngoài quỹ)",
+    "view_safety_gate": "Xem checklist Cổng An Toàn",
+    "create_debt_payoff_goal": "Tạo plan trả nợ",
+    "create_savings_goal": "Tạo Goal tiết kiệm riêng",
+    "view_options_framework": "Xem khung lựa chọn",
+}
+
+
+def content_root() -> Path:
+    env = os.environ.get("WELORA_CONTENT_ROOT")
+    if env:
+        return Path(env)
+    return Path("/home/workdir/artifacts")
+
+
+def resolve_keys(keys: list[str]) -> list[dict[str, Any]]:
+    out = []
+    seen = set()
+    for k in keys:
+        if k in seen or k not in CONTENT_BY_KEY:
+            continue
+        seen.add(k)
+        meta = dict(CONTENT_BY_KEY[k])
+        meta["principle_key"] = k
+        meta["href"] = f"/app/content?key={k}"
+        out.append(meta)
+    return out
+
+
+def enrich_cta(codes: list[str]) -> list[dict[str, str]]:
+    items = []
+    for c in codes:
+        label = _CTA_LABELS.get(c, c)
+        row: dict[str, str] = {"code": c, "label": label}
+        extra = CTA_CONTENT.get(c)
+        if extra:
+            row["href"] = extra.get("href") or ""
+            row["principle_key"] = extra.get("principle_key") or ""
+            if extra.get("label"):
+                row["label"] = extra["label"]
+        items.append(row)
+    return items
+
+
+def get_article(key: str) -> dict[str, Any]:
+    meta = CONTENT_BY_KEY.get(key)
+    if not meta:
+        return {"ok": False, "error": "unknown principle_key", "principle_key": key}
+    root = content_root()
+    body = ""
+    path_used = None
+    for rel in (meta.get("path_wp"), meta.get("path_wa")):
+        if not rel:
+            continue
+        path = root / rel
+        if path.is_file():
+            body = path.read_text(encoding="utf-8", errors="replace")
+            path_used = str(path.name)
+            break
+    preview = body
+    truncated = False
+    if len(preview) > 12000:
+        preview = preview[:12000] + "\n\n… (truncated)"
+        truncated = True
+    return {
+        "ok": True,
+        "principle_key": key,
+        "title": meta["title"],
+        "module": meta["module"],
+        "wp": meta.get("wp"),
+        "wa": meta.get("wa"),
+        "source_file": path_used,
+        "body_markdown": preview,
+        "truncated": truncated,
+        "href": f"/app/content?key={key}",
+    }
+
+
+def service_get_content(key: str) -> tuple[int, dict]:
+    if not key:
+        return 400, {"error": "key is required"}
+    art = get_article(key.strip().upper() if "-" in key else key.strip())
+    if not art.get("ok"):
+        art = get_article(key.strip())
+    if not art.get("ok"):
+        art = get_article(key.strip().upper())
+    if not art.get("ok"):
+        return 404, art
+    return 200, art
+
+
+def service_list_content_keys() -> tuple[int, dict]:
+    items = [
+        {"principle_key": k, "title": v["title"], "href": f"/app/content?key={k}"}
+        for k, v in CONTENT_BY_KEY.items()
+    ]
+    return 200, {"items": items}

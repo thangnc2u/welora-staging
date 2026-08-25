@@ -1,5 +1,5 @@
 """
-Welora FastAPI app — P1-E5
+Welora FastAPI app — P1-E5 / P2-E2
 
 Wraps existing service_* functions. OpenAPI at /docs · /redoc · /openapi.json
 
@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
         title="Welora API",
         version="0.2.0",
         description=(
-            "Welora Phase 1 API — Auth · Onboarding · Goals · Safety Gate · Agent (rule-first).\n\n"
+            "Welora Phase 2 API — Auth · Onboarding · Goals · Safety Gate · Agent (rule-first).\n\n"
             "**Hard rules:** Cổng ≥ 3 tháng · Hard Deny trước LLM · Principle Key."
         ),
         contact={"name": "Welora"},
@@ -149,13 +149,22 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
+        dialect = "unknown"
+        try:
+            from welora.db.connection import detect_dialect
+            dialect = detect_dialect()
+        except Exception:
+            pass
         return {
             "status": "ok",
             "service": "welora",
             "phase": "2",
             "env": os.environ.get("WELORA_ENV", "local"),
             "store": os.environ.get("WELORA_STORE", "memory"),
+            "dialect": dialect,
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
+            "gate_months": 3,
+            "hard_deny": True,
         }
 
     @app.post("/auth/device", tags=["auth"], summary="Login/register by device_id")

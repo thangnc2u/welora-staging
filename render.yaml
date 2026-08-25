@@ -1,11 +1,17 @@
-# Render Blueprint — Welora Staging (tối ưu)
+# Render Blueprint — Welora Staging (P2-E2)
 # https://render.com/docs/blueprint-spec
+#
+# Apply: Dashboard → New → Blueprint → Connect repo thangnc2u/welora-staging
+# URL kỳ vọng: https://welora-staging.onrender.com/health
+
 services:
   - type: web
     name: welora-staging
     runtime: python
     plan: free
     region: singapore
+    branch: main
+    autoDeploy: true
     buildCommand: |
       pip install --upgrade pip
       pip install --no-cache-dir -r requirements.txt

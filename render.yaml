@@ -15,14 +15,8 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install --no-cache-dir -r requirements.txt
-    startCommand: >
-      uvicorn welora.api.app:app
-      --host 0.0.0.0
-      --port $PORT
-      --workers 1
-      --proxy-headers
-      --forwarded-allow-ips='*'
-      --timeout-keep-alive 5
+    # $PORT must expand via shell — do not use exec-form JSON
+    startCommand: "sh -c 'uvicorn welora.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --proxy-headers --forwarded-allow-ips=* --timeout-keep-alive 5'"
     healthCheckPath: /health
     envVars:
       - key: PYTHONPATH
@@ -40,4 +34,4 @@ services:
       - key: WELORA_ENV
         value: staging
       - key: UVICORN_LOG_LEVEL
-        value: warning
+        value: info

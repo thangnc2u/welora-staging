@@ -1,9 +1,5 @@
 # Render Blueprint — Welora Staging (P2-E2)
 # https://render.com/docs/blueprint-spec
-#
-# Apply: Dashboard → New → Blueprint → Connect repo thangnc2u/welora-staging
-# URL kỳ vọng: https://welora-staging.onrender.com/health
-
 services:
   - type: web
     name: welora-staging
@@ -12,11 +8,8 @@ services:
     region: singapore
     branch: main
     autoDeploy: true
-    buildCommand: |
-      pip install --upgrade pip
-      pip install --no-cache-dir -r requirements.txt
-    # $PORT must expand via shell — do not use exec-form JSON
-    startCommand: "sh -c 'uvicorn welora.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --proxy-headers --forwarded-allow-ips=* --timeout-keep-alive 5'"
+    buildCommand: pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+    startCommand: python -m uvicorn welora.api.app:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --timeout-keep-alive 5
     healthCheckPath: /health
     envVars:
       - key: PYTHONPATH
@@ -33,5 +26,3 @@ services:
         value: stub
       - key: WELORA_ENV
         value: staging
-      - key: UVICORN_LOG_LEVEL
-        value: info

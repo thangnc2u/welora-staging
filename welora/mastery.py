@@ -8,6 +8,7 @@ Gate requires mastery >= apply (LOCKED threshold).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -28,7 +29,6 @@ class MasteryNode:
         return _RANK.get(self.state, 0) >= _RANK[GATE_MIN]
 
 
-# In-memory store: user_id -> node_id -> MasteryNode
 _STORE: dict[str, dict[str, MasteryNode]] = {}
 
 
@@ -63,3 +63,52 @@ def to_dict(node: MasteryNode) -> dict:
         "gate_min": GATE_MIN,
         "principle_keys": list(node.principle_keys),
     }
+
+
+def service_get_mastery(user_id: str, node_id: str = NODE_NO_EFUND) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    return 200, to_dict(get_node(user_id, node_id or NODE_NO_EFUND))
+
+
+def service_patch_mastery(user_id: str, body: dict) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    state = (body or {}).get("state")
+    node_id = (body or {}).get("node_id") or NODE_NO_EFUND
+    if not state:
+        return 400, {"error": "state is required"}
+    try:
+        node = set_state(user_id, str(state), node_id)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    try:
+        from welora.goals_api import USER_FLAGS, get_user_flags
+        prev = get_user_flags(user_id)
+        flags = USER_FLAGS.setdefault(
+            user_id,
+            {
+                "has_dangerous_debt": bool(prev.get("has_dangerous_debt")),
+                "debt_on_track": bool(prev.get("debt_on_track", True)),
+                "mastery_no_efund_invest": node.state,
+            },
+        )
+        flags["mastery_no_efund_invest"] = node.state
+    except Exception:
+        flags = {
+            "has_dangerous_debt": False,
+            "debt_on_track": True,
+            "mastery_no_efund_invest": node.state,
+        }
+    if os.environ.get("WELORA_STORE", "memory").lower() == "sqlite":
+        try:
+            from welora.db.repos import set_user_flags_db
+            set_user_flags_db(
+                user_id,
+                has_dangerous_debt=bool(flags.get("has_dangerous_debt")),
+                debt_on_track=bool(flags.get("debt_on_track", True)),
+                mastery_no_efund_invest=node.state,
+            )
+        except Exception:
+            pass
+    return 200, to_dict(node)

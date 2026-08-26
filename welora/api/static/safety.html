@@ -1,56 +1,99 @@
 <!DOCTYPE html>
-<html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Welora · Cổng An Toàn</title>
-<style>body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
-.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
-.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:700;font-size:13px}
-.pass{background:#14532d;color:#86efac}.fail{background:#7f1d1d;color:#fecaca}
-.bar{height:8px;background:#243041;border-radius:4px;overflow:hidden;margin:6px 0}
-.bar>i{display:block;height:100%;background:#3b82f6}
-input,button{width:100%;padding:12px;border-radius:10px;border:1px solid #243041;box-sizing:border-box;margin-top:8px}
-button{background:#3b82f6;color:#fff;border:0;font-weight:600}
-.muted{color:#8b9bb4;font-size:13px}</style></head>
-<body>
-<h1>Cổng An Toàn</h1>
-<p class="muted">Ngưỡng cứng ≥ 3 tháng · Health Score không bypass Gate</p>
-<div class="card" id="gate"><span class="badge fail" id="badge">…</span>
-  <p id="months" class="muted"></p>
-  <ul id="reasons"></ul>
+<html lang="vi"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora — An Toàn</title>
+<style>
+body{font-family:system-ui;margin:0;background:#f6f7f9;color:#1a1d21}
+.shell{max-width:430px;margin:0 auto;background:#fff;min-height:100dvh;padding:16px}
+.badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #e5e7eb}
+.badge-card.ok{background:#ecfdf5}.badge-card.fail{background:#fff7ed}
+.status{font-weight:700;font-size:18px}.meta{color:#6b7280;font-size:14px}
+.bar{height:8px;background:#eef2f0;border-radius:99px;overflow:hidden;margin:8px 0}
+.bar>i{display:block;height:100%;background:#0f766e}
+input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid #e5e7eb;box-sizing:border-box}
+button{background:#0f766e;color:#fff;border:0;font-weight:600}
+a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
+.hs-note{font-size:11px;color:#c2410c;background:#fff7ed;border-radius:8px;padding:8px;margin-top:8px}
+</style></head><body>
+<div class="shell">
+  <h1>An Toàn</h1>
+  <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHUA DAT</div><div class="meta" id="gateMeta"></div></div>
+  <div class="badge-card fail" id="masteryBadge">
+    <div class="status" id="masteryStatus">Mastery · —</div>
+    <div class="meta" id="masteryMeta">meets_gate: false</div>
+    <select id="masteryState">
+      <option value="not_started">not_started</option><option value="learning">learning</option>
+      <option value="familiar">familiar</option><option value="apply">apply</option><option value="mastered">mastered</option>
+    </select>
+    <p><a href="/app/content?key=SAFE-02">Hoc SAFE-02</a></p>
+  </div>
+  <div class="section-title">Health Score</div>
+  <div class="hs-card" id="hsCard"><div id="hsScore">— / 1000</div><div id="hsBars"></div>
+    <div class="hs-note">Diem khong bypass Cong An Toan.</div></div>
+  <div class="section-title">Goal quy</div>
+  <div class="goal-card">
+    <div class="bar"><i id="barFill" style="width:0%"></i></div>
+    <div class="meta" id="goalMeta">Chua co Goal</div>
+    <label>Chi tieu thiet yeu / thang</label>
+    <input id="essential" type="number" value="10000000"/>
+    <button id="btnCreate">Tao Goal quy 3 thang</button>
+    <label>So du quy (VND)</label>
+    <input id="amount" type="number" value="0"/>
+    <button id="btnSave">Luu so du</button>
+  </div>
 </div>
-<div class="card" id="hs"><b>Health Score</b> <span id="score">—</span>/1000
-  <div id="bars"></div>
-  <p class="muted">can_bypass_gate_with_score = false</p>
-</div>
-<div class="card">
-  <label class="muted">Cập nhật số dư quỹ (VND)</label>
-  <input id="amt" type="number" placeholder="30000000"/>
-  <button id="save">Lưu tiến độ</button>
-  <p id="msg" class="muted"></p>
-</div>
-<p><a href="/app/chat" style="color:#93c5fd">→ Chat Agent</a></p>
 <script>
-const qs=new URLSearchParams(location.search); let uid=qs.get('user_id');
-const j=async(u,o)=>{const r=await fetch(u,o);return r.json()};
+const state={userId:null,goal:null,gate:null,health:null,mastery:null};
+async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});return r.json();}
 async function load(){
-  if(!uid){const a=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'safety-'+Date.now()})});uid=a.user_id}
-  const g=await j('/users/'+uid+'/safety-gate');
-  const badge=document.getElementById('badge'); badge.textContent=g.status; badge.className='badge '+(g.status==='passed'?'pass':'fail');
-  document.getElementById('months').textContent='months_covered='+(g.months_covered||0)+' / target='+(g.target_months||3);
-  document.getElementById('reasons').innerHTML=(g.reasons||[]).map(r=>'<li>'+r+'</li>').join('')||'<li>OK</li>';
-  const h=await j('/users/'+uid+'/health-score');
-  document.getElementById('score').textContent=h.score;
-  const bars=document.getElementById('bars'); bars.innerHTML='';
-  const comps=h.components||{}; for(const [k,v] of Object.entries(comps)){
-    const max=k==='cashflow'?200:k.includes('emergency')||k==='debt'?250:150;
-    bars.innerHTML+='<div class="muted">'+k+' '+v.score+'</div><div class="bar"><i style="width:'+(100*v.score/max)+'%"></i></div>';
-  }
-  window.__uid=uid; const goals=await j('/goals?user_id='+encodeURIComponent(uid)); window.__gid=(goals.items&&goals.items[0]&&goals.items[0].goal_id)||null;
+  const id=localStorage.getItem("welora_device_id")||("web-"+Math.random().toString(36).slice(2,10));
+  localStorage.setItem("welora_device_id",id);
+  const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:id})});
+  state.userId=auth.user_id;
+  const list=await api("/goals?user_id="+encodeURIComponent(state.userId)+"&type=emergency_fund");
+  state.goal=(list.items&&list.items[0])||null;
+  state.gate=await api("/users/"+state.userId+"/safety-gate");
+  try{state.health=await api("/users/"+state.userId+"/health-score")}catch(_){state.health=null}
+  try{state.mastery=await api("/users/"+state.userId+"/mastery?node_id=no_efund_invest")}catch(_){state.mastery={state:"not_started",meets_gate:false}}
+  render();
 }
-document.getElementById('save').onclick=async()=>{
-  const amt=+document.getElementById('amt').value; if(!window.__gid){document.getElementById('msg').textContent='Chưa có Goal';return}
-  await j('/goals/'+window.__gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:amt})});
-  document.getElementById('msg').textContent='Đã cập nhật'; load();
+function render(){
+  const passed=state.gate&&state.gate.status==="passed";
+  document.getElementById("gateCard").className="badge-card "+(passed?"ok":"fail");
+  document.getElementById("gateStatus").textContent=passed?"DAT":"CHUA DAT";
+  document.getElementById("gateMeta").textContent=(state.gate&&state.gate.reasons||[]).join(", ");
+  const st=(state.mastery&&state.mastery.state)||"not_started";
+  const ok=!!(state.mastery&&state.mastery.meets_gate);
+  document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");
+  document.getElementById("masteryStatus").textContent="Mastery · "+st;
+  document.getElementById("masteryMeta").textContent="meets_gate: "+ok;
+  document.getElementById("masteryState").value=st;
+  if(state.health){
+    document.getElementById("hsScore").textContent=(state.health.score||0)+" / 1000";
+    const c=state.health.components||{};
+    document.getElementById("hsBars").innerHTML=Object.keys(c).map(k=>"<div class=meta>"+k+" "+(c[k].score||0)+"</div>").join("");
+  }
+  if(state.goal){
+    const pct=Math.min(100,Number(state.goal.current&&state.goal.current.percent||0));
+    document.getElementById("barFill").style.width=pct+"%";
+    document.getElementById("goalMeta").textContent=(state.goal.current&&state.goal.current.amount||0)+" / "+(state.goal.target&&state.goal.target.amount||0);
+    document.getElementById("amount").value=state.goal.current&&state.goal.current.amount||0;
+  }
+}
+document.getElementById("masteryState").onchange=async e=>{
+  state.mastery=await api("/users/"+state.userId+"/mastery",{method:"PATCH",body:JSON.stringify({node_id:"no_efund_invest",state:e.target.value})});
+  state.gate=await api("/users/"+state.userId+"/safety-gate"); render();
+};
+document.getElementById("btnCreate").onclick=async()=>{
+  const ess=+document.getElementById("essential").value;
+  await api("/goals",{method:"POST",body:JSON.stringify({user_id:state.userId,type:"emergency_fund",essential_expense_monthly:ess,current_amount:0})});
+  await load();
+};
+document.getElementById("btnSave").onclick=async()=>{
+  if(!state.goal) return;
+  const val=+document.getElementById("amount").value;
+  await api("/goals/"+state.goal.goal_id+"/progress",{method:"PATCH",body:JSON.stringify({set_amount:val})});
+  await load();
 };
 load();
-</script>
-</body></html>
+</script></body></html>

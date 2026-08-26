@@ -1,4 +1,4 @@
-"""Welora FastAPI app — P1-E5 / P2-E2 / P2-E4"""
+"""Welora FastAPI app — P1-E5 / P2-E2 / P2-E4 / P2-E8"""
 
 from __future__ import annotations
 
@@ -144,6 +144,11 @@ def create_app() -> FastAPI:
     @app.get("/healthz", tags=["system"], include_in_schema=False)
     def healthz() -> dict:
         return health()
+
+    @app.get("/metrics", tags=["system"], summary="Agent counters (no PII)")
+    def metrics() -> dict:
+        from welora.metrics import service_get_metrics
+        return _respond(*service_get_metrics())
 
     @app.post("/auth/device", tags=["auth"])
     def auth_device(body: DeviceLoginBody) -> dict:

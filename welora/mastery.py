@@ -8,6 +8,7 @@ Gate requires mastery >= apply (LOCKED threshold).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -82,16 +83,32 @@ def service_patch_mastery(user_id: str, body: dict) -> tuple[int, dict]:
     except ValueError as e:
         return 400, {"error": str(e)}
     try:
-        from welora.goals_api import USER_FLAGS
+        from welora.goals_api import USER_FLAGS, get_user_flags
+        prev = get_user_flags(user_id)
         flags = USER_FLAGS.setdefault(
             user_id,
             {
-                "has_dangerous_debt": False,
-                "debt_on_track": True,
+                "has_dangerous_debt": bool(prev.get("has_dangerous_debt")),
+                "debt_on_track": bool(prev.get("debt_on_track", True)),
                 "mastery_no_efund_invest": node.state,
             },
         )
         flags["mastery_no_efund_invest"] = node.state
     except Exception:
-        pass
+        flags = {
+            "has_dangerous_debt": False,
+            "debt_on_track": True,
+            "mastery_no_efund_invest": node.state,
+        }
+    if os.environ.get("WELORA_STORE", "memory").lower() == "sqlite":
+        try:
+            from welora.db.repos import set_user_flags_db
+            set_user_flags_db(
+                user_id,
+                has_dangerous_debt=bool(flags.get("has_dangerous_debt")),
+                debt_on_track=bool(flags.get("debt_on_track", True)),
+                mastery_no_efund_invest=node.state,
+            )
+        except Exception:
+            pass
     return 200, to_dict(node)

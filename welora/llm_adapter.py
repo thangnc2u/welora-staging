@@ -150,14 +150,28 @@ def safe_call_llm(
     call_llm: Optional[Callable[[str, str], str]],
     system: str,
     message: str,
-) -> tuple[str, str]:
+    *,
+    provider_tag: Optional[str] = None,
+) -> tuple[str, str, bool]:
+    """Returns (reply, model_used, llm_called). Never raises."""
     if not call_llm:
-        return "", "none"
+        return "", "none", False
     try:
-        return call_llm(system, message), "llm"
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, OSError) as e:
+        return call_llm(system, message), "llm", True
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        TimeoutError,
+        KeyError,
+        OSError,
+        ValueError,
+        TypeError,
+        json.JSONDecodeError,
+    ) as e:
         return (
             f"Tạm thời không gọi được model ({type(e).__name__}). "
             "Tôi vẫn có thể hỗ trợ bằng khung nguyên tắc Welora — "
-            "bạn muốn xem Cổng An Toàn hay Goal quỹ?"
-        ), "llm_error"
+            "bạn muốn xem Cổng An Toàn hay Goal quỹ?",
+            "llm_error",
+            False,
+        )

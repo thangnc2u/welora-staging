@@ -1,11 +1,5 @@
 """
-Welora FastAPI app — P1-E5 / P2-E2
-
-Wraps existing service_* functions. OpenAPI at /docs · /redoc · /openapi.json
-
-Run:
-  uvicorn welora.api.app:app --reload --port 8000
-  PYTHONPATH=. python -m welora.api.app
+Welora FastAPI app — P1-E5 / P2-E2 / P2-E4
 """
 
 from __future__ import annotations
@@ -33,15 +27,12 @@ class DeviceLoginBody(BaseModel):
     device_id: str = Field(..., min_length=4)
     display_name: Optional[str] = None
 
-
 class OtpRequestBody(BaseModel):
     phone: str = Field(..., min_length=8)
-
 
 class OtpVerifyBody(BaseModel):
     challenge_id: str
     code: str
-
 
 class GoalCreateBody(BaseModel):
     user_id: str
@@ -52,27 +43,26 @@ class GoalCreateBody(BaseModel):
     monthly_contribution: float = 0
     plan_method: Optional[str] = None
 
-
 class ProgressBody(BaseModel):
     set_amount: Optional[float] = None
     add_amount: Optional[float] = None
 
-
 class SessionCreateBody(BaseModel):
     user_id: str
-
 
 class ChatBody(BaseModel):
     user_id: str
     message: str
     context: Optional[dict[str, Any]] = None
 
-
 class PreRuleBody(BaseModel):
     user_id: str
     message: str
     context: Optional[dict[str, Any]] = None
 
+class MasteryPatchBody(BaseModel):
+    state: str
+    node_id: Optional[str] = "no_efund_invest"
 
 class CsvParseBody(BaseModel):
     text: str
@@ -86,22 +76,8 @@ def _respond(code: int, body: dict) -> dict:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(
-        title="Welora API",
-        version="0.2.0",
-        description=(
-            "Welora Phase 2 API — Auth · Onboarding · Goals · Safety Gate · Agent (rule-first).\n\n"
-            "**Hard rules:** Cổng ≥ 3 tháng · Hard Deny trước LLM · Principle Key."
-        ),
-        contact={"name": "Welora"},
-    )
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
+    app = FastAPI(title="Welora API", version="0.2.0")
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -110,35 +86,35 @@ def create_app() -> FastAPI:
     def root() -> RedirectResponse:
         return RedirectResponse(url="/app/onboarding")
 
-    @app.get("/app/onboarding", include_in_schema=False, tags=["ui"])
+    @app.get("/app/onboarding", include_in_schema=False)
     def onboarding_ui() -> FileResponse:
         return FileResponse(static_dir / "onboarding.html")
 
-    @app.get("/app/demo", include_in_schema=False, tags=["ui"])
+    @app.get("/app/demo", include_in_schema=False)
     def demo_ui() -> FileResponse:
         return FileResponse(static_dir / "demo.html")
 
-    @app.get("/app/safety", include_in_schema=False, tags=["ui"])
+    @app.get("/app/safety", include_in_schema=False)
     def safety_ui() -> FileResponse:
         return FileResponse(static_dir / "safety.html")
 
-    @app.get("/app/chat", include_in_schema=False, tags=["ui"])
+    @app.get("/app/chat", include_in_schema=False)
     def chat_ui() -> FileResponse:
         return FileResponse(static_dir / "chat.html")
 
-    @app.get("/app/parser", include_in_schema=False, tags=["ui"])
+    @app.get("/app/parser", include_in_schema=False)
     def parser_ui() -> FileResponse:
         return FileResponse(static_dir / "parser.html")
 
-    @app.get("/app/content/{content_id}", include_in_schema=False, tags=["ui"])
+    @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")
 
-    @app.get("/app/content/module/{module_id}", include_in_schema=False, tags=["ui"])
+    @app.get("/app/content/module/{module_id}", include_in_schema=False)
     def content_module_ui(module_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")
 
-    @app.get("/app/content", include_in_schema=False, tags=["ui"])
+    @app.get("/app/content", include_in_schema=False)
     def content_ui() -> FileResponse:
         return FileResponse(static_dir / "content.html")
 
@@ -149,29 +125,26 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
-        dialect = "unknown"
-        try:
-            from welora.db.connection import detect_dialect
-            dialect = detect_dialect()
-        except Exception:
-            pass
         return {
             "status": "ok",
             "service": "welora",
             "phase": "2",
             "env": os.environ.get("WELORA_ENV", "local"),
             "store": os.environ.get("WELORA_STORE", "memory"),
-            "dialect": dialect,
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
             "gate_months": 3,
             "hard_deny": True,
         }
 
-    @app.post("/auth/device", tags=["auth"], summary="Login/register by device_id")
+    @app.get("/healthz", tags=["system"], include_in_schema=False)
+    def healthz() -> dict:
+        return health()
+
+    @app.post("/auth/device", tags=["auth"])
     def auth_device(body: DeviceLoginBody) -> dict:
         return _respond(*auth_svc.service_device_login(body.model_dump()))
 
-    @app.post("/auth/otp/request", tags=["auth"], summary="Request OTP (pilot echoes code)")
+    @app.post("/auth/otp/request", tags=["auth"])
     def auth_otp_request(body: OtpRequestBody) -> dict:
         return _respond(*auth_svc.service_otp_request(body.model_dump()))
 
@@ -217,10 +190,7 @@ def create_app() -> FastAPI:
         return _respond(code, out)
 
     @app.get("/goals", tags=["goals"])
-    def goals_list(
-        user_id: str = Query(...),
-        type: Optional[str] = Query(None, alias="type"),
-    ) -> dict:
+    def goals_list(user_id: str = Query(...), type: Optional[str] = Query(None, alias="type")) -> dict:
         return _respond(*goals_svc.service_list_goals(user_id, type))
 
     @app.get("/goals/{goal_id}", tags=["goals"])
@@ -235,47 +205,44 @@ def create_app() -> FastAPI:
     def safety_gate(user_id: str) -> dict:
         return _respond(*goals_svc.service_safety_gate(user_id))
 
-    @app.get("/users/{user_id}/health-score", tags=["health"], summary="Health Score read (does not bypass Gate)")
+    @app.get("/users/{user_id}/health-score", tags=["health"])
     def health_score(user_id: str) -> dict:
         return _respond(*hs_svc.service_get_health_score(user_id))
 
-    @app.post("/agent/pre-rule", tags=["agent"], summary="Evaluate Pre-Rule R01–R09 only")
+    @app.get("/users/{user_id}/mastery", tags=["mastery"])
+    def mastery_get(user_id: str, node_id: str = Query("no_efund_invest")) -> dict:
+        from welora.mastery import service_get_mastery
+        return _respond(*service_get_mastery(user_id, node_id))
+
+    @app.patch("/users/{user_id}/mastery", tags=["mastery"])
+    def mastery_patch(user_id: str, body: MasteryPatchBody) -> dict:
+        from welora.mastery import service_patch_mastery
+        return _respond(*service_patch_mastery(user_id, body.model_dump()))
+
+    @app.post("/agent/pre-rule", tags=["agent"])
     def agent_pre_rule(body: PreRuleBody) -> dict:
-        code, out = pre_svc.service_evaluate(
-            message=body.message,
-            user_id=body.user_id,
-            context_seed=body.context,
-        )
+        code, out = pre_svc.service_evaluate(message=body.message, user_id=body.user_id, context_seed=body.context)
         return _respond(code, out)
 
-    @app.post("/agent/chat", tags=["agent"], summary="Rule-first chat (deny without LLM)")
+    @app.post("/agent/chat", tags=["agent"])
     def agent_chat(body: ChatBody) -> dict:
         from welora.llm_adapter import make_llm_callable
-        code, out = chat_svc.service_chat(
-            user_id=body.user_id,
-            message=body.message,
-            context_seed=body.context,
-            call_llm=make_llm_callable(),
-        )
+        code, out = chat_svc.service_chat(user_id=body.user_id, message=body.message, context_seed=body.context, call_llm=make_llm_callable())
         return _respond(code, out)
 
     @app.get("/agent/decision-logs", tags=["agent"])
     def agent_logs(user_id: str = Query(...), limit: int = Query(20, ge=1, le=100)) -> dict:
         return _respond(*chat_svc.service_list_logs(user_id, limit))
 
-    @app.post(
-        "/parser/csv",
-        tags=["parser"],
-        summary="Parse bank CSV → transactions + essential_expense suggestion (no auto-write)",
-    )
+    @app.post("/parser/csv", tags=["parser"])
     def parse_csv(body: CsvParseBody) -> dict:
         return _respond(*csv_svc.service_parse_csv(text=body.text, filename=body.filename or ""))
 
-    @app.get("/content", tags=["content"], summary="List principle_key content index")
+    @app.get("/content", tags=["content"])
     def content_index() -> dict:
         return _respond(*content_svc.service_list_content_keys())
 
-    @app.get("/content/{key}", tags=["content"], summary="Article by principle_key")
+    @app.get("/content/{key}", tags=["content"])
     def content_by_key(key: str) -> dict:
         return _respond(*content_svc.service_get_content(key))
 
@@ -283,12 +250,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-def main() -> None:
-    import uvicorn
-    uvicorn.run("welora.api.app:app", host="0.0.0.0", port=8000, reload=False)
-
-
-if __name__ == "__main__":
-    main()

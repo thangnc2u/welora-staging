@@ -1,5 +1,5 @@
 # Render Blueprint — Welora Staging (P2-E2)
-# https://render.com/docs/blueprint-spec
+# Default Render Python is 3.14.3 (services after 2026-02-11) — pin 3.11.11 for wheels.
 services:
   - type: web
     name: welora-staging
@@ -8,10 +8,17 @@ services:
     region: singapore
     branch: main
     autoDeploy: true
-    buildCommand: pip install --upgrade pip && pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+    buildCommand: |
+      export CARGO_HOME=/tmp/cargo
+      export CARGO_TARGET_DIR=/tmp/cargo-target
+      mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+      pip install --upgrade pip
+      pip install --no-cache-dir --only-binary=:all: -r requirements.txt
     startCommand: bash start.sh
     healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
       - key: PYTHONPATH
         value: .
       - key: PYTHONUNBUFFERED

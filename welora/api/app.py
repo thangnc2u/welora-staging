@@ -1,6 +1,4 @@
-"""
-Welora FastAPI app — P1-E5 / P2-E2 / P2-E4
-"""
+"""Welora FastAPI app — P1-E5 / P2-E2 / P2-E4"""
 
 from __future__ import annotations
 
@@ -125,12 +123,19 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
+        dialect = "unknown"
+        try:
+            from welora.db.connection import detect_dialect
+            dialect = detect_dialect()
+        except Exception:
+            pass
         return {
             "status": "ok",
             "service": "welora",
             "phase": "2",
             "env": os.environ.get("WELORA_ENV", "local"),
             "store": os.environ.get("WELORA_STORE", "memory"),
+            "dialect": dialect,
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
             "gate_months": 3,
             "hard_deny": True,

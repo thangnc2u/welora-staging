@@ -9,7 +9,7 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
-    startCommand: python -m uvicorn welora.api.app:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --timeout-keep-alive 5
+    startCommand: bash start.sh
     healthCheckPath: /health
     envVars:
       - key: PYTHONPATH

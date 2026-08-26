@@ -28,7 +28,6 @@ class MasteryNode:
         return _RANK.get(self.state, 0) >= _RANK[GATE_MIN]
 
 
-# In-memory store: user_id -> node_id -> MasteryNode
 _STORE: dict[str, dict[str, MasteryNode]] = {}
 
 
@@ -63,3 +62,36 @@ def to_dict(node: MasteryNode) -> dict:
         "gate_min": GATE_MIN,
         "principle_keys": list(node.principle_keys),
     }
+
+
+def service_get_mastery(user_id: str, node_id: str = NODE_NO_EFUND) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    return 200, to_dict(get_node(user_id, node_id or NODE_NO_EFUND))
+
+
+def service_patch_mastery(user_id: str, body: dict) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    state = (body or {}).get("state")
+    node_id = (body or {}).get("node_id") or NODE_NO_EFUND
+    if not state:
+        return 400, {"error": "state is required"}
+    try:
+        node = set_state(user_id, str(state), node_id)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    try:
+        from welora.goals_api import USER_FLAGS
+        flags = USER_FLAGS.setdefault(
+            user_id,
+            {
+                "has_dangerous_debt": False,
+                "debt_on_track": True,
+                "mastery_no_efund_invest": node.state,
+            },
+        )
+        flags["mastery_no_efund_invest"] = node.state
+    except Exception:
+        pass
+    return 200, to_dict(node)

@@ -8,7 +8,7 @@ services:
     region: singapore
     branch: main
     autoDeploy: true
-    buildCommand: pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install --no-cache-dir --only-binary=:all: -r requirements.txt
     startCommand: bash start.sh
     healthCheckPath: /health
     envVars:
@@ -26,3 +26,9 @@ services:
         value: stub
       - key: WELORA_ENV
         value: staging
+      - key: PIP_ONLY_BINARY
+        value: ":all:"
+      - key: CARGO_HOME
+        value: /tmp/cargo
+      - key: CARGO_TARGET_DIR
+        value: /tmp/cargo-target

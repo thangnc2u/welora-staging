@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -34,6 +36,7 @@ class TestP2E4MasteryGate(unittest.TestCase):
         self.assertEqual(body["status"], "ok")
         self.assertEqual(body["gate_months"], 3)
         self.assertTrue(body["hard_deny"])
+        self.assertIn("dialect", body)
         self.assertEqual(TARGET_MONTHS, 3)
 
     def test_safety_html_has_mastery_badge(self):
@@ -41,6 +44,10 @@ class TestP2E4MasteryGate(unittest.TestCase):
         self.assertIn("masteryBadge", html)
         self.assertIn("meets_gate", html)
         self.assertIn("SAFE-02", html)
+        self.assertIn("hs-card", html)
+        self.assertIn("Health Score", html)
+        self.assertIn("btnSave", html)
+        self.assertIn("set_amount", html)
 
     def test_fund_enough_familiar_not_passed(self):
         uid = "e4_familiar"
@@ -81,6 +88,59 @@ class TestP2E4MasteryGate(unittest.TestCase):
         gate = self.client.get(f"/users/{uid}/safety-gate").json()
         self.assertEqual(gate["status"], "not_passed")
         self.assertFalse(bool(hs.get("can_bypass") or hs.get("can_bypass_gate_with_score")))
+
+
+class TestP2E4MasterySqlite(unittest.TestCase):
+    def setUp(self) -> None:
+        self._prev_store = os.environ.get("WELORA_STORE")
+        self._prev_url = os.environ.get("WELORA_DB_URL")
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self._tmp.close()
+        os.environ["WELORA_STORE"] = "sqlite"
+        os.environ["WELORA_DB_URL"] = self._tmp.name
+        from welora.db.repos import SqliteEmergencyFundStore
+        use_store(SqliteEmergencyFundStore(self._tmp.name))
+        reset_all_stores()
+        reset_mastery_store()
+        self.client = TestClient(create_app())
+
+    def tearDown(self) -> None:
+        use_store(InMemoryEmergencyFundStore())
+        reset_all_stores()
+        reset_mastery_store()
+        if self._prev_store is None:
+            os.environ.pop("WELORA_STORE", None)
+        else:
+            os.environ["WELORA_STORE"] = self._prev_store
+        if self._prev_url is None:
+            os.environ.pop("WELORA_DB_URL", None)
+        else:
+            os.environ["WELORA_DB_URL"] = self._prev_url
+        try:
+            Path(self._tmp.name).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def test_sqlite_familiar_not_passed(self):
+        uid = "e4_sql_fam"
+        self.client.post(
+            "/goals",
+            json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
+        )
+        self.client.patch(f"/users/{uid}/mastery", json={"state": "familiar"})
+        gate = self.client.get(f"/users/{uid}/safety-gate").json()
+        self.assertEqual(gate["status"], "not_passed")
+        self.assertIn("mastery_missing", gate["reasons"])
+
+    def test_sqlite_apply_passed(self):
+        uid = "e4_sql_apply"
+        self.client.post(
+            "/goals",
+            json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
+        )
+        self.client.patch(f"/users/{uid}/mastery", json={"state": "apply"})
+        gate = self.client.get(f"/users/{uid}/safety-gate").json()
+        self.assertEqual(gate["status"], "passed")
 
 
 if __name__ == "__main__":

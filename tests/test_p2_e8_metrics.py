@@ -54,6 +54,24 @@ class TestP2E8Metrics(unittest.TestCase):
         self.assertGreaterEqual(m["deny_total"], 1)
         self.assertEqual(snapshot()["deny_with_llm_calls"], 0)
 
+    def test_advisory_passed_gate_http_200(self):
+        seed = self.pair["passed"]["agent_context_seed"]
+        r = self.client.post(
+            "/agent/chat",
+            json={
+                "user_id": seed["user_id"],
+                "message": "Giải thích quỹ khẩn cấp khác tiết kiệm thế nào?",
+                "context": seed,
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("reply", body)
+        self.assertTrue(str(body.get("reply") or "").strip())
+        self.assertNotEqual(body.get("guardrail_result"), "deny")
+        m = self.client.get("/metrics").json()
+        self.assertEqual(m["deny_with_llm_calls"], 0)
+
     def test_sanitize_strips_secrets_and_phone(self):
         raw = "Gọi 0912345678 token=sk-SUPERSECRETKEY99 api_key=xai-ABCDEFG123"
         clean = sanitize_query(raw)

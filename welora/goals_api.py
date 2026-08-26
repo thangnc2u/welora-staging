@@ -142,7 +142,17 @@ def service_safety_gate(user_id: str) -> tuple[int, dict]:
     if os.environ.get("WELORA_STORE", "memory").lower() == "sqlite":
         try:
             from welora.db.repos import get_user_flags_db
-            flags = get_user_flags_db(user_id)
+            from welora.mastery import get_node
+            db = get_user_flags_db(user_id)
+            flags["has_dangerous_debt"] = bool(db.get("has_dangerous_debt"))
+            flags["debt_on_track"] = bool(db.get("debt_on_track", True))
+            store_state = get_node(user_id).state
+            if user_id in USER_FLAGS:
+                flags["mastery_no_efund_invest"] = USER_FLAGS[user_id]["mastery_no_efund_invest"]
+            elif store_state != "not_started":
+                flags["mastery_no_efund_invest"] = store_state
+            else:
+                flags["mastery_no_efund_invest"] = db.get("mastery_no_efund_invest") or "not_started"
         except Exception:
             pass
     if not goal:

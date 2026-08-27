@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora Logs</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.row{margin-top:6px}
+.err{color:#ff6b6b}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Decision logs</h1>
+<p class="label">Deny · rule_hit · llm_called · không lộ id</p>
+<div id="logList"></div>
+<p class="err" id="logErr"></p>
+<script>
+const KEY='welora_device_id';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function card(row){
+  const el=document.createElement('div');
+  el.className='card';
+  const g=row.guardrail_result||'—';
+  const r=row.rule_hit||'—';
+  const l=String(row.llm_called??'—');
+  const s=row.safety_gate_status||'—';
+  const q=row.user_query_summary||'';
+  el.innerHTML='<div class="row"><span class="label">guardrail</span> '+g+'</div>'
+    +'<div class="row"><span class="label">rule_hit</span> '+r+'</div>'
+    +'<div class="row"><span class="label">llm_called</span> '+l+'</div>'
+    +'<div class="row"><span class="label">gate</span> '+s+'</div>'
+    +(q?'<div class="row"><span class="label">query</span> '+q+'</div>':'');
+  return el;
+}
+(async()=>{
+  const list=document.getElementById('logList');
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||a.user||'';
+    const lr=await fetch('/agent/decision-logs?user_id='+encodeURIComponent(uid)+'&limit=20');
+    const data=await lr.json();
+    const items=data.items||[];
+    if(!items.length){list.textContent='Chưa có log';return;}
+    items.forEach(row=>list.appendChild(card(row)));
+  }catch(e){
+    document.getElementById('logErr').textContent='Không đọc được logs';
+  }
+})();
+</script>
+</body>
+</html>

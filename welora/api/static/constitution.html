@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Hiến pháp cá nhân</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.code{color:#7dd3fc;font-weight:700;font-size:13px}
+.text{margin-top:6px;line-height:1.45}
+.muted{color:#8b9bb4;font-size:13px}
+.empty{color:#8b9bb4;margin-top:16px}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Hiến pháp cá nhân</h1>
+<p class="muted">Điều bạn đã xác nhận khi onboarding</p>
+<div id="articles"></div>
+<script>
+const KEY='welora_device_id';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function showEmpty(){
+  const box=document.getElementById('articles');
+  box.innerHTML='';
+  const p=document.createElement('p');
+  p.className='empty';
+  p.id='emptyState';
+  p.textContent='Chưa có Hiến pháp. Hãy hoàn tất Onboarding rồi quay lại đây.';
+  box.appendChild(p);
+}
+function renderArticles(list){
+  const box=document.getElementById('articles');
+  box.innerHTML='';
+  if(!list||!list.length){showEmpty();return;}
+  list.forEach(a=>{
+    const el=document.createElement('div');
+    el.className='card';
+    const c=document.createElement('div');
+    c.className='code';
+    c.textContent=a.code||a.id||'—';
+    const t=document.createElement('div');
+    t.className='text';
+    t.textContent=a.text||a.title||'';
+    el.appendChild(c);
+    el.appendChild(t);
+    box.appendChild(el);
+  });
+}
+(async()=>{
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||a.user||'';
+    const cr=await fetch('/users/'+encodeURIComponent(uid)+'/personal-constitution');
+    if(cr.status===404||!cr.ok){showEmpty();return;}
+    const data=await cr.json();
+    const list=data.articles||(data.personal_constitution&&data.personal_constitution.articles)||[];
+    renderArticles(list);
+  }catch(e){
+    showEmpty();
+  }
+})();
+</script>
+</body>
+</html>

@@ -10,6 +10,36 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+FALLBACK_BODY: dict[str, str] = {
+    "SAFE-01": (
+        "## Quỹ khẩn cấp là lớp sống còn\n\n"
+        "Quỹ khẩn cấp không phải tiền để đầu tư. Đó là lớp đệm khi thu nhập gián đoạn "
+        "hoặc chi phí bất ngờ (ốm, mất việc, sửa chữa cần thiết).\n\n"
+        "Welora yêu cầu quỹ đủ tối thiểu 3 tháng chi tiêu thiết yếu trước khi nói đến đầu tư. "
+        "Không cam kết lợi suất. Không rút quỹ để all-in."
+    ),
+    "SAFE-02": (
+        "## Chỉ dùng quỹ cho sự cố bất ngờ\n\n"
+        "Quỹ khẩn cấp chỉ dùng khi sự cố bất ngờ và cần thiết: bệnh, mất việc, "
+        "hỏng việc phải sửa để sống hoặc làm việc.\n\n"
+        "Không dùng quỹ để du lịch, mua sắm, hay cơ hội đầu tư. Nếu rút quỹ, "
+        "ưu tiên xây lại đủ 3 tháng trước khi mở quyền đầu tư."
+    ),
+    "DEBT-03": (
+        "## An Toàn trước đầu tư\n\n"
+        "Nợ nguy hiểm (lãi cao, tín dụng tiêu dùng, vay để đầu cơ) cần xử lý "
+        "trước khi tăng rủi ro đầu tư.\n\n"
+        "Không vay để đầu tư. Không phá quỹ khẩn cấp để trả nợ không khẩn. "
+        "Đầu tư chỉ bằng tiền thừa ngoài quỹ 3 tháng và ngoài nghĩa vụ nợ nguy hiểm."
+    ),
+    "CORE-07": (
+        "## Phòng thủ đi trước tăng trưởng\n\n"
+        "Tăng trưởng đứng sau phòng thủ: quỹ 3 tháng, không nợ nguy hiểm, hiểu rõ rủi ro.\n\n"
+        "Cổng An Toàn không bị Health Score hay cảm xúc bypass. "
+        "Agent từ chối đề xuất phá quỹ hoặc cam kết chắc lời."
+    ),
+}
+
 CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
     "SAFE-01": {
         "title": "Quỹ khẩn cấp là lớp sống còn",
@@ -185,6 +215,10 @@ def get_article(key: str) -> dict[str, Any]:
             body = path.read_text(encoding="utf-8", errors="replace")
             path_used = str(path.name)
             break
+    if not (body or "").strip():
+        body = FALLBACK_BODY.get(key) or ""
+        if body:
+            path_used = path_used or "fallback"
     preview = body
     truncated = False
     if len(preview) > 12000:

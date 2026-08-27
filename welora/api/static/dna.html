@@ -58,8 +58,6 @@ function render(data){
   const ident=data.identity_context||{};
   const snap=data.financial_snapshot_self||{};
   const psy=data.psychological_profile_self||{};
-  const beh=data.behavioral_patterns_self||{};
-  const pref=data.agent_preferences||{};
   const fields=[
     ['life_stage', pick(ident,'life_stage')??data.life_stage],
     ['income_stability', pick(ident,'income_stability')??data.income_stability],
@@ -68,9 +66,9 @@ function render(data){
     ['emergency_fund_months_self', pick(snap,'emergency_fund_months_self')??data.emergency_fund_months_self],
     ['has_dangerous_debt_self', pick(snap,'has_dangerous_debt_self')??data.has_dangerous_debt_self],
     ['near_term_priority', pick(snap,'near_term_priority')??data.near_term_priority],
-    ['surplus_habit', pick(beh,'surplus_habit')??data.surplus_habit],
+    ['surplus_habit', pick(psy,'surplus_habit')??data.surplus_habit],
     ['risk_tolerance', pick(psy,'risk_tolerance')??data.risk_tolerance],
-    ['agent_role_preference', pick(pref,'desired_role')??data.agent_role_preference]
+    ['agent_role_preference', pick(psy,'agent_role_preference')??data.agent_role_preference]
   ];
   fields.forEach(([k,v])=>box.appendChild(row(k,v)));
 }

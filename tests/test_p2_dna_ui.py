@@ -34,6 +34,10 @@ class TestP2DnaUi(unittest.TestCase):
         self.assertNotIn("'user='+", body)
         self.assertNotIn("textContent=user_id", body)
         self.assertNotIn("dna_id", body)
+        self.assertIn("pick(psy,'surplus_habit')", body)
+        self.assertIn("pick(psy,'agent_role_preference')", body)
+        self.assertNotIn("pick(beh,'surplus_habit')", body)
+        self.assertNotIn("desired_role", body)
 
     def test_get_app_dna_slash_200(self):
         r = self.client.get("/app/dna/")

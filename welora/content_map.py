@@ -38,6 +38,31 @@ FALLBACK_BODY: dict[str, str] = {
         "Cổng An Toàn không bị Health Score hay cảm xúc bypass. "
         "Agent từ chối đề xuất phá quỹ hoặc cam kết chắc lời."
     ),
+    "SAFE-03": (
+        "## Quỹ thanh khoản cao và tách biệt\n\n"
+        "Quỹ khẩn cấp cần dễ rút khi sự cố xảy ra. Nên để ở nơi tách biệt khỏi tài khoản chi tiêu hàng ngày và khỏi tiền đầu tư.\n\n"
+        "Ưu tiên giữ quỹ an toàn, đủ 3 tháng chi tiêu thiết yếu. Không dùng quỹ này để tìm lợi suất."
+    ),
+    "DEBT-01": (
+        "## Phân biệt nợ tốt và nợ xấu\n\n"
+        "Nợ nguy hiểm thường có lãi suất cao, kỳ hạn ngắn, hoặc dùng để tiêu dùng và đầu cơ. Cần xem khả năng trả, không quyết theo cảm xúc.\n\n"
+        "Ưu tiên giảm nợ nguy hiểm. Không vay thêm để đầu tư khi Cổng An Toàn chưa đạt."
+    ),
+    "DEBT-02": (
+        "## Chọn cách trả nợ phù hợp\n\n"
+        "Có thể trả khoản nhỏ nhất trước để giảm số món, hoặc trả khoản lãi cao trước để giảm chi phí lãi. Chọn một cách và theo dõi đều.\n\n"
+        "Không có phương pháp nào luôn đúng mọi trường hợp. Không vay mới để đảo nợ nếu chưa rõ khả năng trả."
+    ),
+    "CORE-01": (
+        "## Trách nhiệm với quyết định tiền bạc\n\n"
+        "Bạn chịu trách nhiệm cho lựa chọn chi tiêu, vay, và đầu tư của mình. Agent chỉ hỗ trợ theo nguyên tắc An Toàn, không quyết định thay bạn.\n\n"
+        "Hãy xem rõ thu nhập, chi tiêu thiết yếu, và quỹ khẩn cấp trước khi nhận thêm rủi ro."
+    ),
+    "CORE-05": (
+        "## Cảm xúc không thay cho nguyên tắc\n\n"
+        "Sợ hãi hoặc hưng phấn dễ đẩy tới quyết định vội: rút quỹ, vay nóng, all-in. Giữ nguyên tắc An Toàn dù thị trường biến động.\n\n"
+        "Không dùng cảm xúc để phá quỹ 3 tháng hay nhận lời hứa lợi suất cố định."
+    ),
 }
 
 CONTENT_BY_KEY: dict[str, dict[str, Any]] = {

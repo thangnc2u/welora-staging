@@ -1,44 +1,175 @@
 <!DOCTYPE html>
-<html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora Onboarding</title>
-<style>body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
 label{display:block;margin:8px 0 4px;color:#8b9bb4;font-size:13px}
 input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;box-sizing:border-box}
-button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
-.muted{color:#8b9bb4;font-size:13px}</style></head>
+button,a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
+button.secondary{background:#243041}
+.muted{color:#8b9bb4;font-size:13px}
+.hidden{display:none}
+.err{color:#ff6b6b;font-size:13px;margin-top:8px}
+</style>
+</head>
 <body>
 <h1>Hiến pháp Cá nhân</h1>
-<p class="muted">B0–B5 · DNA Self · CTA Goal 3 tháng</p>
+<p class="muted">B0–B5 · DNA Self · Goal quỹ 3 tháng</p>
+
 <div class="card" id="step0">
-  <p>Đăng nhập thiết bị (pilot)</p>
-  <button id="auth">Bắt đầu</button>
+  <h2>B0 · Chào</h2>
+  <p>An Toàn trước. Cổng quỹ khẩn cấp tối thiểu 3 tháng. Agent không quyết định thay bạn.</p>
+  <button type="button" id="auth">Bắt đầu</button>
+  <p class="err" id="err0"></p>
 </div>
-<div class="card" id="form" style="display:none">
-  <label>Life stage</label><select id="life_stage"><option>young_single</option><option>family</option></select>
-  <label>Chi tiêu thiết yếu / tháng (VND)</label><input id="essential" type="number" value="10000000"/>
-  <label>Đã có nợ nguy hiểm?</label><select id="debt"><option value="false">Không</option><option value="true">Có</option></select>
-  <button id="go">Hoàn tất → Tạo Goal quỹ</button>
-  <pre id="out" class="muted"></pre>
+
+<div class="card hidden" id="step1">
+  <h2>B1 · Identity</h2>
+  <label for="life_stage">Life stage</label>
+  <select id="life_stage">
+    <option value="young_single">young_single</option>
+    <option value="family">family</option>
+  </select>
+  <label for="income_stability">Thu nhập</label>
+  <select id="income_stability">
+    <option value="stable">stable</option>
+    <option value="variable">variable</option>
+  </select>
+  <label for="family_context">Gia đình</label>
+  <select id="family_context">
+    <option value="alone">alone</option>
+    <option value="with_family">with_family</option>
+  </select>
+  <button type="button" id="next1">Tiếp</button>
 </div>
+
+<div class="card hidden" id="step2">
+  <h2>B2 · Snapshot</h2>
+  <label for="essential">Chi tiêu thiết yếu / tháng (VND)</label>
+  <input id="essential" type="number" min="0" step="1000" value="10000000"/>
+  <label for="debt">Đã có nợ nguy hiểm?</label>
+  <select id="debt">
+    <option value="false">Không</option>
+    <option value="true">Có</option>
+  </select>
+  <label for="priority">Ưu tiên gần</label>
+  <select id="priority">
+    <option value="safety">safety</option>
+    <option value="debt">debt</option>
+  </select>
+  <button type="button" id="next2">Tiếp</button>
+</div>
+
+<div class="card hidden" id="step3">
+  <h2>B3 · Behavior</h2>
+  <label for="surplus_habit">Thói quen tiền dư</label>
+  <select id="surplus_habit">
+    <option value="hold">hold</option>
+    <option value="spend">spend</option>
+  </select>
+  <label for="risk_tolerance">Mức chấp nhận biến động (1–5)</label>
+  <select id="risk_tolerance">
+    <option value="3">3</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+  </select>
+  <label for="agent_role">Vai trò Agent</label>
+  <select id="agent_role">
+    <option value="advisor_only">advisor_only</option>
+  </select>
+  <button type="button" id="next3">Tiếp</button>
+</div>
+
+<div class="card hidden" id="step4">
+  <h2>B4 · Hiến pháp</h2>
+  <p class="muted">Xác nhận nguyên tắc: quỹ ≥ 3 tháng trước đầu tư. Không phá quỹ. Không cam kết lợi suất.</p>
+  <button type="button" id="next4">Xác nhận Hiến pháp</button>
+</div>
+
+<div class="card hidden" id="step5">
+  <h2>B5 · Tóm tắt + Goal quỹ 3 tháng</h2>
+  <p class="muted" id="summary"></p>
+  <button type="button" id="ctaGoal">Tạo Goal quỹ khẩn cấp 3 tháng</button>
+  <p class="err" id="err5"></p>
+</div>
+
 <script>
-let uid=null;
-const out=document.getElementById('out');
+let uid=null, sid=null;
+function show(n){
+  for(let i=0;i<=5;i++){
+    const el=document.getElementById('step'+i);
+    if(el) el.classList.toggle('hidden', i!==n);
+  }
+}
 document.getElementById('auth').onclick=async()=>{
-  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'mob-'+Date.now()})});
-  const d=await r.json(); uid=d.user_id; document.getElementById('form').style.display='block'; out.textContent='user='+uid;
+  document.getElementById('err0').textContent='';
+  try{
+    const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'mob-'+Date.now()})});
+    const d=await r.json();
+    uid=d.user_id;
+    const s=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
+    const sd=await s.json();
+    sid=sd.session_id;
+    show(1);
+  }catch(e){ document.getElementById('err0').textContent=String(e); }
 };
-document.getElementById('go').onclick=async()=>{
-  let r=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
-  let d=await r.json(); const sid=d.session_id;
+document.getElementById('next1').onclick=async()=>{
+  await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    life_stage:document.getElementById('life_stage').value,
+    income_stability:document.getElementById('income_stability').value,
+    family_context:document.getElementById('family_context').value
+  })});
+  show(2);
+};
+document.getElementById('next2').onclick=async()=>{
   const essential=+document.getElementById('essential').value;
-  await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:document.getElementById('life_stage').value,income_stability:'stable',family_context:'alone'})});
-  await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:essential,emergency_fund_months_self:'0',has_dangerous_debt_self:document.getElementById('debt').value==='true',near_term_priority:'safety'})});
-  await fetch('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
+  await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    essential_expense_monthly:essential,
+    emergency_fund_months_self:'0',
+    has_dangerous_debt_self:document.getElementById('debt').value==='true',
+    near_term_priority:document.getElementById('priority').value
+  })});
+  show(3);
+};
+document.getElementById('next3').onclick=async()=>{
+  await fetch('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    surplus_habit:document.getElementById('surplus_habit').value,
+    risk_tolerance:+document.getElementById('risk_tolerance').value,
+    agent_role_preference:document.getElementById('agent_role').value
+  })});
+  show(4);
+};
+document.getElementById('next4').onclick=async()=>{
   await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-  r=await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'}); d=await r.json();
-  r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,essential_expense_monthly:essential,current_amount:0,linked_from_onboarding:true})});
-  d=await r.json(); out.textContent='Goal created '+d.goal_id; location.href='/app/safety?user_id='+encodeURIComponent(uid);
+  const essential=+document.getElementById('essential').value;
+  document.getElementById('summary').textContent=
+    'Life stage: '+document.getElementById('life_stage').value+
+    ' · Chi tiêu thiết yếu: '+essential+
+    ' VND/tháng · Target quỹ: 3 tháng (cố định).';
+  show(5);
+};
+document.getElementById('ctaGoal').onclick=async()=>{
+  document.getElementById('err5').textContent='';
+  try{
+    await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
+    const essential=+document.getElementById('essential').value;
+    const r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      user_id:uid,
+      type:'emergency_fund',
+      essential_expense_monthly:essential,
+      current_amount:0,
+      linked_from_onboarding:true
+    })});
+    if(!r.ok){ document.getElementById('err5').textContent='Không tạo được Goal'; return; }
+    location.href='/app/safety?user_id='+encodeURIComponent(uid);
+  }catch(e){ document.getElementById('err5').textContent=String(e); }
 };
 </script>
-</body></html>
+</body>
+</html>

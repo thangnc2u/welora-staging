@@ -16,6 +16,7 @@ article h1{font-size:1.25rem;margin:8px 0 12px}
 </style>
 </head>
 <body>
+<p><a id="navHome" href="/app">← Welora</a></p>
 <p class="nav"><a href="/app/chat">← Chat</a> · <a href="/app/safety">An Toàn</a></p>
 <p id="contentKey" class="key">…</p>
 <article>
@@ -28,7 +29,7 @@ const key=params.get('key')||'';
 const elKey=document.getElementById('contentKey');
 const elTitle=document.getElementById('contentTitle');
 const elBody=document.getElementById('contentBody');
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function esc(s){return String(s||'').replace(/&/g,'&').replace(/</g,'<');}
 (async()=>{
   if(!key){
     const r=await fetch('/content');

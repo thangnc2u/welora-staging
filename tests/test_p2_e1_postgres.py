@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from welora.api.app import create_app
 from welora.db.connection import adapt_sql_for_postgres, detect_dialect, ph
 from welora.db.migrate import current_version, migrate
+from welora.db.repos import SqliteEmergencyFundStore
+from welora.goal_emergency_fund import InMemoryEmergencyFundStore
 from welora.safety_gate import TARGET_MONTHS
 
 
@@ -48,6 +50,22 @@ def test_sqlite_migrate_always(tmp_path, monkeypatch):
     vers = current_version(url=url)
     assert "001_init" in vers
     assert "002_auth" in vers
+
+
+def test_make_store_postgres_not_inmemory(monkeypatch):
+    """No real PG. WELORA_STORE=postgres must not fall back to InMemory."""
+    monkeypatch.setenv("WELORA_STORE", "postgres")
+    monkeypatch.setenv("WELORA_DB_URL", "postgresql://u:p@localhost/welora")
+
+    def _init(self, url=None):
+        self.url = url
+
+    monkeypatch.setattr(SqliteEmergencyFundStore, "__init__", _init)
+    from welora.goals_api import _make_store
+
+    store = _make_store()
+    assert not isinstance(store, InMemoryEmergencyFundStore)
+    assert isinstance(store, SqliteEmergencyFundStore)
 
 
 @pytest.mark.skipif(

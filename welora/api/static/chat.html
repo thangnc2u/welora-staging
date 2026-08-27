@@ -1,28 +1,81 @@
 <!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora Agent</title>
-<style>body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
 #log{flex:1;overflow:auto;background:#141b24;border-radius:12px;padding:12px;border:1px solid #243041}
 .msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%}.user{background:#1e3a5f;margin-left:auto}.bot{background:#1a2332}
 .deny{border-left:3px solid #ff6b6b}.pass{border-left:3px solid #3dd68c}
 form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;border-radius:10px;border:1px solid #243041;background:#0b0f14;color:#e8eef7}
 button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
-.muted{color:#8b9bb4;font-size:12px}</style></head>
+.muted{color:#8b9bb4;font-size:12px}
+#gateBadge{display:inline-block;margin:8px 0 12px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041;background:#141b24}
+#gateBadge.passed{color:#3dd68c;border-color:#3dd68c}
+#gateBadge.not_passed{color:#ffb020;border-color:#ffb020}
+#denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
+#denyCta.show{display:block}
+</style></head>
 <body>
 <h1>CFO Agent</h1>
 <p class="muted">Hard Deny trước LLM · An Toàn ≥ 3 tháng</p>
+<div id="gateBadge">Cổng: …</div>
+<a id="denyCta" href="/app/content?key=SAFE-02">Đọc nguyên tắc An Toàn (SAFE-02)</a>
 <div id="log"></div>
 <form id="f"><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button>Gửi</button></form>
 <script>
 const log=document.getElementById('log');
+const gateBadge=document.getElementById('gateBadge');
+const denyCta=document.getElementById('denyCta');
 let uid=null;
 const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;log.appendChild(d);log.scrollTop=log.scrollHeight};
-(async()=>{const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'chat-'+Date.now()})});const d=await r.json();uid=d.user_id;add('Sẵn sàng · user='+uid,'bot muted')})();
+function setGate(status){
+  const s=(status==='passed')?'passed':'not_passed';
+  gateBadge.textContent='Cổng: '+s;
+  gateBadge.className=s;
+}
+function pickHref(d){
+  const links=d.content_links||[];
+  for(const L of links){
+    if(L && (L.href||L.path||L.learn_href)) return L.href||L.learn_href||L.path;
+  }
+  const ctas=d.cta||[];
+  for(const c of ctas){
+    if(c && (c.learn_href||c.href) && String(c.learn_href||c.href).indexOf('/app/content')===0)
+      return c.learn_href||c.href;
+  }
+  const keys=d.principle_keys||[];
+  if(keys.length) return '/app/content?key='+encodeURIComponent(keys[0]);
+  return '/app/content?key=SAFE-02';
+}
+function showDenyCta(d){
+  const href=pickHref(d);
+  denyCta.href=href;
+  denyCta.textContent='Đọc nguyên tắc · '+href.replace('/app/content?key=','');
+  denyCta.classList.add('show');
+}
+function hideDenyCta(){ denyCta.classList.remove('show'); }
+async function loadGate(){
+  if(!uid) return;
+  try{
+    const r=await fetch('/users/'+encodeURIComponent(uid)+'/safety-gate');
+    const d=await r.json();
+    setGate(d.status||d.safety_gate_status||'not_passed');
+  }catch(e){ setGate('not_passed'); }
+}
+(async()=>{
+  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'chat-'+Date.now()})});
+  const d=await r.json(); uid=d.user_id;
+  add('Sẵn sàng · user='+uid,'bot muted');
+  await loadGate();
+})();
 document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return; document.getElementById('q').value=''; add(q,'user');
   const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
-  const d=await r.json(); const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
+  const d=await r.json();
+  const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
   add((d.reply||JSON.stringify(d))+'\n['+(d.guardrail_result||'')+(d.rule_hit?' · '+d.rule_hit:'')+']', cls);
+  setGate(d.safety_gate_status||'not_passed');
+  if(d.guardrail_result==='deny') showDenyCta(d); else hideDenyCta();
 };
 </script>
 </body></html>

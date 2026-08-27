@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Quỹ khẩn cấp</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.val{margin-top:2px;font-weight:600}
+.muted{color:#8b9bb4;font-size:13px}
+.empty{color:#8b9bb4;margin-top:16px}
+input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
+.err{color:#ff6b6b}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Quỹ khẩn cấp</h1>
+<p class="muted">Mục tiêu 3 tháng chi thiết yếu</p>
+<div id="goalList"></div>
+<div class="card" id="addBox">
+  <div class="label">Cộng tiến độ (VND)</div>
+  <input id="addAmount" type="number" min="1" step="1000" inputmode="numeric"/>
+  <button type="button" id="addBtn">Cộng tiền</button>
+  <p class="err" id="addErr"></p>
+</div>
+<script>
+const KEY='welora_device_id';
+let lastId='';
+let uid='';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function showEmpty(){
+  const box=document.getElementById('goalList');
+  box.innerHTML='';
+  const p=document.createElement('p');
+  p.className='empty';
+  p.textContent='Chưa có quỹ khẩn cấp';
+  const a=document.createElement('a');
+  a.id='ctaOnboarding';
+  a.href='/app/onboarding';
+  a.textContent='Đi Onboarding để tạo quỹ 3 tháng';
+  box.appendChild(p);
+  box.appendChild(a);
+  lastId='';
+}
+function line(label,value){
+  const wrap=document.createElement('div');
+  wrap.style.marginTop='8px';
+  const l=document.createElement('div');
+  l.className='label';
+  l.textContent=label;
+  const v=document.createElement('div');
+  v.className='val';
+  v.textContent=value===null||value===undefined?'—':String(value);
+  wrap.appendChild(l);
+  wrap.appendChild(v);
+  return wrap;
+}
+function renderItems(items){
+  const box=document.getElementById('goalList');
+  box.innerHTML='';
+  if(!items||!items.length){showEmpty();return;}
+  lastId=items[0].goal_id||'';
+  items.forEach(g=>{
+    const el=document.createElement('div');
+    el.className='card';
+    const tgt=g.target||{};
+    const cur=g.current||{};
+    el.appendChild(line('title', g.title||'Quỹ khẩn cấp'));
+    el.appendChild(line('type', g.type||''));
+    el.appendChild(line('target.months_of_expense', tgt.months_of_expense));
+    el.appendChild(line('current.amount', cur.amount));
+    el.appendChild(line('current.percent', cur.percent));
+    el.appendChild(line('current.months_covered', cur.months_covered));
+    box.appendChild(el);
+  });
+}
+async function loadList(){
+  const lr=await fetch('/goals?user_id='+encodeURIComponent(uid));
+  const data=await lr.json();
+  renderItems(data.items||[]);
+}
+document.getElementById('addBtn').addEventListener('click', async()=>{
+  const err=document.getElementById('addErr');
+  err.textContent='';
+  const n=Number(document.getElementById('addAmount').value);
+  if(!(n>0)||!lastId){err.textContent='Nhập số tiền > 0 khi đã có quỹ';return;}
+  const r=await fetch('/goals/'+encodeURIComponent(lastId)+'/progress',{
+    method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({add_amount:n})
+  });
+  if(!r.ok){err.textContent='Không cộng được tiền';return;}
+  document.getElementById('addAmount').value='';
+  await loadList();
+});
+(async()=>{
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    uid=a.user_id||a.user||'';
+    await loadList();
+  }catch(e){
+    showEmpty();
+  }
+})();
+</script>
+</body>
+</html>

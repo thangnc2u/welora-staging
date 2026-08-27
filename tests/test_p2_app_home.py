@@ -1,4 +1,4 @@
-"""P2 Native UI /app home — 6 nav links, no JSON dump."""
+"""P2 Native UI /app home — nav links, no JSON dump."""
 
 from __future__ import annotations
 
@@ -34,9 +34,11 @@ class TestP2AppHome(unittest.TestCase):
         self.assertIn('id="navParser"', body)
         self.assertIn('href="/app/parser"', body)
         self.assertNotIn("JSON.stringify", body)
-        self.assertNotIn("/goals", body)
+        self.assertNotIn('fetch("/goals"', body)
+        self.assertNotIn("POST /goals", body)
         self.assertNotIn("/agent/chat", body)
         self.assertNotIn("/auth", body)
+        self.assertIn('id="navGoals"', body)
 
     def test_home_html_file_has_nav_ids(self):
         html = HOME_HTML.read_text(encoding="utf-8")

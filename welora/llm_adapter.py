@@ -99,7 +99,7 @@ def make_llm_callable() -> Optional[Callable[[str, str], str]]:
         return _call
 
     if provider in ("xai", "grok"):
-        model = model or "grok-2-latest"
+        model = model or "grok-4.3"
         base = os.environ.get("WELORA_LLM_BASE_URL") or "https://api.x.ai/v1"
 
         def _call(system: str, message: str) -> str:

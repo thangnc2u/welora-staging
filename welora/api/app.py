@@ -114,6 +114,11 @@ def create_app() -> FastAPI:
     def metrics_ui() -> FileResponse:
         return FileResponse(static_dir / "metrics.html")
 
+    @app.get("/app/logs", include_in_schema=False)
+    @app.get("/app/logs/", include_in_schema=False)
+    def logs_ui() -> FileResponse:
+        return FileResponse(static_dir / "logs.html")
+
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")

@@ -84,6 +84,11 @@ def create_app() -> FastAPI:
     def root() -> RedirectResponse:
         return RedirectResponse(url="/app/onboarding")
 
+    @app.get("/app", include_in_schema=False)
+    @app.get("/app/", include_in_schema=False)
+    def app_home() -> FileResponse:
+        return FileResponse(static_dir / "home.html")
+
     @app.get("/app/onboarding", include_in_schema=False)
     def onboarding_ui() -> FileResponse:
         return FileResponse(static_dir / "onboarding.html")

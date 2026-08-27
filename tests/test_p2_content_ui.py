@@ -38,8 +38,16 @@ class TestP2ContentUi(unittest.TestCase):
         self.assertTrue(str(d.get("body_markdown") or "").strip())
         self.assertNotIn("%/năm chắc", d["body_markdown"])
 
-    def test_get_content_debt03_core07(self):
-        for key in ("DEBT-03", "CORE-07", "SAFE-01"):
+    def test_get_content_ticket_e_keys_still_have_body(self):
+        for key in ("SAFE-01", "SAFE-02", "DEBT-03", "CORE-07"):
+            r = self.client.get(f"/content/{key}")
+            self.assertEqual(r.status_code, 200, key)
+            d = r.json()
+            self.assertTrue(d.get("ok"), key)
+            self.assertTrue(str(d.get("body_markdown") or "").strip(), key)
+
+    def test_get_content_five_new_fallback_keys(self):
+        for key in ("SAFE-03", "DEBT-01", "DEBT-02", "CORE-01", "CORE-05"):
             r = self.client.get(f"/content/{key}")
             self.assertEqual(r.status_code, 200, key)
             d = r.json()

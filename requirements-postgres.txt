@@ -1,0 +1,4 @@
+# Optional Postgres extra — do NOT add to Render requirements.txt
+# pip install -r requirements-postgres.txt
+-r requirements.txt
+psycopg[binary]==3.2.4

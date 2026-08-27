@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DNA tài chính</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.val{margin-top:4px;font-weight:600}
+.muted{color:#8b9bb4;font-size:13px}
+.empty{color:#8b9bb4;margin-top:16px}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>DNA tài chính</h1>
+<p class="muted">Hồ sơ bạn khai khi onboarding</p>
+<div id="dna"></div>
+<script>
+const KEY='welora_device_id';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function showEmpty(){
+  const box=document.getElementById('dna');
+  box.innerHTML='';
+  const p=document.createElement('p');
+  p.className='empty';
+  p.id='emptyState';
+  p.textContent='Chưa có DNA tài chính. Hãy hoàn tất Onboarding rồi quay lại đây.';
+  box.appendChild(p);
+}
+function pick(obj,key){
+  if(obj&&obj[key]!==undefined&&obj[key]!==null&&obj[key]!=='') return obj[key];
+  return null;
+}
+function row(label,value){
+  const el=document.createElement('div');
+  el.className='card';
+  const l=document.createElement('div');
+  l.className='label';
+  l.textContent=label;
+  const v=document.createElement('div');
+  v.className='val';
+  v.textContent=value===null||value===undefined?'—':String(value);
+  el.appendChild(l);
+  el.appendChild(v);
+  return el;
+}
+function render(data){
+  const box=document.getElementById('dna');
+  box.innerHTML='';
+  const ident=data.identity_context||{};
+  const snap=data.financial_snapshot_self||{};
+  const psy=data.psychological_profile_self||{};
+  const beh=data.behavioral_patterns_self||{};
+  const pref=data.agent_preferences||{};
+  const fields=[
+    ['life_stage', pick(ident,'life_stage')??data.life_stage],
+    ['income_stability', pick(ident,'income_stability')??data.income_stability],
+    ['family_context', pick(ident,'family_context')??data.family_context],
+    ['essential_expense_monthly', pick(snap,'essential_expense_monthly')??data.essential_expense_monthly],
+    ['emergency_fund_months_self', pick(snap,'emergency_fund_months_self')??data.emergency_fund_months_self],
+    ['has_dangerous_debt_self', pick(snap,'has_dangerous_debt_self')??data.has_dangerous_debt_self],
+    ['near_term_priority', pick(snap,'near_term_priority')??data.near_term_priority],
+    ['surplus_habit', pick(beh,'surplus_habit')??data.surplus_habit],
+    ['risk_tolerance', pick(psy,'risk_tolerance')??data.risk_tolerance],
+    ['agent_role_preference', pick(pref,'desired_role')??data.agent_role_preference]
+  ];
+  fields.forEach(([k,v])=>box.appendChild(row(k,v)));
+}
+(async()=>{
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||a.user||'';
+    const dr=await fetch('/users/'+encodeURIComponent(uid)+'/dna');
+    if(dr.status===404||!dr.ok){showEmpty();return;}
+    const data=await dr.json();
+    render(data);
+  }catch(e){
+    showEmpty();
+  }
+})();
+</script>
+</body>
+</html>

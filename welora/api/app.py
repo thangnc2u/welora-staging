@@ -124,6 +124,11 @@ def create_app() -> FastAPI:
     def constitution_ui() -> FileResponse:
         return FileResponse(static_dir / "constitution.html")
 
+    @app.get("/app/dna", include_in_schema=False)
+    @app.get("/app/dna/", include_in_schema=False)
+    def dna_ui() -> FileResponse:
+        return FileResponse(static_dir / "dna.html")
+
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")

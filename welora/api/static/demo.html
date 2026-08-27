@@ -35,7 +35,15 @@ function setStep(n, html, cls){
 const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={}};return {status:r.status,d}};
 document.getElementById('run').onclick=async()=>{
   for(let i=1;i<=8;i++) setStep(i,'Đang chạy…','muted');
-  const device='demo-'+Date.now();
+  function weloraDeviceId(){
+    let id=localStorage.getItem('welora_device_id');
+    if(!id){
+      id='web-'+Math.random().toString(36).slice(2,12);
+      localStorage.setItem('welora_device_id', id);
+    }
+    return id;
+  }
+  const device=weloraDeviceId();
   let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
   const uid=r.d.user_id;
   setStep(1,'HTTP '+r.status+' · user sẵn sàng','ok');

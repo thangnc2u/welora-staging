@@ -107,10 +107,18 @@ function show(n){
     if(el) el.classList.toggle('hidden', i!==n);
   }
 }
+function weloraDeviceId(){
+  let id=localStorage.getItem('welora_device_id');
+  if(!id){
+    id='web-'+Math.random().toString(36).slice(2,12);
+    localStorage.setItem('welora_device_id', id);
+  }
+  return id;
+}
 document.getElementById('auth').onclick=async()=>{
   document.getElementById('err0').textContent='';
   try{
-    const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'mob-'+Date.now()})});
+    const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
     const d=await r.json();
     uid=d.user_id;
     const s=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});

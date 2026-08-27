@@ -5,24 +5,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Welora — Nội dung</title>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#0b1220;color:#e8eefc}
-.card{background:#141c2e;border-radius:12px;padding:16px;margin-bottom:12px}
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;max-width:640px;margin-inline:auto;background:#0b1220;color:#e8eefc}
 a{color:#7dd3fc}
+.key{display:inline-block;background:#132337;color:#7dd3fc;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
+article{background:#141c2e;border-radius:12px;padding:16px;margin-top:12px}
+article h1{font-size:1.25rem;margin:8px 0 12px}
+#contentBody{white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.55;margin:0}
+.muted{color:#8b9bb4;font-size:13px}
+.nav{margin-bottom:12px}
 </style>
 </head>
 <body>
-<h1>Nội dung Welora</h1>
-<p id="key"></p>
-<div class="card" id="body">Đang tải…</div>
+<p class="nav"><a href="/app/chat">← Chat</a> · <a href="/app/safety">An Toàn</a></p>
+<p id="contentKey" class="key">…</p>
+<article>
+  <h1 id="contentTitle">Đang tải…</h1>
+  <div id="contentBody"></div>
+</article>
 <script>
 const params=new URLSearchParams(location.search);
-const key=params.get('key')||'SAFE-02';
-document.getElementById('key').textContent='principle_key: '+key;
-fetch('/content/'+encodeURIComponent(key)).then(r=>r.json()).then(d=>{
-  const el=document.getElementById('body');
-  if(d.error){el.textContent=d.error;return;}
-  el.innerHTML='<h2>'+(d.title||key)+'</h2><pre style="white-space:pre-wrap">'+JSON.stringify(d,null,2)+'</pre>';
-}).catch(e=>{document.getElementById('body').textContent=String(e);});
+const key=params.get('key')||'';
+const elKey=document.getElementById('contentKey');
+const elTitle=document.getElementById('contentTitle');
+const elBody=document.getElementById('contentBody');
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+(async()=>{
+  if(!key){
+    const r=await fetch('/content');
+    const j=await r.json();
+    elKey.textContent='index';
+    elTitle.textContent='Welorapedia · principle_key';
+    elBody.innerHTML=(j.items||[]).map(i=>
+      '<p><a href="/app/content?key='+encodeURIComponent(i.principle_key)+'">'+esc(i.principle_key)+' — '+esc(i.title)+'</a></p>'
+    ).join('');
+    return;
+  }
+  const r=await fetch('/content/'+encodeURIComponent(key));
+  const d=await r.json();
+  elKey.textContent=d.principle_key||key;
+  if(!r.ok || d.ok===false){
+    elTitle.textContent='Không tìm thấy';
+    elBody.textContent=d.error||'unknown principle_key';
+    return;
+  }
+  elTitle.textContent=d.title||key;
+  elBody.textContent=d.body_markdown||'';
+})().catch(e=>{elTitle.textContent='Lỗi';elBody.textContent=String(e);});
 </script>
 </body>
 </html>

@@ -88,12 +88,58 @@ def get_connection(url: str | None = None) -> Any:
         from psycopg.rows import dict_row
     except ImportError as e:
         raise ImportError(
-            "PostgreSQL requires psycopg. Install: pip install 'psycopg[binary]>=3.2'"
+            "PostgreSQL requires psycopg. Install: pip install -r requirements-postgres.txt"
         ) from e
 
     dsn = get_postgres_dsn(url)
-    conn = psycopg.connect(dsn, row_factory=dict_row)
-    return conn
+    raw = psycopg.connect(dsn, row_factory=dict_row)
+    return PgCompatConnection(raw)
+
+
+def adapt_sql_for_postgres(sql: str) -> str:
+    """Rewrite SQLite-shaped SQL so psycopg can run it."""
+    import re
+
+    out = sql
+    out = out.replace("datetime('now')", "now()::text")
+    out = out.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+    out = out.replace("excluded.", "EXCLUDED.")
+    out = re.sub(r"ON CONFLICT\(([^)]+)\)", r"ON CONFLICT (\1)", out)
+    out = out.replace("?", "%s")
+    if (
+        "INSERT INTO users(user_id) VALUES" in out
+        and "ON CONFLICT" not in out
+    ):
+        out = out.rstrip().rstrip(";") + " ON CONFLICT (user_id) DO NOTHING"
+    return out
+
+
+class PgCompatConnection:
+    """psycopg connection that accepts SQLite '?' placeholders from repos.py."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def execute(self, sql: str, params: Any = ()):
+        return self._conn.execute(adapt_sql_for_postgres(sql), params)
+
+    def executemany(self, sql: str, seq: Any):
+        return self._conn.executemany(adapt_sql_for_postgres(sql), seq)
+
+    def cursor(self):
+        return self._conn.cursor()
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        return self._conn.close()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
 
 
 def ph(dialect: Dialect | None = None) -> str:

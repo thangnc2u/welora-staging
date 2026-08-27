@@ -62,8 +62,16 @@ async function loadGate(){
     setGate(d.status||d.safety_gate_status||'not_passed');
   }catch(e){ setGate('not_passed'); }
 }
+function weloraDeviceId(){
+  let id=localStorage.getItem('welora_device_id');
+  if(!id){
+    id='web-'+Math.random().toString(36).slice(2,12);
+    localStorage.setItem('welora_device_id', id);
+  }
+  return id;
+}
 (async()=>{
-  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'chat-'+Date.now()})});
+  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
   const d=await r.json(); uid=d.user_id;
   add('Sẵn sàng · user='+uid,'bot muted');
   await loadGate();

@@ -9,8 +9,18 @@ from welora.goal_emergency_fund import InMemoryEmergencyFundStore
 from welora.safety_gate import compute_safety_gate, compute_safety_gate_from_amounts
 
 
+def _use_db_store() -> bool:
+    store = (os.environ.get("WELORA_STORE") or "memory").strip().lower()
+    url = (os.environ.get("WELORA_DB_URL") or "").strip()
+    if store in ("sqlite", "postgres", "db"):
+        return True
+    if url.startswith("postgresql://") or url.startswith("postgres://"):
+        return True
+    return False
+
+
 def _make_store():
-    if os.environ.get("WELORA_STORE", "memory").lower() == "sqlite":
+    if _use_db_store():
         from welora.db.repos import SqliteEmergencyFundStore
         return SqliteEmergencyFundStore(os.environ.get("WELORA_DB_URL") or None)
     return InMemoryEmergencyFundStore()
@@ -139,7 +149,7 @@ def service_safety_gate(user_id: str) -> tuple[int, dict]:
         return 400, {"error": "user_id is required"}
     goal = STORE.get_active_for_user(user_id)
     flags = get_user_flags(user_id)
-    if os.environ.get("WELORA_STORE", "memory").lower() == "sqlite":
+    if _use_db_store():
         try:
             from welora.db.repos import get_user_flags_db
             from welora.mastery import get_node

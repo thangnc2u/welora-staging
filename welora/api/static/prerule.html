@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pre-Rule debug</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.val{margin-top:4px;font-weight:600;white-space:pre-wrap}
+.muted{color:#8b9bb4;font-size:13px}
+textarea{width:100%;box-sizing:border-box;min-height:88px;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600;width:100%}
+.err{color:#ff6b6b}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Pre-Rule</h1>
+<p class="muted">Deny trước LLM. Không hiện user_id.</p>
+<textarea id="q" placeholder="Ví dụ: Tôi muốn all-in ETF ngay"></textarea>
+<button type="button" id="go">Chạy Pre-Rule</button>
+<p class="err" id="err"></p>
+<div class="card"><div class="label">guardrail_result</div><div class="val" id="guardrail">—</div></div>
+<div class="card"><div class="label">rule_hit</div><div class="val" id="ruleHit">—</div></div>
+<div class="card"><div class="label">should_call_llm</div><div class="val" id="llmCalled">—</div></div>
+<div class="card"><div class="label">safety_gate_status</div><div class="val" id="gateStatus">—</div></div>
+<div class="card"><div class="label">reply</div><div class="val" id="reply">—</div></div>
+<script>
+const KEY='welora_device_id';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function setTxt(id,v){
+  document.getElementById(id).textContent=(v===undefined||v===null||v==='')?'—':String(v);
+}
+document.getElementById('go').addEventListener('click', async()=>{
+  document.getElementById('err').textContent='';
+  const message=document.getElementById('q').value.trim();
+  if(!message){document.getElementById('err').textContent='Nhập câu hỏi';return;}
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||a.user||'';
+    const r=await fetch('/agent/pre-rule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message})});
+    const d=await r.json();
+    if(!r.ok){document.getElementById('err').textContent='Không chạy được Pre-Rule';return;}
+    setTxt('guardrail', d.guardrail_result);
+    setTxt('ruleHit', d.rule_hit);
+    setTxt('llmCalled', d.should_call_llm);
+    setTxt('gateStatus', d.safety_gate_status);
+    setTxt('reply', d.reply);
+  }catch(e){
+    document.getElementById('err').textContent='Không chạy được Pre-Rule';
+  }
+});
+</script>
+</body>
+</html>

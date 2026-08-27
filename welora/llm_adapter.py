@@ -48,6 +48,19 @@ def _http_json(url: str, headers: dict, payload: dict, timeout: float = 45.0) ->
         return json.loads(resp.read().decode("utf-8"))
 
 
+def build_openai_compatible_payload(model: str, system: str, message: str) -> dict:
+    payload: dict = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+    }
+    if str(model).startswith("grok-4.3"):
+        payload["reasoning_effort"] = "none"
+    return payload
+
+
 def openai_compatible_llm(
     system: str,
     message: str,
@@ -59,14 +72,7 @@ def openai_compatible_llm(
     data = _http_json(
         f"{base_url.rstrip('/')}/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
-        payload={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": message},
-            ],
-            "temperature": 0.3,
-        },
+        payload=build_openai_compatible_payload(model, system, message),
     )
     return data["choices"][0]["message"]["content"]
 
@@ -158,9 +164,15 @@ def safe_call_llm(
         return "", "none", False
     try:
         return call_llm(system, message), "llm", True
+    except urllib.error.HTTPError as e:
+        status = getattr(e, "code", "") or ""
+        return (
+            f"Không gọi được model (HTTPError {status}).",
+            "llm_error",
+            False,
+        )
     except (
         urllib.error.URLError,
-        urllib.error.HTTPError,
         TimeoutError,
         KeyError,
         OSError,
@@ -169,9 +181,7 @@ def safe_call_llm(
         json.JSONDecodeError,
     ) as e:
         return (
-            f"Tạm thời không gọi được model ({type(e).__name__}). "
-            "Tôi vẫn có thể hỗ trợ bằng khung nguyên tắc Welora — "
-            "bạn muốn xem Cổng An Toàn hay Goal quỹ?",
+            f"Không gọi được model ({type(e).__name__}).",
             "llm_error",
             False,
         )

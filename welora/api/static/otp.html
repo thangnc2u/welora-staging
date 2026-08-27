@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OTP điện thoại</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.muted{color:#8b9bb4;font-size:13px}
+input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
+.err{color:#ff6b6b}
+.ok{color:#86efac;font-weight:700}
+.hide{display:none}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>OTP điện thoại</h1>
+<p class="muted">Xin mã rồi xác thực. Không hiện token.</p>
+<div class="card">
+  <div class="label">Số điện thoại</div>
+  <input id="phone" type="tel" inputmode="tel" autocomplete="tel"/>
+  <button type="button" id="btnRequest">Xin mã</button>
+</div>
+<div class="card">
+  <div class="label">Số đã che</div>
+  <div id="phoneMasked">—</div>
+  <div id="pilotWrap" class="hide">
+    <div class="label">Mã pilot (staging)</div>
+    <div id="pilotCode"></div>
+  </div>
+  <div class="label">Mã OTP</div>
+  <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code"/>
+  <button type="button" id="btnVerify">Xác thực</button>
+</div>
+<p id="status"></p>
+<p class="err" id="otpErr"></p>
+<script>
+let challenge='';
+function showErr(msg){
+  document.getElementById('otpErr').textContent=msg||'';
+}
+document.getElementById('btnRequest').addEventListener('click', async()=>{
+  showErr('');
+  document.getElementById('status').textContent='';
+  const phone=document.getElementById('phone').value.trim();
+  if(phone.length<8){showErr('Nhập số điện thoại hợp lệ');return;}
+  try{
+    const r=await fetch('/auth/otp/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
+    if(!r.ok){showErr('Không xin được mã');return;}
+    const d=await r.json();
+    challenge=d.challenge_id||'';
+    document.getElementById('phoneMasked').textContent=d.phone_masked||'—';
+    const wrap=document.getElementById('pilotWrap');
+    const pc=document.getElementById('pilotCode');
+    if(d.pilot_code){pc.textContent=String(d.pilot_code);wrap.classList.remove('hide');}
+    else{pc.textContent='';wrap.classList.add('hide');}
+  }catch(e){
+    showErr('Không xin được mã');
+  }
+});
+document.getElementById('btnVerify').addEventListener('click', async()=>{
+  showErr('');
+  const code=document.getElementById('code').value.trim();
+  if(!challenge||!code){showErr('Cần mã OTP sau khi xin mã');return;}
+  try{
+    const r=await fetch('/auth/otp/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge_id:challenge,code})});
+    if(!r.ok){showErr('Mã không đúng hoặc đã hết hạn');return;}
+    const d=await r.json();
+    const tok=d.token||'';
+    if(tok) localStorage.setItem('welora_token',tok);
+    const me=await fetch('/auth/me',{headers:{Authorization:'Bearer '+tok}});
+    if(!me.ok){showErr('Xác thực xong nhưng chưa đọc được phiên');return;}
+    document.getElementById('status').className='ok';
+    document.getElementById('status').textContent='Đã xác thực';
+  }catch(e){
+    showErr('Không xác thực được');
+  }
+});
+</script>
+</body>
+</html>

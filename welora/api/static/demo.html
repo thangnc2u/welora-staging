@@ -5,45 +5,67 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Welora Demo E2E</title>
 <style>
-body{font-family:system-ui,sans-serif;background:#0b0f14;color:#e8eef7;margin:0;padding:16px}
-.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin-bottom:12px}
+body{font-family:system-ui,sans-serif;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin-bottom:10px}
 .ok{color:#3dd68c}.deny{color:#ff6b6b}.muted{color:#8b9bb4;font-size:13px}
-button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:600}
-pre{white-space:pre-wrap;font-size:12px;background:#0b0f14;padding:10px;border-radius:8px;overflow:auto}
+h1{font-size:1.25rem}h2{font-size:14px;margin:0 0 6px;color:#8b9bb4}
+button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:12px 14px;font-weight:600}
+.result{font-size:14px;line-height:1.45}
 </style>
 </head>
 <body>
 <h1>Welora · Demo E2E</h1>
-<p class="muted">Auth → Onboard → Goal → Deny → Fund → Gate pass → R01 still denies</p>
-<div class="card"><button id="run">Chạy demo 8 bước</button></div>
-<div class="card"><pre id="log">Sẵn sàng…</pre></div>
+<p class="muted">Auth → Onboard → Goal → Deny → Fund 3 tháng → Gate → R01 still denies</p>
+<div class="card"><button type="button" id="run">Chạy demo 8 bước</button><p class="muted">Chạy full demo Founders E2E</p></div>
+<div class="card" id="step1"><h2>1 · Auth</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step2"><h2>2 · Onboard session</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step3"><h2>3 · Complete DNA</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step4"><h2>4 · Goal quỹ</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step5"><h2>5 · Deny (all-in ETF)</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step6"><h2>6 · Fund 3 tháng</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step7"><h2>7 · Gate</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step8"><h2>8 · R01 still denies</h2><p class="result muted">Chưa chạy</p></div>
 <script>
-const log=document.getElementById('log');
-const out=(s)=>{log.textContent+=s+'\n'};
-const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={raw:t}};return {status:r.status,d}};
+function setStep(n, html, cls){
+  const el=document.querySelector('#step'+n+' .result');
+  if(!el) return;
+  el.className='result '+(cls||'');
+  el.innerHTML=html;
+}
+const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={}};return {status:r.status,d}};
 document.getElementById('run').onclick=async()=>{
-  log.textContent='';
+  for(let i=1;i<=8;i++) setStep(i,'Đang chạy…','muted');
   const device='demo-'+Date.now();
   let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
-  out('1. Auth '+r.status+' user='+(r.d.user_id||''));
   const uid=r.d.user_id;
+  setStep(1,'HTTP '+r.status+' · user sẵn sàng','ok');
+
   r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
-  const sid=r.d.session_id; out('2. Session '+sid);
+  const sid=r.d.session_id;
+  setStep(2,'HTTP '+r.status+' · session tạo xong','ok');
+
   await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:'young_single',income_stability:'stable',family_context:'alone'})});
   await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:false,near_term_priority:'safety'})});
   await j('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
   await j('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-  r=await j('/onboarding/session/'+sid+'/complete',{method:'POST'}); out('3. Complete DNA ok');
-  r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
-  const gid=r.d.goal_id; out('4. Goal '+gid);
+  r=await j('/onboarding/session/'+sid+'/complete',{method:'POST'});
+  setStep(3,'HTTP '+r.status+' · DNA + Hiến pháp xong','ok');
+
+  r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'emergency_fund',essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
+  const gid=r.d.goal_id;
+  setStep(4,'HTTP '+r.status+' · Goal quỹ 3 tháng đã tạo','ok');
+
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Tôi muốn all-in ETF ngay'})});
-  out('5. Deny path → '+r.d.guardrail_result+' rule='+r.d.rule_hit);
+  setStep(5,'guardrail_result: '+(r.d.guardrail_result||'')+' · rule_hit: '+(r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');
+
   r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
-  out('6. Fund set 3 months');
-  r=await j('/users/'+uid+'/safety-gate'); out('7. Gate '+r.d.status+' months='+r.d.months_covered);
+  setStep(6,'set_amount = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');
+
+  r=await j('/users/'+uid+'/safety-gate');
+  setStep(7,'status: '+(r.d.status||'')+' · months_covered: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');
+
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Rút quỹ khẩn cấp để đầu tư cổ phiếu'})});
-  out('8. R01 still deny → '+r.d.guardrail_result+' rule='+r.d.rule_hit);
-  out('DONE');
+  setStep(8,'guardrail_result: '+(r.d.guardrail_result||'')+' · rule_hit: '+(r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');
 };
 </script>
 </body>

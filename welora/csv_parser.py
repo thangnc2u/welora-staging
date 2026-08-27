@@ -24,6 +24,22 @@ def _parse_amount(raw: str) -> Optional[float]:
         return None
 
 
+def vn_category_label(desc: str) -> str:
+    """Heuristic danh mục tiếng Việt từ mô tả. Không LLM."""
+    d = (desc or "").lower()
+    if "thuê nhà" in d or "thue nha" in d or "nhà" in d:
+        return "Nhà ở"
+    if any(k in d for k in ("điện", "dien", "evn", "nước", "nuoc")):
+        return "Điện nước"
+    if "lương" in d or "luong" in d or "salary" in d:
+        return "Lương"
+    if "winmart" in d or "siêu thị" in d or "sieu thi" in d or "grocer" in d:
+        return "Siêu thị"
+    if "học phí" in d or "hoc phi" in d or "học" in d or "hoc" in d:
+        return "Học phí"
+    return "Khác"
+
+
 def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
     text = text or ""
     if not text.strip():
@@ -31,7 +47,6 @@ def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames:
-        # try simple rows
         lines = [ln for ln in text.splitlines() if ln.strip()]
         txs = []
         for ln in lines[:200]:
@@ -42,17 +57,15 @@ def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
                 if amt is not None:
                     break
             if amt is not None:
-                txs.append({"amount": amt, "raw": ln[:120]})
+                txs.append({"amount": amt, "description": ln[:120], "raw": ln[:120]})
         return _summarize(txs, filename)
 
-    # normalize headers
     fields = [f.strip().lower() for f in reader.fieldnames]
     amount_keys = [k for k in fields if any(x in k for x in ("amount", "số tiền", "so tien", "value", "debit", "credit"))]
     desc_keys = [k for k in fields if any(x in k for x in ("desc", "nội dung", "noi dung", "memo", "detail"))]
 
     txs = []
     for row in reader:
-        # map original keys
         raw_map = {k.strip().lower(): v for k, v in row.items() if k}
         amt = None
         for ak in amount_keys:
@@ -77,15 +90,19 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         debits = [abs(t["amount"]) for t in txs if t.get("amount")]
     suggestion = None
     if debits:
-        # crude monthly essential estimate: median of absolute outflows * conservative factor
         sorted_d = sorted(debits)
         median = sorted_d[len(sorted_d) // 2]
         suggestion = {
-            "essential_expense_monthly": round(median * 20, -3),  # rough monthly scale
+            "essential_expense_monthly": round(median * 20, -3),
             "method": "heuristic_median_outflow",
             "note": "Gợi ý — không tự ghi đè Goal. User xác nhận trước khi apply.",
             "sample_size": len(debits),
         }
+    counts: dict[str, int] = {}
+    for t in txs:
+        desc = str(t.get("description") or t.get("raw") or "")
+        lab = vn_category_label(desc)
+        counts[lab] = counts.get(lab, 0) + 1
     return {
         "ok": True,
         "filename": filename,
@@ -93,6 +110,7 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         "transactions": txs[:100],
         "suggestion": suggestion,
         "auto_overwrite": False,
+        "category_counts": counts,
     }
 
 

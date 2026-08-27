@@ -134,6 +134,11 @@ def create_app() -> FastAPI:
     def goals_ui() -> FileResponse:
         return FileResponse(static_dir / "goals.html")
 
+    @app.get("/app/otp", include_in_schema=False)
+    @app.get("/app/otp/", include_in_schema=False)
+    def otp_ui() -> FileResponse:
+        return FileResponse(static_dir / "otp.html")
+
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")

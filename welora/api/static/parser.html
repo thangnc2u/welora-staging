@@ -117,7 +117,7 @@
         if (existingGoal) {
           const cur = (existingGoal.current && existingGoal.current.amount) || existingGoal.current_amount || 0;
           const tgt = (existingGoal.target && existingGoal.target.amount) || existingGoal.target_amount || 0;
-          noteEl.textContent = 'Goal đã có — không ghi đè. Hiện tại ' + vnd(cur) + ' / mục tiêu ' + vnd(tgt);
+          noteEl.textContent = 'Goal đã có · không ghi đè. Hiện tại ' + vnd(cur) + ' / mục tiêu ' + vnd(tgt);
           btn.disabled = true;
         } else if (draftEssential > 0) {
           btn.disabled = false;

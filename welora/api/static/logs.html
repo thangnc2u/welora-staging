@@ -65,7 +65,7 @@ function card(row){
     if(!items.length){list.textContent='Chưa có log';return;}
     items.forEach(row=>list.appendChild(card(row)));
   }catch(e){
-    document.getElementById('logErr').textContent='Không đọc được logs';
+    document.getElementById('logErr').textContent='Không đọc được nhật ký';
   }
 })();
 </script>

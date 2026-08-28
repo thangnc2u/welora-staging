@@ -30,20 +30,20 @@ button.secondary{background:#243041}
 
 <div class="card hidden" id="step1">
   <h2>B1 · Identity</h2>
-  <label for="life_stage">Life stage</label>
+  <label for="life_stage">Giai đoạn sống</label>
   <select id="life_stage">
-    <option value="young_single">young_single</option>
-    <option value="family">family</option>
+    <option value="young_single">Độc thân trẻ</option>
+    <option value="family">Gia đình</option>
   </select>
   <label for="income_stability">Thu nhập</label>
   <select id="income_stability">
-    <option value="stable">stable</option>
-    <option value="variable">variable</option>
+    <option value="stable">Ồn định</option>
+    <option value="variable">Không ổn định</option>
   </select>
   <label for="family_context">Gia đình</label>
   <select id="family_context">
-    <option value="alone">alone</option>
-    <option value="with_family">with_family</option>
+    <option value="alone">Sống một mình</option>
+    <option value="with_family">Sống cùng gia đình</option>
   </select>
   <button type="button" id="next1">Tiếp</button>
 </div>
@@ -59,8 +59,8 @@ button.secondary{background:#243041}
   </select>
   <label for="priority">Ưu tiên gần</label>
   <select id="priority">
-    <option value="safety">safety</option>
-    <option value="debt">debt</option>
+    <option value="safety">An Toàn</option>
+    <option value="debt">Trả nợ</option>
   </select>
   <button type="button" id="next2">Tiếp</button>
 </div>
@@ -69,8 +69,8 @@ button.secondary{background:#243041}
   <h2>B3 · Behavior</h2>
   <label for="surplus_habit">Thói quen tiền dư</label>
   <select id="surplus_habit">
-    <option value="hold">hold</option>
-    <option value="spend">spend</option>
+    <option value="hold">Giữ</option>
+    <option value="spend">Tiêu</option>
   </select>
   <label for="risk_tolerance">Mức chấp nhận biến động (1–5)</label>
   <select id="risk_tolerance">
@@ -82,7 +82,7 @@ button.secondary{background:#243041}
   </select>
   <label for="agent_role">Vai trò Agent</label>
   <select id="agent_role">
-    <option value="advisor_only">advisor_only</option>
+    <option value="advisor_only">Chỉ tư vấn</option>
   </select>
   <button type="button" id="next3">Tiếp</button>
 </div>
@@ -157,8 +157,10 @@ document.getElementById('next3').onclick=async()=>{
 document.getElementById('next4').onclick=async()=>{
   await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
   const essential=+document.getElementById('essential').value;
+  const ls=document.getElementById('life_stage');
+  const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
   document.getElementById('summary').textContent=
-    'Life stage: '+document.getElementById('life_stage').value+
+    lsText+
     ' · Chi tiêu thiết yếu: '+essential+
     ' VND/tháng · Target quỹ: 3 tháng (cố định).';
   show(5);

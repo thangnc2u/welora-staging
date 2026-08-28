@@ -45,7 +45,7 @@ class TestP2E4MasteryGate(unittest.TestCase):
         self.assertIn("meets_gate", html)
         self.assertIn("SAFE-02", html)
         self.assertIn("hs-card", html)
-        self.assertIn("Health Score", html)
+        self.assertIn("Điểm sức khởe", html)
         self.assertIn("btnSave", html)
         self.assertIn("set_amount", html)
 

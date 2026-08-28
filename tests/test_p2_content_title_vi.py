@@ -21,7 +21,7 @@ class TestP2ContentTitleVi(unittest.TestCase):
         self.assertIn("N\u1ed9i dung", html)
         self.assertNotIn("<title>Welora — Nội dung</title>", html)
         self.assertNotIn("<title>Welora - Nội dung</title>", html)
-        self.assertIn("Welorapedia · principle_key", html)
+        self.assertIn("elTitle.textContent='Welorapedia'", html)
         self.assertIn("/content", html)
         self.assertIn("principle_key", html)
         self.assertIn("textContent", html)

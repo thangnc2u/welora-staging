@@ -19,7 +19,7 @@ class TestP2ContentSepVi(unittest.TestCase):
         self.assertIn("+' · '+", html)
         self.assertNotIn("+' — '+", html)
         self.assertIn("<title>Welora · Nội dung</title>", html)
-        self.assertIn("Welorapedia · principle_key", html)
+        self.assertIn("elTitle.textContent='Welorapedia'", html)
         self.assertIn("principle_key", html)
         self.assertIn("/content", html)
         self.assertIn("/app/chat", html)

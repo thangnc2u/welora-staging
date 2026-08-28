@@ -33,7 +33,7 @@ const elBody=document.getElementById('contentBody');
   if(!key){
     const r=await fetch('/content');
     const j=await r.json();
-    elKey.textContent='index';
+    elKey.textContent='danh sách';
     elTitle.textContent='Welorapedia';
     elBody.textContent='';
     (j.items||[]).forEach(i=>{

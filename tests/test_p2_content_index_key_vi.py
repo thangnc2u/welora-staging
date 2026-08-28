@@ -1,4 +1,4 @@
-"""P2 Ticket BL — content index h1 Welorapedia."""
+"""P2 Ticket BM — content index badge danh sách."""
 
 from __future__ import annotations
 
@@ -13,12 +13,14 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "content.html"
 
 
-class TestP2ContentIndexH1Vi(unittest.TestCase):
-    def test_index_h1(self):
+class TestP2ContentIndexKeyVi(unittest.TestCase):
+    def test_index_key(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("elTitle.textContent='Welorapedia'", html)
-        self.assertNotIn("Welorapedia · principle_key", html)
         self.assertIn("elKey.textContent='danh sách'", html)
+        self.assertIn("s\u00e1ch", html)
+        self.assertNotIn("elKey.textContent='index'", html)
+        self.assertIn("elTitle.textContent='Welorapedia'", html)
+        self.assertIn("elKey.textContent=d.principle_key||key", html)
         self.assertIn("i.principle_key", html)
         self.assertIn("+' · '+", html)
         self.assertIn("unknown principle_key", html)

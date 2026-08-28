@@ -14,11 +14,13 @@ input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;bo
 button{background:#0f766e;color:#fff;border:0;font-weight:600}
 a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
 .hs-note{font-size:11px;color:#c2410c;background:#fff7ed;border-radius:8px;padding:8px;margin-top:8px}
+.hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:#374151}
 </style></head><body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <div class="shell">
   <h1>An Toàn</h1>
-  <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHUA DAT</div><div class="meta" id="gateMeta"></div></div>
+  <div class="section-title">Checklist</div>
+  <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHƯA ĐẠT</div><div class="meta" id="gateMeta"></div></div>
   <div class="badge-card fail" id="masteryBadge">
     <div class="status" id="masteryStatus">Mastery · —</div>
     <div class="meta" id="masteryMeta">meets_gate: false</div>
@@ -26,24 +28,31 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
       <option value="not_started">not_started</option><option value="learning">learning</option>
       <option value="familiar">familiar</option><option value="apply">apply</option><option value="mastered">mastered</option>
     </select>
-    <p><a href="/app/content?key=SAFE-02">Hoc SAFE-02</a></p>
+    <p><a href="/app/content?key=SAFE-02">Học SAFE-02</a></p>
   </div>
   <div class="section-title">Health Score</div>
   <div class="hs-card" id="hsCard"><div id="hsScore">— / 1000</div><div id="hsBars"></div>
-    <div class="hs-note">Diem khong bypass Cong An Toan.</div></div>
-  <div class="section-title">Goal quy</div>
+    <div class="hs-note">Điểm không bypass Cổng An Toàn</div></div>
+  <div class="section-title">Goal quỹ</div>
   <div class="goal-card">
     <div class="bar"><i id="barFill" style="width:0%"></i></div>
-    <div class="meta" id="goalMeta">Chua co Goal</div>
-    <label>Chi tieu thiet yeu / thang</label>
+    <div class="meta" id="goalMeta">Chưa có Goal</div>
+    <label>Chi tiêu thiết yếu / tháng</label>
     <input id="essential" type="number" value="10000000"/>
-    <button id="btnCreate">Tao Goal quy 3 thang</button>
-    <label>So du quy (VND)</label>
+    <button id="btnCreate">Tạo Goal quỹ 3 tháng</button>
+    <label>Số dư quỹ (VND)</label>
     <input id="amount" type="number" value="0"/>
-    <button id="btnSave">Luu so du</button>
+    <button id="btnSave">Lưu số dư</button>
   </div>
 </div>
 <script>
+const HS_LABELS={
+  cashflow:'Dòng tiền',
+  emergency_fund:'Quỹ khẩn cấp',
+  debt:'Nợ',
+  savings_invest_rate:'Tiết kiệm / đầu tư',
+  behavior_consistency:'Hành vi nhất quán'
+};
 const state={userId:null,goal:null,gate:null,health:null,mastery:null};
 async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});return r.json();}
 async function load(){
@@ -58,10 +67,25 @@ async function load(){
   try{state.mastery=await api("/users/"+state.userId+"/mastery?node_id=no_efund_invest")}catch(_){state.mastery={state:"not_started",meets_gate:false}}
   render();
 }
+function renderHsBars(components){
+  const box=document.getElementById("hsBars");
+  box.textContent="";
+  Object.keys(HS_LABELS).forEach(k=>{
+    const row=document.createElement("div");
+    row.className="hs-row";
+    const lab=document.createElement("span");
+    lab.textContent=HS_LABELS[k];
+    const val=document.createElement("span");
+    val.textContent=String((components[k]&&components[k].score)||0);
+    row.appendChild(lab);
+    row.appendChild(val);
+    box.appendChild(row);
+  });
+}
 function render(){
   const passed=state.gate&&state.gate.status==="passed";
   document.getElementById("gateCard").className="badge-card "+(passed?"ok":"fail");
-  document.getElementById("gateStatus").textContent=passed?"DAT":"CHUA DAT";
+  document.getElementById("gateStatus").textContent=passed?"ĐẠT":"CHƯA ĐẠT";
   document.getElementById("gateMeta").textContent=(state.gate&&state.gate.reasons||[]).join(", ");
   const st=(state.mastery&&state.mastery.state)||"not_started";
   const ok=!!(state.mastery&&state.mastery.meets_gate);
@@ -71,8 +95,7 @@ function render(){
   document.getElementById("masteryState").value=st;
   if(state.health){
     document.getElementById("hsScore").textContent=(state.health.score||0)+" / 1000";
-    const c=state.health.components||{};
-    document.getElementById("hsBars").innerHTML=Object.keys(c).map(k=>"<div class=meta>"+k+" "+(c[k].score||0)+"</div>").join("");
+    renderHsBars(state.health.components||{});
   }
   if(state.goal){
     const pct=Math.min(100,Number(state.goal.current&&state.goal.current.percent||0));

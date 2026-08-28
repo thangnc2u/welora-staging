@@ -28,7 +28,7 @@ VALUES = (
 LABELS = (
     "Độc thân trẻ",
     "Gia đình",
-    "Ồn định",
+    "Ổn định",
     "Không ổn định",
     "Sống một mình",
     "Sống cùng gia đình",
@@ -47,6 +47,7 @@ class TestP2OnboardingVi(unittest.TestCase):
             self.assertIn(f'value="{v}"', html)
         for lab in LABELS:
             self.assertIn(lab, html)
+        self.assertNotIn("Ồn định", html)
         self.assertIn("selectedOptions[0].text", html)
         self.assertNotIn("Life stage:", html)
         self.assertNotIn("innerHTML", html)

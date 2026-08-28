@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Welora — Parser CSV</title>
+  <title>Welora · Parser CSV ngân hàng</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 16px; background: #f6f7f9; }
     h1 { font-size: 1.2rem; }
@@ -51,14 +51,7 @@
       return d;
     }
     function vnd(n){ return Number(n||0).toLocaleString('vi-VN') + ' đ'; }
-    const sample = `date,amount,description
-01/07/2026,-3500000,Thuê nhà tháng 7
-05/07/2026,-450000,Điện EVN
-10/07/2026,25000000,Lương
-12/07/2026,-1200000,WinMart
-15/07/2026,-2000000,Học phí
-01/08/2026,-3500000,Thuê nhà tháng 8
-10/08/2026,25000000,Lương`;
+    const sample = `date,amount,description\n01/07/2026,-3500000,Thuê nhà tháng 7\n05/07/2026,-450000,Điện EVN\n10/07/2026,25000000,Lương\n12/07/2026,-1200000,WinMart\n15/07/2026,-2000000,Học phí\n01/08/2026,-3500000,Thuê nhà tháng 8\n10/08/2026,25000000,Lương`;
     document.getElementById('csv').value = sample;
     document.getElementById('go').onclick = async () => {
       const text = document.getElementById('csv').value;

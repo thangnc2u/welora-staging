@@ -193,7 +193,7 @@ def content_root() -> Path:
     env = os.environ.get("WELORA_CONTENT_ROOT")
     if env:
         return Path(env)
-    return Path("/home/workdir/artifacts")
+    return Path(__file__).resolve().parents[1] / "content"
 
 
 def resolve_keys(keys: list[str]) -> list[dict[str, Any]]:

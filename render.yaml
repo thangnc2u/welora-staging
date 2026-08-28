@@ -31,6 +31,8 @@ services:
         value: /tmp/welora_staging.db
       - key: WELORA_LLM_PROVIDER
         value: stub
+      - key: WELORA_CONTENT_ROOT
+        value: content
       - key: WELORA_ENV
         value: staging
       - key: PIP_ONLY_BINARY

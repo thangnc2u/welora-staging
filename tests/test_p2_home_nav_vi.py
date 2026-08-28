@@ -17,7 +17,7 @@ NAVS = (
     ("navSafety", "/app/safety", "Cổng An Toàn"),
     ("navChat", "/app/chat", "Chat với Agent"),
     ("navContent", "/app/content", "Welorapedia"),
-    ("navDemo", "/app/demo", "Demo E2E"),
+    ("navDemo", "/app/demo", "Demo 8 bước"),
     ("navParser", "/app/parser", "Sao kê CSV"),
     ("navMetrics", "/app/metrics", "Chỉ số"),
     ("navLogs", "/app/logs", "Nhật ký quyết định"),

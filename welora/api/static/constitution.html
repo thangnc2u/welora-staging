@@ -17,7 +17,7 @@ a{color:#7dd3fc;text-decoration:none}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Hiến pháp cá nhân</h1>
-<p class="muted">Điều bạn đã xác nhận khi onboarding</p>
+<p class="muted">Điều bạn đã xác nhận khi Bắt đầu</p>
 <div id="articles"></div>
 <script>
 const KEY='welora_device_id';
@@ -32,7 +32,7 @@ function showEmpty(){
   const p=document.createElement('p');
   p.className='empty';
   p.id='emptyState';
-  p.textContent='Chưa có Hiến pháp. Hãy hoàn tất Onboarding rồi quay lại đây.';
+  p.textContent='Chưa có Hiến pháp. Hãy hoàn tất Bắt đầu rồi quay lại đây.';
   box.appendChild(p);
 }
 function renderArticles(list){

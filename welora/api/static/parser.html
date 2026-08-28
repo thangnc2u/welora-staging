@@ -68,7 +68,7 @@
       const noteEl = document.getElementById('goalExistingNote');
       const btn = document.getElementById('createGoalBtn');
       suggestionEl.textContent = '…';
-      catEl.innerHTML = '';
+      catEl.textContent = '';
       draftEl.textContent = '—';
       noteEl.textContent = '';
       btn.disabled = true;
@@ -89,9 +89,23 @@
         suggestionEl.textContent = vnd(n);
         const counts = j.category_counts || {};
         const keys = Object.keys(counts);
-        catEl.innerHTML = keys.length
-          ? keys.map((k) => '<li><span>' + k + '</span><span>' + counts[k] + '</span></li>').join('')
-          : "<li class='muted'>Không có danh mục</li>";
+        if (!keys.length) {
+          const li = document.createElement('li');
+          li.className = 'muted';
+          li.textContent = 'Không có danh mục';
+          catEl.appendChild(li);
+        } else {
+          keys.forEach((k) => {
+            const li = document.createElement('li');
+            const a = document.createElement('span');
+            a.textContent = k;
+            const b = document.createElement('span');
+            b.textContent = String(counts[k]);
+            li.appendChild(a);
+            li.appendChild(b);
+            catEl.appendChild(li);
+          });
+        }
         const gd = j.goal_draft || {};
         draftEssential = Number(gd.essential_expense_monthly || n || 0);
         const target = Number(gd.target_amount || (draftEssential * 3) || 0);

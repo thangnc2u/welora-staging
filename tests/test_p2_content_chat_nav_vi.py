@@ -21,7 +21,7 @@ class TestP2ContentChatNavVi(unittest.TestCase):
         self.assertNotIn(">← Chat<", html)
         self.assertIn("An Toàn", html)
         self.assertIn("<title>Welora · Nội dung</title>", html)
-        self.assertIn("Welorapedia · principle_key", html)
+        self.assertIn("elTitle.textContent='Welorapedia'", html)
         self.assertIn("+' · '+", html)
         self.assertIn("/content", html)
         self.assertIn("principle_key", html)

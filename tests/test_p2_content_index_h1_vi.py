@@ -1,4 +1,4 @@
-"""P2 Ticket BJ — content index separator middle-dot."""
+"""P2 Ticket BL — content index h1 Welorapedia."""
 
 from __future__ import annotations
 
@@ -13,18 +13,19 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "content.html"
 
 
-class TestP2ContentSepVi(unittest.TestCase):
-    def test_index_sep(self):
+class TestP2ContentIndexH1Vi(unittest.TestCase):
+    def test_index_h1(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("+' · '+", html)
-        self.assertNotIn("+' — '+", html)
-        self.assertIn("<title>Welora · Nội dung</title>", html)
         self.assertIn("elTitle.textContent='Welorapedia'", html)
-        self.assertIn("principle_key", html)
+        self.assertNotIn("Welorapedia · principle_key", html)
+        self.assertIn("elKey.textContent='index'", html)
+        self.assertIn("i.principle_key", html)
+        self.assertIn("+' · '+", html)
+        self.assertIn("unknown principle_key", html)
+        self.assertIn("← Chat với Agent", html)
+        self.assertIn("An Toàn", html)
+        self.assertIn("<title>Welora · Nội dung</title>", html)
         self.assertIn("/content", html)
-        self.assertIn("/app/chat", html)
-        self.assertIn("textContent", html)
-        self.assertIn("createElement", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "contentKey", "contentTitle", "contentBody"):
             self.assertIn(f'id="{nid}"', html)

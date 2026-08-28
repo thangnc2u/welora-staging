@@ -144,6 +144,11 @@ def create_app() -> FastAPI:
     def prerule_ui() -> FileResponse:
         return FileResponse(static_dir / "prerule.html")
 
+    @app.get("/app/health-score", include_in_schema=False)
+    @app.get("/app/health-score/", include_in_schema=False)
+    def health_score_ui() -> FileResponse:
+        return FileResponse(static_dir / "healthscore.html")
+
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")

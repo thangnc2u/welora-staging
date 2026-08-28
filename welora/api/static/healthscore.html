@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora Health Score</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.label{color:#8b9bb4;font-size:13px}
+.row{margin-top:6px;display:flex;justify-content:space-between}
+.err{color:#ff6b6b}
+.note{font-size:13px;color:#cbd5e1;margin-top:8px}
+#hsScore{font-size:1.6rem;font-weight:700}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Health Score</h1>
+<div class="card">
+  <div class="label">Điểm</div>
+  <div id="hsScore">—</div>
+  <div class="row"><span class="label">Mức</span><span id="hsLevel">—</span></div>
+  <p class="note" id="hsBypassNote">Điểm không bypass Cổng An Toàn</p>
+</div>
+<div class="card" id="hsComponents"></div>
+<p class="err" id="hsErr"></p>
+<script>
+const KEY='welora_device_id';
+const LABELS={
+  cashflow:'Dòng tiền',
+  emergency_fund:'Quỹ khẩn cấp',
+  debt:'Nợ',
+  savings_invest_rate:'Tiết kiệm / đầu tư',
+  behavior_consistency:'Hành vi nhất quán'
+};
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function addRow(parent,label,val){
+  const row=document.createElement('div');
+  row.className='row';
+  const a=document.createElement('span');
+  a.className='label';
+  a.textContent=label;
+  const b=document.createElement('span');
+  b.textContent=val;
+  row.appendChild(a);
+  row.appendChild(b);
+  parent.appendChild(row);
+}
+(async()=>{
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||'';
+    const r=await fetch('/users/'+encodeURIComponent(uid)+'/health-score');
+    const j=await r.json();
+    const score=j.score;
+    document.getElementById('hsScore').textContent=(score==null?'—':String(score)+' / 1000');
+    document.getElementById('hsLevel').textContent=j.level||'—';
+    const note=document.getElementById('hsBypassNote');
+    if(j.can_bypass_gate_with_score===false || j.can_bypass_gate_with_score==null){
+      note.textContent='Điểm không bypass Cổng An Toàn';
+    }
+    const box=document.getElementById('hsComponents');
+    const comps=j.components||{};
+    Object.keys(LABELS).forEach(k=>{
+      const c=comps[k]||{};
+      addRow(box, LABELS[k], String(c.score==null?'—':c.score));
+    });
+  }catch(e){
+    document.getElementById('hsErr').textContent='Không đọc được Health Score';
+  }
+})();
+</script>
+</body>
+</html>

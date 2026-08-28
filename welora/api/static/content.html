@@ -40,7 +40,7 @@ const elBody=document.getElementById('contentBody');
       const p=document.createElement('p');
       const a=document.createElement('a');
       a.href='/app/content?key='+encodeURIComponent(i.principle_key||'');
-      a.textContent=(i.principle_key||'')+' — '+(i.title||'');
+      a.textContent=(i.principle_key||'')+' · '+(i.title||'');
       p.appendChild(a);
       elBody.appendChild(p);
     });

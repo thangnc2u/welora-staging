@@ -31,7 +31,7 @@ let uid=null;
 const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;log.appendChild(d);log.scrollTop=log.scrollHeight};
 function setGate(status){
   const s=(status==='passed')?'passed':'not_passed';
-  gateBadge.textContent='Cổng: '+s;
+  gateBadge.textContent=s==='passed'?'Cổng: ĐẠT':'Cổng: CHƯA ĐẠT';
   gateBadge.className=s;
 }
 function pickHref(d){

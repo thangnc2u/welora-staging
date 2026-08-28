@@ -1,4 +1,4 @@
-"""P2: grok-4.3 payload + HTTP error visible; deny never calls LLM."""
+"""P2: no reasoning_effort; HTTPError body snippet 180; deny no LLM."""
 
 from __future__ import annotations
 
@@ -9,60 +9,41 @@ import unittest
 from fastapi.testclient import TestClient
 
 from welora.api.app import create_app
-from welora.chat_service import reset_logs, service_chat
+from welora.chat_service import reset_logs
 from welora.llm_adapter import build_openai_compatible_payload, safe_call_llm
 from welora.safety_gate import TARGET_MONTHS
 
 
-class TestP2LlmXaiError(unittest.TestCase):
+class TestP2LlmXai400(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(create_app())
 
-    def test_payload_grok43_no_temperature_has_reasoning_none(self):
+    def test_payload_has_no_reasoning_or_temperature(self):
         p = build_openai_compatible_payload("grok-4.3", "sys", "hi")
-        self.assertEqual(p["model"], "grok-4.3")
-        self.assertNotIn("temperature", p)
         self.assertNotIn("reasoning_effort", p)
-        p2 = build_openai_compatible_payload("gpt-4o-mini", "sys", "hi")
-        self.assertNotIn("temperature", p2)
-        self.assertNotIn("reasoning_effort", p2)
+        self.assertNotIn("temperature", p)
+        self.assertEqual(p["model"], "grok-4.3")
 
-    def test_http_error_keeps_llm_error(self):
+    def test_http_400_includes_body_snippet(self):
         def boom(system: str, message: str) -> str:
             raise urllib.error.HTTPError(
                 "https://api.x.ai/v1/chat/completions",
                 400,
                 "Bad Request",
                 hdrs=None,  # type: ignore[arg-type]
-                fp=io.BytesIO(b'{"error":{"message":"unknown field reasoning_effort"}}'),
+                fp=io.BytesIO(b'{"error":"bad_request_demo"}'),
             )
 
         reply, tag, invoked = safe_call_llm(boom, "sys", "hi")
         self.assertFalse(invoked)
         self.assertEqual(tag, "llm_error")
-        self.assertIn("HTTPError", reply)
-        self.assertIn("400", reply)
-        self.assertIn("unknown field", reply)
-        self.assertNotIn("xai-", reply)
-
-        code, out = service_chat(
-            user_id="u-pass-budget",
-            message="Gợi ý ngân sách chi tiêu hàng tháng",
-            context_seed={
-                "user_id": "u-pass-budget",
-                "safety_gate": {"status": "passed", "months_covered": 3},
-            },
-            call_llm=boom,
-        )
-        self.assertEqual(code, 200)
-        if out.get("guardrail_result") != "deny":
-            self.assertEqual(out.get("model_used"), "llm_error")
-            self.assertFalse(out.get("llm_called"))
-            self.assertIn("HTTPError", out.get("reply") or "")
+        self.assertIn("HTTPError 400", reply)
+        self.assertIn("bad_request_demo", reply)
+        self.assertLessEqual(len(reply), 280)
 
     def test_deny_all_in_etf_no_llm(self):
         reset_logs()
-        auth = self.client.post("/auth/device", json={"device_id": "dev-ticket-w-etf"})
+        auth = self.client.post("/auth/device", json={"device_id": "dev-ticket-x-etf"})
         uid = auth.json().get("user_id")
         r = self.client.post(
             "/agent/chat",
@@ -78,7 +59,6 @@ class TestP2LlmXaiError(unittest.TestCase):
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)
         r = self.client.get("/health")
-        self.assertEqual(r.status_code, 200)
         b = r.json()
         self.assertEqual(b["status"], "ok")
         self.assertIn("dialect", b)

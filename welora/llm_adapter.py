@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Callable, Optional
@@ -49,16 +50,26 @@ def _http_json(url: str, headers: dict, payload: dict, timeout: float = 45.0) ->
 
 
 def build_openai_compatible_payload(model: str, system: str, message: str) -> dict:
-    payload: dict = {
+    return {
         "model": model,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": message},
         ],
     }
-    if str(model).startswith("grok-4.3"):
-        payload["reasoning_effort"] = "none"
-    return payload
+
+
+def _http_error_snippet(err: urllib.error.HTTPError, *, limit: int = 180) -> str:
+    raw = ""
+    try:
+        blob = err.read() if getattr(err, "fp", None) is not None else b""
+        raw = blob.decode("utf-8", errors="replace") if isinstance(blob, (bytes, bytearray)) else str(blob or "")
+    except Exception:
+        raw = ""
+    raw = re.sub(r"(?i)(api[_-]?key|secret|token|bearer|authorization)\s*[:=]\s*\S+", "[REDACTED]", raw)
+    raw = re.sub(r"(?i)\b(sk-|xai-|ghp_|github_pat_)[A-Za-z0-9_\-]{8,}", "[REDACTED]", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw[:limit]
 
 
 def openai_compatible_llm(
@@ -166,8 +177,10 @@ def safe_call_llm(
         return call_llm(system, message), "llm", True
     except urllib.error.HTTPError as e:
         status = getattr(e, "code", "") or ""
+        snippet = _http_error_snippet(e)
+        detail = f"{status}: {snippet}" if snippet else str(status)
         return (
-            f"Không gọi được model (HTTPError {status}).",
+            f"Không gọi được model (HTTPError {detail}).",
             "llm_error",
             False,
         )

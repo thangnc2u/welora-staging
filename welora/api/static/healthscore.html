@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Welora Health Score</title>
+<title>Welora · Điểm sức khỏe</title>
 <style>
 body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
 a{color:#7dd3fc;text-decoration:none}
@@ -17,7 +17,7 @@ a{color:#7dd3fc;text-decoration:none}
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
-<h1>Health Score</h1>
+<h1>Điểm sức khỏe</h1>
 <div class="card">
   <div class="label">Điểm</div>
   <div id="hsScore">—</div>
@@ -61,7 +61,9 @@ function addRow(parent,label,val){
     const j=await r.json();
     const score=j.score;
     document.getElementById('hsScore').textContent=(score==null?'—':String(score)+' / 1000');
-    document.getElementById('hsLevel').textContent=j.level||'—';
+    const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
+    const raw=j.level||'—';
+    document.getElementById('hsLevel').textContent=LEVELS[raw]||raw;
     const note=document.getElementById('hsBypassNote');
     if(j.can_bypass_gate_with_score===false || j.can_bypass_gate_with_score==null){
       note.textContent='Điểm không bypass Cổng An Toàn';
@@ -73,7 +75,7 @@ function addRow(parent,label,val){
       addRow(box, LABELS[k], String(c.score==null?'—':c.score));
     });
   }catch(e){
-    document.getElementById('hsErr').textContent='Không đọc được Health Score';
+    document.getElementById('hsErr').textContent='Không đọc được điểm sức khỏe';
   }
 })();
 </script>

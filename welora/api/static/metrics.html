@@ -15,13 +15,13 @@ a{color:#7dd3fc;text-decoration:none}
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
-<h1>Metrics</h1>
-<p class="label">Hard Deny không gọi LLM · deny_with_llm_calls phải = 0</p>
-<div class="card"><div class="label">deny_with_llm_calls</div><div class="val" id="mDenyLlm">—</div></div>
-<div class="card"><div class="label">gate_months</div><div class="val" id="mGateMonths">—</div></div>
-<div class="card"><div class="label">hard_deny</div><div class="val" id="mHardDeny">—</div></div>
-<div class="card"><div class="label">chat_total</div><div class="val" id="mChatTotal">—</div></div>
-<div class="card"><div class="label">deny_total</div><div class="val" id="mDenyTotal">—</div></div>
+<h1>Chỉ số</h1>
+<p class="label">Hard Deny không gọi LLM · Deny có gọi LLM phải = 0</p>
+<div class="card"><div class="label">Deny có gọi LLM</div><div class="val" id="mDenyLlm">—</div></div>
+<div class="card"><div class="label">Cổng (tháng)</div><div class="val" id="mGateMonths">—</div></div>
+<div class="card"><div class="label">Hard Deny</div><div class="val" id="mHardDeny">—</div></div>
+<div class="card"><div class="label">Tổng chat</div><div class="val" id="mChatTotal">—</div></div>
+<div class="card"><div class="label">Tổng deny</div><div class="val" id="mDenyTotal">—</div></div>
 <p class="err" id="mErr"></p>
 <script>
 (async()=>{

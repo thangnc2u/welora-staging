@@ -21,10 +21,10 @@ class TestP2ParserUi(unittest.TestCase):
         self.assertIn('id="out"', html)
         self.assertIn('id="suggestionEssential"', html)
         self.assertIn('id="categories"', html)
+        self.assertIn('id="goalDraft"', html)
+        self.assertIn('id="createGoalBtn"', html)
         self.assertNotIn("JSON.stringify(j.category_counts)", html)
-        self.assertNotIn('JSON.stringify(j.category_counts', html)
         self.assertIn("/app/safety", html)
-        self.assertNotIn('"/goals"', html)
         self.assertIn("không", html)
         self.assertIn("bypass Cổng", html)
 

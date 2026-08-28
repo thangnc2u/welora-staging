@@ -26,19 +26,31 @@ function deviceId(){
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
   return d;
 }
+function redact(t){
+  return String(t||'')
+    .replace(/(?:\+84|0)(?:[\s.\-]?\d){8,10}/g,'[REDACTED]')
+    .replace(/\bBearer\s+\S+/gi,'[REDACTED]')
+    .replace(/\b(?:sk-|xai-|ghp_|github_pat_)[A-Za-z0-9_\-]{8,}/gi,'[REDACTED]');
+}
+function addRow(el,label,val){
+  const row=document.createElement('div');
+  row.className='row';
+  const lab=document.createElement('span');
+  lab.className='label';
+  lab.textContent=label;
+  row.appendChild(lab);
+  row.appendChild(document.createTextNode(' '+val));
+  el.appendChild(row);
+}
 function card(row){
   const el=document.createElement('div');
   el.className='card';
-  const g=row.guardrail_result||'—';
-  const r=row.rule_hit||'—';
-  const l=String(row.llm_called??'—');
-  const s=row.safety_gate_status||'—';
-  const q=row.user_query_summary||'';
-  el.innerHTML='<div class="row"><span class="label">guardrail</span> '+g+'</div>'
-    +'<div class="row"><span class="label">rule_hit</span> '+r+'</div>'
-    +'<div class="row"><span class="label">llm_called</span> '+l+'</div>'
-    +'<div class="row"><span class="label">gate</span> '+s+'</div>'
-    +(q?'<div class="row"><span class="label">query</span> '+q+'</div>':'');
+  addRow(el,'guardrail',row.guardrail_result||'—');
+  addRow(el,'rule_hit',row.rule_hit||'—');
+  addRow(el,'llm_called',String(row.llm_called??'—'));
+  addRow(el,'gate',row.safety_gate_status||'—');
+  const q=redact(row.user_query_summary||'');
+  if(q) addRow(el,'query',q);
   return el;
 }
 (async()=>{

@@ -24,9 +24,10 @@ CTA_LABELS = {
 
 _PII_PATTERNS = (
     re.compile(r"(?i)(api[_-]?key|secret|token|password|bearer)\s*[:=]\s*\S+"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9_\-\.]+"),
     re.compile(r"(?i)\b(sk-|xai-|ghp_|github_pat_)[A-Za-z0-9_\-]{8,}"),
     re.compile(r"(?i)\bauthorization\s*[:=]\s*\S+"),
-    re.compile(r"\b(?:0|\+84)(?:[\s.\-]?\d){8,10}\b"),
+    re.compile(r"(?:\+84|0)(?:[\s.\-]?\d){8,10}"),
 )
 
 

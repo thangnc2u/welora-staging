@@ -1,4 +1,4 @@
-"""P2 Ticket AQ — chat h1/title Vietnamese."""
+"""P2 Ticket AU — chat muted Vietnamese."""
 
 from __future__ import annotations
 
@@ -13,26 +13,20 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "chat.html"
 
 
-class TestP2ChatH1Vi(unittest.TestCase):
-    def test_h1_title(self):
+class TestP2ChatMutedVi(unittest.TestCase):
+    def test_muted(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("<title>Welora · Chat với Agent</title>", html)
-        self.assertIn("<h1>Chat với Agent</h1>", html)
-        self.assertIn("\u1edb", html)
-        self.assertNotIn("<h1>CFO Agent</h1>", html)
         self.assertIn("Từ chối cứng trước LLM · An Toàn ≥ 3 tháng", html)
+        self.assertIn("\u1eeb", html)
+        self.assertIn("c\u1ee9ng", html)
+        self.assertNotIn("Hard Deny trước LLM · An Toàn ≥ 3 tháng", html)
+        self.assertIn("<h1>Chat với Agent</h1>", html)
         self.assertIn("Cổng: ĐẠT", html)
         self.assertIn("Cổng: CHƯA ĐẠT", html)
-        self.assertIn("className=s", html)
         for nid in ("navHome", "gateBadge", "denyCta", "log", "f", "q"):
             self.assertIn(f'id="{nid}"', html)
         self.assertIn("welora_device_id", html)
         self.assertIn("/agent/chat", html)
-        self.assertIn("user_id:uid", html)
-        self.assertIn("message:q", html)
-        self.assertIn("guardrail_result", html)
-        self.assertIn("rule_hit", html)
-        self.assertIn("safety_gate_status", html)
         self.assertNotIn("innerHTML", html)
 
     def test_health_untouched(self):

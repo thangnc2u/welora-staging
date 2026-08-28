@@ -29,16 +29,21 @@ const key=params.get('key')||'';
 const elKey=document.getElementById('contentKey');
 const elTitle=document.getElementById('contentTitle');
 const elBody=document.getElementById('contentBody');
-function esc(s){return String(s||'').replace(/&/g,'&').replace(/</g,'<');}
 (async()=>{
   if(!key){
     const r=await fetch('/content');
     const j=await r.json();
     elKey.textContent='index';
     elTitle.textContent='Welorapedia · principle_key';
-    elBody.innerHTML=(j.items||[]).map(i=>
-      '<p><a href="/app/content?key='+encodeURIComponent(i.principle_key)+'">'+esc(i.principle_key)+' — '+esc(i.title)+'</a></p>'
-    ).join('');
+    elBody.textContent='';
+    (j.items||[]).forEach(i=>{
+      const p=document.createElement('p');
+      const a=document.createElement('a');
+      a.href='/app/content?key='+encodeURIComponent(i.principle_key||'');
+      a.textContent=(i.principle_key||'')+' — '+(i.title||'');
+      p.appendChild(a);
+      elBody.appendChild(p);
+    });
     return;
   }
   const r=await fetch('/content/'+encodeURIComponent(key));

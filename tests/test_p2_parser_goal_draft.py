@@ -52,7 +52,7 @@ class TestP2ParserGoalDraft(unittest.TestCase):
         self.assertIn('id="goalDraft"', html)
         self.assertIn('id="createGoalBtn"', html)
         self.assertIn("welora_device_id", html)
-        self.assertIn("Goal đã có — không ghi đè", html)
+        self.assertIn("Goal đã có · không ghi đè", html)
         self.assertIn("Tạo Goal", html)
         self.assertNotIn("JSON.stringify(j.category_counts)", html)
         go_idx = html.find("document.getElementById('go')")

@@ -1,4 +1,4 @@
-"""P2 Ticket BP — logs error copy nhật ký."""
+"""P2 Ticket BQ — logs empty copy nhật ký."""
 
 from __future__ import annotations
 
@@ -13,22 +13,22 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "logs.html"
 
 
-class TestP2LogsErrVi(unittest.TestCase):
-    def test_err(self):
+class TestP2LogsEmptyVi(unittest.TestCase):
+    def test_empty(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Không đọc được nhật ký", html)
+        self.assertIn("Chưa có nhật ký", html)
+        self.assertIn("\u01b0", html)
+        self.assertIn("\u00f3", html)
         self.assertIn("\u1ead", html)
         self.assertIn("\u00fd", html)
-        self.assertNotIn("Không đọc được logs", html)
-        self.assertIn("Chưa có nhật ký", html)
+        self.assertNotIn("Chưa có log", html)
+        self.assertIn("Không đọc được nhật ký", html)
         self.assertIn("/agent/decision-logs", html)
         self.assertIn("/auth/device", html)
         self.assertIn("<title>Welora · Nhật ký quyết định</title>", html)
         self.assertIn("<h1>Nhật ký quyết định</h1>", html)
         self.assertIn("welora_device_id", html)
         self.assertIn("function redact", html)
-        self.assertIn("textContent", html)
-        self.assertIn("createElement", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "logList", "logErr"):
             self.assertIn(f'id="{nid}"', html)

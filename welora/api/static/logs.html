@@ -62,7 +62,7 @@ function card(row){
     const lr=await fetch('/agent/decision-logs?user_id='+encodeURIComponent(uid)+'&limit=20');
     const data=await lr.json();
     const items=data.items||[];
-    if(!items.length){list.textContent='Chưa có log';return;}
+    if(!items.length){list.textContent='Chưa có nhật ký';return;}
     items.forEach(row=>list.appendChild(card(row)));
   }catch(e){
     document.getElementById('logErr').textContent='Không đọc được nhật ký';

@@ -128,7 +128,7 @@ def service_chat(
         reply, model_used, llm_called = safe_call_llm(
             call_llm, "CONSTRAINT: Không đưa số % cam kết.", message
         )
-        if not llm_called:
+        if not llm_called and model_used != "llm_error":
             reply = soft_warning_stub()
             model_used = "rule_only"
     else:
@@ -136,7 +136,7 @@ def service_chat(
         reply, model_used, llm_called = safe_call_llm(
             call_llm, "Welora Agent Stage 1 advisory.", message
         )
-        if not llm_called:
+        if not llm_called and model_used != "llm_error":
             reply = advisory_stub(message, gate_status)
             model_used = "rule_only"
 

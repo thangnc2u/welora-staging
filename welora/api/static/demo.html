@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Welora Demo E2E</title>
+<title>Welora · Demo 8 bước</title>
 <style>
 body{font-family:system-ui,sans-serif;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin-bottom:10px}
@@ -15,17 +15,17 @@ button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;paddi
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
-<h1>Welora · Demo E2E</h1>
-<p class="muted">Auth → Onboard → Goal → Deny → Fund 3 tháng → Gate → R01 still denies</p>
+<h1>Welora · Demo 8 bước</h1>
+<p class="muted">Đăng nhập → Onboard → Goal → Deny → Nạp quỹ 3 tháng → Cổng → R01 vẫn deny</p>
 <div class="card"><button type="button" id="run">Chạy demo 8 bước</button><p class="muted">Chạy full demo Founders E2E</p></div>
-<div class="card" id="step1"><h2>1 · Auth</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step2"><h2>2 · Onboard session</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step3"><h2>3 · Complete DNA</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step1"><h2>1 · Đăng nhập</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step2"><h2>2 · Phiên onboard</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step3"><h2>3 · Hoàn tất DNA</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step4"><h2>4 · Goal quỹ</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step5"><h2>5 · Deny (all-in ETF)</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step6"><h2>6 · Fund 3 tháng</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step7"><h2>7 · Gate</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step8"><h2>8 · R01 still denies</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step6"><h2>6 · Nạp quỹ 3 tháng</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step7"><h2>7 · Cổng</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step8"><h2>8 · R01 vẫn deny</h2><p class="result muted">Chưa chạy</p></div>
 <script>
 function setStep(n, text, cls){
   const el=document.querySelector('#step'+n+' .result');

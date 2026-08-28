@@ -51,7 +51,7 @@ const elBody=document.getElementById('contentBody');
   elKey.textContent=d.principle_key||key;
   if(!r.ok || d.ok===false){
     elTitle.textContent='Không tìm thấy';
-    elBody.textContent=d.error||'unknown principle_key';
+    elBody.textContent=d.error||'Không tìm thấy';
     return;
   }
   elTitle.textContent=d.title||key;

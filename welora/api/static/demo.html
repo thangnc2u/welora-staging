@@ -27,11 +27,11 @@ button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;paddi
 <div class="card" id="step7"><h2>7 · Gate</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step8"><h2>8 · R01 still denies</h2><p class="result muted">Chưa chạy</p></div>
 <script>
-function setStep(n, html, cls){
+function setStep(n, text, cls){
   const el=document.querySelector('#step'+n+' .result');
   if(!el) return;
   el.className='result '+(cls||'');
-  el.innerHTML=html;
+  el.textContent=text;
 }
 const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={}};return {status:r.status,d}};
 document.getElementById('run').onclick=async()=>{

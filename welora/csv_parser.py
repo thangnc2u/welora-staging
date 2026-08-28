@@ -40,6 +40,26 @@ def vn_category_label(desc: str) -> str:
     return "Khác"
 
 
+def attach_goal_draft(out: dict) -> dict:
+    from welora.safety_gate import TARGET_MONTHS
+
+    suggestion = out.get("suggestion") or {}
+    sug = suggestion.get("essential_expense_monthly") if isinstance(suggestion, dict) else None
+    draft = None
+    if sug:
+        essential = float(sug)
+        draft = {
+            "type": "emergency_fund",
+            "essential_expense_monthly": essential,
+            "target_amount": essential * int(TARGET_MONTHS),
+            "target_months": int(TARGET_MONTHS),
+            "auto_overwrite": False,
+        }
+    out["goal_draft"] = draft
+    out["auto_overwrite"] = False
+    return out
+
+
 def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
     text = text or ""
     if not text.strip():
@@ -103,7 +123,7 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         desc = str(t.get("description") or t.get("raw") or "")
         lab = vn_category_label(desc)
         counts[lab] = counts.get(lab, 0) + 1
-    return {
+    out = {
         "ok": True,
         "filename": filename,
         "transaction_count": len(txs),
@@ -112,6 +132,7 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         "auto_overwrite": False,
         "category_counts": counts,
     }
+    return attach_goal_draft(out)
 
 
 def service_parse_csv(*, text: str, filename: str = "") -> tuple[int, dict]:

@@ -28,7 +28,7 @@ function deviceId(){
 }
 function showEmpty(){
   const box=document.getElementById('articles');
-  box.innerHTML='';
+  box.textContent='';
   const p=document.createElement('p');
   p.className='empty';
   p.id='emptyState';
@@ -37,7 +37,7 @@ function showEmpty(){
 }
 function renderArticles(list){
   const box=document.getElementById('articles');
-  box.innerHTML='';
+  box.textContent='';
   if(!list||!list.length){showEmpty();return;}
   list.forEach(a=>{
     const el=document.createElement('div');

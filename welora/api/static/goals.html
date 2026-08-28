@@ -39,7 +39,7 @@ function deviceId(){
 }
 function showEmpty(){
   const box=document.getElementById('goalList');
-  box.innerHTML='';
+  box.textContent='';
   const p=document.createElement('p');
   p.className='empty';
   p.textContent='Chưa có quỹ khẩn cấp';
@@ -66,7 +66,7 @@ function line(label,value){
 }
 function renderItems(items){
   const box=document.getElementById('goalList');
-  box.innerHTML='';
+  box.textContent='';
   if(!items||!items.length){showEmpty();return;}
   lastId=items[0].goal_id||'';
   items.forEach(g=>{

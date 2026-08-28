@@ -28,7 +28,7 @@ function deviceId(){
 }
 function showEmpty(){
   const box=document.getElementById('dna');
-  box.innerHTML='';
+  box.textContent='';
   const p=document.createElement('p');
   p.className='empty';
   p.id='emptyState';
@@ -54,7 +54,7 @@ function row(label,value){
 }
 function render(data){
   const box=document.getElementById('dna');
-  box.innerHTML='';
+  box.textContent='';
   const ident=data.identity_context||{};
   const snap=data.financial_snapshot_self||{};
   const psy=data.psychological_profile_self||{};

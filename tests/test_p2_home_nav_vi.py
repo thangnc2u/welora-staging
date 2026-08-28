@@ -25,7 +25,7 @@ NAVS = (
     ("navDna", "/app/dna", "DNA tài chính"),
     ("navGoals", "/app/goals", "Quỹ khẩn cấp"),
     ("navOtp", "/app/otp", "OTP điện thoại"),
-    ("navPreRule", "/app/pre-rule", "Pre-Rule debug"),
+    ("navPreRule", "/app/pre-rule", "Pre-Rule · gỡ lỗi"),
     ("navHealth", "/app/health-score", "Điểm sức khỏe"),
 )
 

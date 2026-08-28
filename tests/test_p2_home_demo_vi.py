@@ -21,7 +21,7 @@ class TestP2HomeDemoVi(unittest.TestCase):
         self.assertIn("Demo 8 bước", html)
         self.assertIn("\u1edb", html)
         self.assertNotIn("Demo E2E", html)
-        self.assertIn("Pre-Rule debug", html)
+        self.assertIn("Pre-Rule · gỡ lỗi", html)
         self.assertIn('id="navPreRule"', html)
         self.assertNotIn("innerHTML", html)
 

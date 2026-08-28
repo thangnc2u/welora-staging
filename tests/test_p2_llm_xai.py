@@ -22,11 +22,13 @@ class TestP2LlmXai(unittest.TestCase):
         self.assertIn("grok-4.3", src)
         self.assertNotIn("grok-2-latest", src)
 
-    def test_render_stays_stub_no_api_key(self):
+    def test_render_provider_xai_no_api_key(self):
         yml = (ROOT / "render.yaml").read_text(encoding="utf-8")
         self.assertIn("WELORA_LLM_PROVIDER", yml)
-        self.assertIn("stub", yml)
+        self.assertIn("value: xai", yml)
+        self.assertNotIn("value: stub", yml)
         self.assertNotIn("WELORA_LLM_API_KEY", yml)
+        self.assertNotIn("XAI_API_KEY", yml)
         self.assertNotIn("xai-", yml)
 
     def test_deny_all_in_etf_no_llm_metric(self):

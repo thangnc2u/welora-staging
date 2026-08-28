@@ -30,7 +30,7 @@ services:
       - key: WELORA_DB_URL
         value: /tmp/welora_staging.db
       - key: WELORA_LLM_PROVIDER
-        value: stub
+        value: xai
       - key: WELORA_CONTENT_ROOT
         value: content
       - key: WELORA_ENV

@@ -21,7 +21,7 @@ class TestP2ContentIndexH1Vi(unittest.TestCase):
         self.assertIn("elKey.textContent='danh sách'", html)
         self.assertIn("i.principle_key", html)
         self.assertIn("+' · '+", html)
-        self.assertIn("unknown principle_key", html)
+        self.assertIn("d.error||'Không tìm thấy'", html)
         self.assertIn("← Chat với Agent", html)
         self.assertIn("An Toàn", html)
         self.assertIn("<title>Welora · Nội dung</title>", html)

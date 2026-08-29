@@ -22,7 +22,7 @@ class TestP2DemoOnboardVi(unittest.TestCase):
         self.assertIn("<h1>Welora · Demo 8 bước</h1>", html)
         self.assertIn("Chạy demo 8 bước", html)
         self.assertIn("<h2>4 · Goal quỹ</h2>", html)
-        self.assertIn("<h2>5 · Deny (all-in ETF)</h2>", html)
+        self.assertIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
         self.assertIn("<h2>8 · R01 vẫn deny</h2>", html)
         self.assertIn("\u1eaf", html)
         self.assertIn("\u1ea7", html)

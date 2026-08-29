@@ -1,4 +1,4 @@
-"""P2 Ticket CX — safety option not_started → Chưa bắt đầu."""
+"""P2 Ticket CZ — safety option familiar → Quen thuộc."""
 
 from __future__ import annotations
 
@@ -12,25 +12,24 @@ from welora.safety_gate import TARGET_MONTHS
 
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "safety.html"
 
+JS = (
+    'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu"'
+    ':st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)'
+)
 
-class TestP2SafetyNotStartedVi(unittest.TestCase):
+
+class TestP2SafetyFamiliarVi(unittest.TestCase):
     def test_option(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn('<option value="not_started">Chưa bắt đầu</option>', html)
-        self.assertIn(
-            'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)',
-            html,
-        )
-        self.assertIn("\u01b0", html)
-        self.assertIn("\u1eaf", html)
-        self.assertIn("\u0111", html)
-        self.assertIn("\u1ea7", html)
-        self.assertNotIn(">not_started</option>", html)
+        self.assertIn('<option value="familiar">Quen thuộc</option>', html)
+        self.assertIn(JS, html)
+        self.assertIn("\u1ed9", html)
+        self.assertNotIn(">familiar</option>", html)
+        self.assertIn('value="familiar"', html)
+        self.assertIn('value="learning"', html)
         self.assertIn('value="not_started"', html)
-        self.assertIn('||"not_started"', html)
-        self.assertIn('state:"not_started"', html)
+        self.assertIn(">Chưa bắt đầu</option>", html)
         self.assertIn(">Đang học</option>", html)
-        self.assertIn(">Quen thuộc</option>", html)
         self.assertIn(">apply</option>", html)
         self.assertIn(">mastered</option>", html)
         self.assertIn("Làm chủ ·", html)

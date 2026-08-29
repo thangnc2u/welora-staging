@@ -20,7 +20,7 @@ class TestP2HealthscoreVi(unittest.TestCase):
             self.assertIn(f'id="{nid}"', html)
         self.assertIn("welora_device_id", html)
         self.assertIn("Welora · Điểm sức khởe", html)
-        self.assertIn("<h1>Điểm sức khởe</h1>", html)
+        self.assertIn("<h1>Điểm sức khỏe</h1>", html)
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
         self.assertIn("Không đọc được điểm sức khởe", html)
         self.assertIn("critical:'Nguy cấp'", html)
@@ -43,7 +43,7 @@ class TestP2HealthscoreVi(unittest.TestCase):
         self.assertNotIn("<h1>Health Score</h1>", html)
         self.assertNotIn("Không đọc được Health Score", html)
         self.assertIn("\u1edf", html)
-        self.assertNotIn("\u1ecf", html)
+        self.assertIn("\u1ecf", html)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

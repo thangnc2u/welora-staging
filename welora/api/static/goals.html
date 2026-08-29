@@ -76,7 +76,7 @@ function renderItems(items){
     const cur=g.current||{};
     el.appendChild(line('Tên quỹ', g.title||'Quỹ khẩn cấp'));
     el.appendChild(line('Loại quỹ', g.type||''));
-    el.appendChild(line('target.months_of_expense', tgt.months_of_expense));
+    el.appendChild(line('Tháng chi mục tiêu', tgt.months_of_expense));
     el.appendChild(line('current.amount', cur.amount));
     el.appendChild(line('current.percent', cur.percent));
     el.appendChild(line('current.months_covered', cur.months_covered));

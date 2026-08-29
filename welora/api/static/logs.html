@@ -28,9 +28,10 @@ function deviceId(){
 }
 function redact(t){
   return String(t||'')
-    .replace(/(?:\+84|0)(?:[\s.\-]?\d){8,10}/g,'[REDACTED]')
-    .replace(/\bBearer\s+\S+/gi,'[REDACTED]')
-    .replace(/\b(?:sk-|xai-|ghp_|github_pat_)[A-Za-z0-9_\-]{8,}/gi,'[REDACTED]');
+    .replace(/(?:\+84|0)(?:[\s.\-]?\d){8,10}/g,'[ĐÃ ẨN]')
+    .replace(/\bBearer\s+\S+/gi,'[ĐÃ ẨN]')
+    .replace(/\b(?:sk-|xai-|ghp_|github_pat_)[A-Za-z0-9_\-]{8,}/gi,'[ĐÃ ẨN]')
+    .replace(/\[REDACTED\]/g,'[ĐÃ ẨN]');
 }
 function addRow(el,label,val){
   const row=document.createElement('div');

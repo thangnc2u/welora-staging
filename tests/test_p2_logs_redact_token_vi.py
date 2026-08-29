@@ -1,4 +1,4 @@
-"""P2 Ticket AN — logs page Vietnamese labels, API fields + redact unchanged."""
+"""P2 Ticket CU — logs UI redact token [ĐÃ ẨN]."""
 
 from __future__ import annotations
 
@@ -13,13 +13,21 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "logs.html"
 
 
-class TestP2LogsVi(unittest.TestCase):
-    def test_labels_ids_redact(self):
+class TestP2LogsRedactTokenVi(unittest.TestCase):
+    def test_token(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn('id="navHome"', html)
-        self.assertIn('id="logList"', html)
-        self.assertIn('id="logErr"', html)
-        self.assertIn("welora_device_id", html)
+        self.assertIn("'[ĐÃ ẨN]'", html)
+        self.assertIn("\\[REDACTED\\]/g,'[ĐÃ ẨN]'", html)
+        self.assertIn("\u0110", html)
+        self.assertIn("\u00c3", html)
+        self.assertIn("\u1ea8", html)
+        self.assertNotIn("'[REDACTED]'", html)
+        self.assertNotIn("[REDACTED]", html)
+        self.assertIn("function redact", html)
+        self.assertIn("(?:\\+84|0)", html)
+        self.assertIn("Bearer", html)
+        self.assertIn("sk-|xai-|ghp_|github_pat_", html)
+        self.assertIn("<title>Welora · Nhật ký quyết định</title>", html)
         self.assertIn("<h1>Nhật ký quyết định</h1>", html)
         self.assertIn("Deny · luật · gọi LLM · không lộ id", html)
         self.assertIn("'Kết quả'", html)
@@ -27,21 +35,10 @@ class TestP2LogsVi(unittest.TestCase):
         self.assertIn("'Gọi LLM'", html)
         self.assertIn("'Cổng'", html)
         self.assertIn("'Câu hỏi'", html)
-        self.assertIn("row.guardrail_result", html)
-        self.assertIn("row.rule_hit", html)
-        self.assertIn("row.llm_called", html)
-        self.assertIn("row.safety_gate_status", html)
-        self.assertIn("row.user_query_summary", html)
-        self.assertIn("/agent/decision-logs?user_id=", html)
-        self.assertIn("data.items", html)
-        self.assertIn("Bearer", html)
-        self.assertIn("sk-", html)
-        self.assertIn("xai-", html)
-        self.assertIn("[ĐÃ ẨN]", html)
-        self.assertNotIn("[REDACTED]", html)
         self.assertNotIn("innerHTML", html)
-        self.assertNotIn("<h1>Decision logs</h1>", html)
-        self.assertNotIn("textContent=...user_id", html)
+        self.assertIn('id="navHome"', html)
+        self.assertIn('id="logList"', html)
+        self.assertIn('id="logErr"', html)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

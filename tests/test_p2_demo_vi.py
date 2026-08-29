@@ -23,7 +23,7 @@ class TestP2DemoVi(unittest.TestCase):
         self.assertIn("<h2>2 · Phiên Bắt đầu</h2>", html)
         self.assertIn("<h2>3 · Hoàn tất DNA</h2>", html)
         self.assertIn("<h2>4 · Goal quỹ</h2>", html)
-        self.assertIn("<h2>5 · Deny (all-in ETF)</h2>", html)
+        self.assertIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
         self.assertIn("<h2>6 · Nạp quỹ 3 tháng</h2>", html)
         self.assertIn("<h2>7 · Cổng</h2>", html)
         self.assertIn("<h2>8 · R01 vẫn deny</h2>", html)

@@ -20,7 +20,7 @@ class TestP2HsKhoeH1Vi(unittest.TestCase):
         self.assertIn("\u1ecf", html)
         self.assertNotIn("<h1>Điểm sức khởe</h1>", html)
         self.assertIn("<title>Welora · Điểm sức khỏe</title>", html)
-        self.assertIn("Không đọc được điểm sức khởe", html)
+        self.assertIn("Không đọc được điểm sức khỏe", html)
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "hsScore", "hsLevel", "hsBypassNote", "hsComponents", "hsErr"):

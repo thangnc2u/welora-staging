@@ -22,7 +22,7 @@ class TestP2HealthscoreVi(unittest.TestCase):
         self.assertIn("Welora · Điểm sức khỏe", html)
         self.assertIn("<h1>Điểm sức khỏe</h1>", html)
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
-        self.assertIn("Không đọc được điểm sức khởe", html)
+        self.assertIn("Không đọc được điểm sức khỏe", html)
         self.assertIn("critical:'Nguy cấp'", html)
         self.assertIn("low:'Thấp'", html)
         self.assertIn("moderate:'Trung bình'", html)
@@ -42,7 +42,7 @@ class TestP2HealthscoreVi(unittest.TestCase):
         self.assertNotIn("innerHTML", html)
         self.assertNotIn("<h1>Health Score</h1>", html)
         self.assertNotIn("Không đọc được Health Score", html)
-        self.assertIn("\u1edf", html)
+        self.assertNotIn("\u1edf", html)
         self.assertIn("\u1ecf", html)
 
     def test_health_untouched(self):

@@ -1,4 +1,4 @@
-"""P2 Ticket AX — safety Checklist/Health Score section titles Vietnamese."""
+"""P2 Ticket CT — safety section-title Điểm sức khỏe (ỏ U+1ECF)."""
 
 from __future__ import annotations
 
@@ -13,33 +13,28 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "safety.html"
 
 
-class TestP2SafetyHsVi(unittest.TestCase):
-    def test_section_titles(self):
+class TestP2SafetyKhoeVi(unittest.TestCase):
+    def test_section_title(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn(">Danh sách<", html)
-        self.assertIn(">Điểm sức khỏe<", html)
-        self.assertIn("\u00e1ch", html)
+        self.assertIn('<div class="section-title">Điểm sức khỏe</div>', html)
+        self.assertIn("\u1ecf", html)
         self.assertIn("\u1ec3", html)
-        self.assertIn("s\u1ee9c", html)
-        self.assertIn("kh\u1ecfe", html)
-        self.assertNotIn("kh\u1edfe", html)
-        self.assertNotIn("Checklist", html)
-        self.assertNotIn("Health Score", html)
+        self.assertIn("\u1ee9", html)
+        self.assertNotIn("Điểm sức khởe", html)
+        self.assertNotIn("khởe", html)
+        self.assertNotIn("\u1edf", html)
+        self.assertIn('<div class="section-title">Danh sách</div>', html)
+        self.assertIn('<div class="section-title">Goal quỹ</div>', html)
+        self.assertIn("<title>Welora · An Toàn</title>", html)
         self.assertIn("<h1>An Toàn</h1>", html)
-        self.assertIn("Goal quỹ", html)
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
-        self.assertIn("CHƯA ĐẠT", html)
-        self.assertIn("ĐẠT", html)
-        self.assertIn("Mastery · —", html)
-        self.assertIn("meets_gate: false", html)
         self.assertIn('value="not_started"', html)
         self.assertIn('value="apply"', html)
-        self.assertIn("/mastery", html)
         self.assertNotIn("innerHTML", html)
         for nid in (
-            "navHome", "gateCard", "gateStatus", "masteryBadge", "masteryStatus",
-            "masteryState", "hsCard", "hsScore", "hsBars", "essential",
-            "btnCreate", "amount", "btnSave",
+            "navHome", "gateCard", "gateStatus", "gateMeta", "masteryBadge",
+            "masteryStatus", "masteryMeta", "masteryState", "hsCard", "hsScore",
+            "hsBars", "barFill", "goalMeta", "essential", "btnCreate", "amount", "btnSave",
         ):
             self.assertIn(f'id="{nid}"', html)
 

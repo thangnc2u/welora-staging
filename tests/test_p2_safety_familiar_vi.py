@@ -15,7 +15,7 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "safe
 JS = (
     'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu"'
     ':st==="learning"?"Đang học":st==="familiar"?"Quen thuộc"'
-    ':st==="apply"?"Áp dụng":st)'
+    ':st==="apply"?"Áp dụng":st==="mastered"?"Thành thạo":st)'
 )
 
 
@@ -32,7 +32,7 @@ class TestP2SafetyFamiliarVi(unittest.TestCase):
         self.assertIn(">Chưa bắt đầu</option>", html)
         self.assertIn(">Đang học</option>", html)
         self.assertIn(">Áp dụng</option>", html)
-        self.assertIn(">mastered</option>", html)
+        self.assertIn(">Thành thạo</option>", html)
         self.assertIn("Làm chủ ·", html)
         self.assertIn("Đạt cổng: chưa", html)
         self.assertNotIn("innerHTML", html)

@@ -23,7 +23,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
   <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHƯA ĐẠT</div><div class="meta" id="gateMeta"></div></div>
   <div class="badge-card fail" id="masteryBadge">
     <div class="status" id="masteryStatus">Mastery · —</div>
-    <div class="meta" id="masteryMeta">meets_gate: false</div>
+    <div class="meta" id="masteryMeta">Đạt cổng: chưa</div>
     <select id="masteryState">
       <option value="not_started">not_started</option><option value="learning">learning</option>
       <option value="familiar">familiar</option><option value="apply">apply</option><option value="mastered">mastered</option>
@@ -91,7 +91,7 @@ function render(){
   const ok=!!(state.mastery&&state.mastery.meets_gate);
   document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");
   document.getElementById("masteryStatus").textContent="Mastery · "+st;
-  document.getElementById("masteryMeta").textContent="meets_gate: "+ok;
+  document.getElementById("masteryMeta").textContent="Đạt cổng: "+(ok?"đạt":"chưa");
   document.getElementById("masteryState").value=st;
   if(state.health){
     document.getElementById("hsScore").textContent=(state.health.score||0)+" / 1000";

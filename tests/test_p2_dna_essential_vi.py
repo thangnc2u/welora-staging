@@ -1,4 +1,4 @@
-"""P2 — DNA label Hoàn cảnh gia đình."""
+"""P2 — DNA label Chi tiêu thiết yếu / tháng."""
 
 from __future__ import annotations
 
@@ -13,27 +13,26 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "dna.html"
 
 
-class TestP2DnaFamilyVi(unittest.TestCase):
+class TestP2DnaEssentialVi(unittest.TestCase):
     def test_label(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn(
-            "['Hoàn cảnh gia đình', pick(ident,'family_context')??data.family_context]",
+            "['Chi tiêu thiết yếu / tháng', pick(snap,'essential_expense_monthly')??data.essential_expense_monthly]",
             html,
         )
-        self.assertIn("\u00e0", html)
-        self.assertIn("\u1ea3", html)
-        self.assertIn("\u0111", html)
-        self.assertIn("\u00ec", html)
-        self.assertNotIn("['family_context'", html)
-        self.assertIn("pick(ident,'family_context')", html)
-        self.assertIn("data.family_context", html)
+        self.assertIn("\u00ea", html)
+        self.assertIn("\u1ebf", html)
+        self.assertIn("\u00e1", html)
+        self.assertNotIn("['essential_expense_monthly'", html)
+        self.assertIn("pick(snap,'essential_expense_monthly')", html)
+        self.assertIn("data.essential_expense_monthly", html)
         self.assertIn("['Giai đoạn sống'", html)
         self.assertIn("['Ổn định thu nhập'", html)
-        self.assertIn("['Chi tiêu thiết yếu / tháng'", html)
+        self.assertIn("['Hoàn cảnh gia đình'", html)
+        self.assertIn("['emergency_fund_months_self'", html)
         self.assertNotIn("innerHTML", html)
         self.assertIn('id="navHome"', html)
         self.assertIn('id="dna"', html)
-        self.assertIn("emptyState", html)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

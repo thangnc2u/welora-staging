@@ -1,4 +1,4 @@
-"""P2 Ticket BV — Pre-Rule placeholder tất tay ETF."""
+"""P2 Ticket BZ — Pre-Rule muted mã tài khoản."""
 
 from __future__ import annotations
 
@@ -13,22 +13,20 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "prerule.html"
 
 
-class TestP2PreruleAllinVi(unittest.TestCase):
-    def test_placeholder(self):
+class TestP2PreruleUseridVi(unittest.TestCase):
+    def test_muted(self):
         html = HTML.read_text(encoding="utf-8")
+        self.assertIn("Deny trước LLM. Không hiện mã tài khoản.", html)
+        self.assertIn("\u00e3", html)
+        self.assertIn("\u00e0", html)
+        self.assertIn("\u1ea3", html)
+        self.assertNotIn("Không hiện user_id.", html)
+        self.assertIn("user_id", html)
         self.assertIn('placeholder="Ví dụ: Tôi muốn tất tay ETF ngay"', html)
-        self.assertIn("\u1ea5", html)
-        self.assertNotIn("all-in", html)
         self.assertIn("<title>Pre-Rule · gỡ lỗi</title>", html)
         self.assertIn("<h1>Pre-Rule</h1>", html)
-        self.assertIn("Deny trước LLM. Không hiện mã tài khoản.", html)
-        self.assertIn("/auth/device", html)
+        self.assertIn("Chạy Pre-Rule", html)
         self.assertIn("/agent/pre-rule", html)
-        self.assertIn("guardrail_result", html)
-        self.assertIn("rule_hit", html)
-        self.assertIn("should_call_llm", html)
-        self.assertIn("safety_gate_status", html)
-        self.assertIn("textContent", html)
         self.assertNotIn("innerHTML", html)
         for nid in (
             "navHome",

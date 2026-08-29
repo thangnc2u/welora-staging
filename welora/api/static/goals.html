@@ -74,7 +74,7 @@ function renderItems(items){
     el.className='card';
     const tgt=g.target||{};
     const cur=g.current||{};
-    el.appendChild(line('title', g.title||'Quỹ khẩn cấp'));
+    el.appendChild(line('Tên quỹ', g.title||'Quỹ khẩn cấp'));
     el.appendChild(line('type', g.type||''));
     el.appendChild(line('target.months_of_expense', tgt.months_of_expense));
     el.appendChild(line('current.amount', cur.amount));

@@ -47,7 +47,7 @@ document.getElementById('run').onclick=async()=>{
   const device=weloraDeviceId();
   let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
   const uid=r.d.user_id;
-  setStep(1,'HTTP '+r.status+' · user sẵn sàng','ok');
+  setStep(1,'HTTP '+r.status+' · tài khoản sẵn sàng','ok');
 
   r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
   const sid=r.d.session_id;

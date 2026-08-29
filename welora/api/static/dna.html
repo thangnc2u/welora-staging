@@ -59,7 +59,7 @@ function render(data){
   const snap=data.financial_snapshot_self||{};
   const psy=data.psychological_profile_self||{};
   const fields=[
-    ['life_stage', pick(ident,'life_stage')??data.life_stage],
+    ['Giai đoạn sống', pick(ident,'life_stage')??data.life_stage],
     ['income_stability', pick(ident,'income_stability')??data.income_stability],
     ['family_context', pick(ident,'family_context')??data.family_context],
     ['essential_expense_monthly', pick(snap,'essential_expense_monthly')??data.essential_expense_monthly],

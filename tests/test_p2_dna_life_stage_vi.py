@@ -24,7 +24,7 @@ class TestP2DnaLifeStageVi(unittest.TestCase):
         self.assertIn("pick(ident,'life_stage')", html)
         self.assertIn("data.life_stage", html)
         self.assertIn("['Ổn định thu nhập'", html)
-        self.assertIn("['family_context'", html)
+        self.assertIn("['Hoàn cảnh gia đình'", html)
         self.assertIn("['essential_expense_monthly'", html)
         self.assertIn("['emergency_fund_months_self'", html)
         self.assertIn("['has_dangerous_debt_self'", html)

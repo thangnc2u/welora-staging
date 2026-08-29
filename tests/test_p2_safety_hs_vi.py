@@ -30,7 +30,7 @@ class TestP2SafetyHsVi(unittest.TestCase):
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
         self.assertIn("CHƯA ĐẠT", html)
         self.assertIn("ĐẠT", html)
-        self.assertIn("Mastery · —", html)
+        self.assertIn("Làm chủ · —", html)
         self.assertIn("Đạt cổng: chưa", html)
         self.assertNotIn("meets_gate: false", html)
         self.assertIn('value="not_started"', html)

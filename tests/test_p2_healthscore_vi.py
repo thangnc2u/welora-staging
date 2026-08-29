@@ -19,7 +19,7 @@ class TestP2HealthscoreVi(unittest.TestCase):
         for nid in ("navHome", "hsScore", "hsLevel", "hsBypassNote", "hsComponents", "hsErr"):
             self.assertIn(f'id="{nid}"', html)
         self.assertIn("welora_device_id", html)
-        self.assertIn("Welora · Điểm sức khởe", html)
+        self.assertIn("Welora · Điểm sức khỏe", html)
         self.assertIn("<h1>Điểm sức khỏe</h1>", html)
         self.assertIn("Điểm không bypass Cổng An Toàn", html)
         self.assertIn("Không đọc được điểm sức khởe", html)

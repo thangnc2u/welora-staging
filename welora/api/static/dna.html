@@ -66,7 +66,7 @@ function render(data){
     ['Tháng quỹ khẩn cấp', pick(snap,'emergency_fund_months_self')??data.emergency_fund_months_self],
     ['Có nợ nguy hiểm', pick(snap,'has_dangerous_debt_self')??data.has_dangerous_debt_self],
     ['Ưu tiên ngắn hạn', pick(snap,'near_term_priority')??data.near_term_priority],
-    ['surplus_habit', pick(psy,'surplus_habit')??data.surplus_habit],
+    ['Thói quen thặng dư', pick(psy,'surplus_habit')??data.surplus_habit],
     ['risk_tolerance', pick(psy,'risk_tolerance')??data.risk_tolerance],
     ['agent_role_preference', pick(psy,'agent_role_preference')??data.agent_role_preference]
   ];

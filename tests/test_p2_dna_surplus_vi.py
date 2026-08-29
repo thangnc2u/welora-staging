@@ -1,4 +1,4 @@
-"""P2 Ticket CM — DNA label Ưu tiên ngắn hạn."""
+"""P2 Ticket CN — DNA label Thói quen thặng dư."""
 
 from __future__ import annotations
 
@@ -13,22 +13,21 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "dna.html"
 
 
-class TestP2DnaPriorityVi(unittest.TestCase):
+class TestP2DnaSurplusVi(unittest.TestCase):
     def test_label(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn(
-            "['Ưu tiên ngắn hạn', pick(snap,'near_term_priority')??data.near_term_priority]",
+            "['Thói quen thặng dư', pick(psy,'surplus_habit')??data.surplus_habit]",
             html,
         )
-        self.assertIn("\u01af", html)
-        self.assertIn("\u00ea", html)
-        self.assertIn("\u1eaf", html)
-        self.assertIn("\u1ea1", html)
-        self.assertNotIn("['near_term_priority'", html)
-        self.assertIn("pick(snap,'near_term_priority')", html)
-        self.assertIn("data.near_term_priority", html)
-        self.assertIn("['Có nợ nguy hiểm'", html)
-        self.assertIn("['Thói quen thặng dư'", html)
+        self.assertIn("\u00f3", html)
+        self.assertIn("\u1eb7", html)
+        self.assertIn("\u01b0", html)
+        self.assertNotIn("['surplus_habit'", html)
+        self.assertIn("pick(psy,'surplus_habit')", html)
+        self.assertIn("data.surplus_habit", html)
+        self.assertIn("['Ưu tiên ngắn hạn'", html)
+        self.assertIn("['risk_tolerance'", html)
         self.assertNotIn("innerHTML", html)
         self.assertIn('id="navHome"', html)
         self.assertIn('id="dna"', html)

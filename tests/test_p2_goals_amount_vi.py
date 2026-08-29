@@ -27,7 +27,7 @@ class TestP2GoalsAmountVi(unittest.TestCase):
         self.assertIn("line('Loại quỹ', g.type||'')", html)
         self.assertIn("line('Tháng chi mục tiêu', tgt.months_of_expense)", html)
         self.assertIn("line('Phần trăm'", html)
-        self.assertIn("line('current.months_covered'", html)
+        self.assertIn("line('Tháng chi hiện tại'", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "goalList", "addBox", "addAmount", "addBtn", "addErr"):
             self.assertIn(f'id="{nid}"', html)

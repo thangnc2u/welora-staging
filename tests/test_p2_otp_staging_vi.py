@@ -1,4 +1,4 @@
-"""P2 Ticket BS — OTP label Mã thử."""
+"""P2 Ticket BT — OTP label môi trường thử."""
 
 from __future__ import annotations
 
@@ -13,15 +13,18 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "otp.html"
 
 
-class TestP2OtpPilotVi(unittest.TestCase):
+class TestP2OtpStagingVi(unittest.TestCase):
     def test_label(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn("Mã thử (môi trường thử)", html)
         self.assertIn("\u00e3", html)
         self.assertIn("\u1eed", html)
-        self.assertNotIn("Mã pilot (staging)", html)
+        self.assertIn("\u00f4", html)
+        self.assertIn("\u01b0", html)
+        self.assertIn("\u1edd", html)
+        self.assertNotIn("Mã thử (staging)", html)
+        self.assertNotIn("staging", html.lower())
         self.assertIn("Không hiện mã OTP.", html)
-        self.assertIn("Xin mã rồi xác thực.", html)
         self.assertIn("d.pilot_code", html)
         self.assertIn("d.token", html)
         self.assertIn("welora_token", html)

@@ -68,7 +68,7 @@ document.getElementById('run').onclick=async()=>{
   setStep(5,'guardrail_result: '+(r.d.guardrail_result||'')+' · rule_hit: '+(r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');
 
   r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
-  setStep(6,'set_amount = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');
+  setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');
 
   r=await j('/users/'+uid+'/safety-gate');
   setStep(7,'status: '+(r.d.status||'')+' · months_covered: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');

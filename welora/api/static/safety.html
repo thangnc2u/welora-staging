@@ -22,7 +22,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
   <div class="section-title">Danh sách</div>
   <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHƯA ĐẠT</div><div class="meta" id="gateMeta"></div></div>
   <div class="badge-card fail" id="masteryBadge">
-    <div class="status" id="masteryStatus">Mastery · —</div>
+    <div class="status" id="masteryStatus">Làm chủ · —</div>
     <div class="meta" id="masteryMeta">Đạt cổng: chưa</div>
     <select id="masteryState">
       <option value="not_started">not_started</option><option value="learning">learning</option>
@@ -90,7 +90,7 @@ function render(){
   const st=(state.mastery&&state.mastery.state)||"not_started";
   const ok=!!(state.mastery&&state.mastery.meets_gate);
   document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");
-  document.getElementById("masteryStatus").textContent="Mastery · "+st;
+  document.getElementById("masteryStatus").textContent="Làm chủ · "+st;
   document.getElementById("masteryMeta").textContent="Đạt cổng: "+(ok?"đạt":"chưa");
   document.getElementById("masteryState").value=st;
   if(state.health){

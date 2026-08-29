@@ -22,7 +22,7 @@ class TestP2SafetyTitleVi(unittest.TestCase):
         self.assertNotIn("<title>Welora — An Toàn</title>", html)
         self.assertNotIn("<title>Welora - An Toàn</title>", html)
         self.assertIn("<h1>An Toàn</h1>", html)
-        self.assertIn("Mastery ·", html)
+        self.assertIn("Làm chủ ·", html)
         self.assertIn("meets_gate", html)
         self.assertIn("Danh sách", html)
         self.assertIn("Goal quỹ", html)

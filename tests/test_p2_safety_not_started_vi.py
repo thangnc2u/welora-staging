@@ -18,7 +18,7 @@ class TestP2SafetyNotStartedVi(unittest.TestCase):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn('<option value="not_started">Chưa bắt đầu</option>', html)
         self.assertIn(
-            'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)',
+            'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st)',
             html,
         )
         self.assertIn("\u01b0", html)
@@ -31,7 +31,7 @@ class TestP2SafetyNotStartedVi(unittest.TestCase):
         self.assertIn('state:"not_started"', html)
         self.assertIn(">Đang học</option>", html)
         self.assertIn(">Quen thuộc</option>", html)
-        self.assertIn(">apply</option>", html)
+        self.assertIn(">Áp dụng</option>", html)
         self.assertIn(">mastered</option>", html)
         self.assertIn("Làm chủ ·", html)
         self.assertIn("Đạt cổng: chưa", html)

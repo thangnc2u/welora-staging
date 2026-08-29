@@ -12,7 +12,7 @@ from welora.safety_gate import TARGET_MONTHS
 
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "safety.html"
 
-JS = 'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)'
+JS = 'textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st)'
 
 
 class TestP2SafetyLearningVi(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestP2SafetyLearningVi(unittest.TestCase):
         self.assertIn('value="not_started"', html)
         self.assertIn(">Chưa bắt đầu</option>", html)
         self.assertIn(">Quen thuộc</option>", html)
-        self.assertIn(">apply</option>", html)
+        self.assertIn(">Áp dụng</option>", html)
         self.assertIn(">mastered</option>", html)
         self.assertIn("Làm chủ ·", html)
         self.assertIn("Đạt cổng: chưa", html)

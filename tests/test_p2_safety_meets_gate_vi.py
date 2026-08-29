@@ -28,7 +28,7 @@ class TestP2SafetyMeetsGateVi(unittest.TestCase):
         self.assertIn("meets_gate:false", html)
         self.assertIn("state.mastery.meets_gate", html)
         self.assertIn("Làm chủ · —", html)
-        self.assertIn('"Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)', html)
+        self.assertIn('"Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st)', html)
         self.assertIn('value="not_started"', html)
         self.assertIn('value="apply"', html)
         self.assertNotIn("innerHTML", html)

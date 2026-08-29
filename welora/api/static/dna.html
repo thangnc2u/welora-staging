@@ -68,7 +68,7 @@ function render(data){
     ['Ưu tiên ngắn hạn', pick(snap,'near_term_priority')??data.near_term_priority],
     ['Thói quen thặng dư', pick(psy,'surplus_habit')??data.surplus_habit],
     ['Chấp nhận rủi ro', pick(psy,'risk_tolerance')??data.risk_tolerance],
-    ['agent_role_preference', pick(psy,'agent_role_preference')??data.agent_role_preference]
+    ['Vai trò Agent ưa thích', pick(psy,'agent_role_preference')??data.agent_role_preference]
   ];
   fields.forEach(([k,v])=>box.appendChild(row(k,v)));
 }

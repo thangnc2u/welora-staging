@@ -31,7 +31,7 @@ class TestP2DnaLifeStageVi(unittest.TestCase):
         self.assertIn("['Ưu tiên ngắn hạn'", html)
         self.assertIn("['Thói quen thặng dư'", html)
         self.assertIn("['Chấp nhận rủi ro'", html)
-        self.assertIn("['agent_role_preference'", html)
+        self.assertIn("['Vai trò Agent ưa thích'", html)
         self.assertIn("fields.forEach(([k,v])=>box.appendChild(row(k,v)))", html)
         self.assertIn("<title>DNA tài chính</title>", html)
         self.assertIn("<h1>DNA tài chính</h1>", html)

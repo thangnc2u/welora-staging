@@ -1,4 +1,4 @@
-"""P2 Ticket CO — DNA label Chấp nhận rủi ro."""
+"""P2 Ticket CP — DNA label Vai trò Agent ưa thích."""
 
 from __future__ import annotations
 
@@ -13,21 +13,21 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "dna.html"
 
 
-class TestP2DnaRiskVi(unittest.TestCase):
+class TestP2DnaAgentRoleVi(unittest.TestCase):
     def test_label(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn(
-            "['Chấp nhận rủi ro', pick(psy,'risk_tolerance')??data.risk_tolerance]",
+            "['Vai trò Agent ưa thích', pick(psy,'agent_role_preference')??data.agent_role_preference]",
             html,
         )
-        self.assertIn("\u1ea5", html)
-        self.assertIn("\u1ead", html)
-        self.assertIn("\u1ee7", html)
-        self.assertNotIn("['risk_tolerance'", html)
-        self.assertIn("pick(psy,'risk_tolerance')", html)
-        self.assertIn("data.risk_tolerance", html)
-        self.assertIn("['Thói quen thặng dư'", html)
-        self.assertIn("['Vai trò Agent ưa thích'", html)
+        self.assertIn("\u00f2", html)
+        self.assertIn("Agent", html)
+        self.assertIn("\u01b0", html)
+        self.assertIn("\u00ed", html)
+        self.assertNotIn("['agent_role_preference'", html)
+        self.assertIn("pick(psy,'agent_role_preference')", html)
+        self.assertIn("data.agent_role_preference", html)
+        self.assertIn("['Chấp nhận rủi ro'", html)
         self.assertNotIn("innerHTML", html)
         self.assertIn('id="navHome"', html)
         self.assertIn('id="dna"', html)

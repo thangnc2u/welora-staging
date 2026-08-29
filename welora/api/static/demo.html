@@ -51,7 +51,7 @@ document.getElementById('run').onclick=async()=>{
 
   r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
   const sid=r.d.session_id;
-  setStep(2,'HTTP '+r.status+' · session tạo xong','ok');
+  setStep(2,'HTTP '+r.status+' · phiên tạo xong','ok');
 
   await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:'young_single',income_stability:'stable',family_context:'alone'})});
   await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:false,near_term_priority:'safety'})});

@@ -1,4 +1,4 @@
-"""P2 Ticket CZ — safety option familiar → Quen thuộc."""
+"""P2 Ticket DA — safety option apply → Áp dụng."""
 
 from __future__ import annotations
 
@@ -19,19 +19,21 @@ JS = (
 )
 
 
-class TestP2SafetyFamiliarVi(unittest.TestCase):
+class TestP2SafetyApplyVi(unittest.TestCase):
     def test_option(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn('<option value="familiar">Quen thuộc</option>', html)
+        self.assertIn('<option value="apply">Áp dụng</option>', html)
         self.assertIn(JS, html)
-        self.assertIn("\u1ed9", html)
-        self.assertNotIn(">familiar</option>", html)
+        self.assertIn("\u00c1", html)
+        self.assertIn("\u1ee5", html)
+        self.assertNotIn(">apply</option>", html)
+        self.assertIn('value="apply"', html)
         self.assertIn('value="familiar"', html)
         self.assertIn('value="learning"', html)
         self.assertIn('value="not_started"', html)
         self.assertIn(">Chưa bắt đầu</option>", html)
         self.assertIn(">Đang học</option>", html)
-        self.assertIn(">Áp dụng</option>", html)
+        self.assertIn(">Quen thuộc</option>", html)
         self.assertIn(">mastered</option>", html)
         self.assertIn("Làm chủ ·", html)
         self.assertIn("Đạt cổng: chưa", html)

@@ -17,7 +17,7 @@ class TestP2SafetyMasteryVi(unittest.TestCase):
     def test_chrome(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn('id="masteryStatus">Làm chủ · —</div>', html)
-        self.assertIn('textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st)', html)
+        self.assertIn('textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st)', html)
         self.assertIn("\u00e0", html)
         self.assertIn("\u1ee7", html)
         self.assertIn("\u00b7", html)

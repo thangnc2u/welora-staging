@@ -244,3 +244,64 @@ class SqliteEmergencyFundStore:
             created_at=row["created_at"] or "",
             updated_at=row["updated_at"] or "",
         )
+
+
+class SqliteOnboardingRepository:
+    """Persists sessions via in-memory onboarding + DNA/constitution tables when completed."""
+
+    def __init__(self, url: str | None = None) -> None:
+        self.url = url
+        migrate(url)
+
+    def create_session(self, user_id: str):
+        return ob.create_session(user_id)
+
+    def patch_step(self, session_id: str, step: int, payload: dict):
+        return ob.patch_step(session_id, step, payload)
+
+    def complete_session(self, session_id: str) -> dict:
+        result = ob.complete_session(session_id)
+        dna = result["dna"]
+        constitution = result["personal_constitution"]
+        user_id = result["session"]["user_id"]
+        conn = get_connection(self.url)
+        try:
+            conn.execute(
+                "INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
+                (user_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO dna_profiles(user_id, life_stage, income_stability, family_context,
+                  essential_expense_monthly, emergency_fund_months_self, has_dangerous_debt_self,
+                  near_term_priority, surplus_habit, risk_tolerance, agent_role_preference, raw_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET raw_json=excluded.raw_json, updated_at=datetime('now')
+                """,
+                (
+                    user_id,
+                    (dna.get("identity_context") or {}).get("life_stage"),
+                    (dna.get("identity_context") or {}).get("income_stability"),
+                    (dna.get("identity_context") or {}).get("family_context"),
+                    (dna.get("financial_snapshot_self") or {}).get("essential_expense_monthly"),
+                    str((dna.get("financial_snapshot_self") or {}).get("emergency_fund_months_self") or ""),
+                    int(bool((dna.get("financial_snapshot_self") or {}).get("has_dangerous_debt_self"))),
+                    (dna.get("financial_snapshot_self") or {}).get("near_term_priority"),
+                    (dna.get("psychological_profile_self") or {}).get("surplus_habit"),
+                    (dna.get("psychological_profile_self") or {}).get("risk_tolerance"),
+                    (dna.get("psychological_profile_self") or {}).get("agent_role_preference"),
+                    json.dumps(dna, ensure_ascii=False),
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO constitutions(user_id, version, articles_json)
+                VALUES (?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET articles_json=excluded.articles_json, updated_at=datetime('now')
+                """,
+                (user_id, constitution.get("version") or "1.0", json.dumps(constitution.get("articles") or [], ensure_ascii=False)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return result

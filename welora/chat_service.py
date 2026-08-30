@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from welora.agent import CONFIDENCE_THRESHOLD
 from welora.pre_rule_service import service_evaluate
 
 DECISION_LOGS: list[dict[str, Any]] = []
@@ -29,6 +30,12 @@ _PII_PATTERNS = (
     re.compile(r"(?i)\bauthorization\s*[:=]\s*\S+"),
     re.compile(r"(?:\+84|0)(?:[\s.\-]?\d){8,10}"),
 )
+
+LOW_CONFIDENCE_REPLY = (
+    "Chưa đủ tin cậy để trả lời cá nhân hóa. "
+    "Bạn đang ưu tiên quỹ khẩn cấp hay trả nợ nguy hiểm trước?"
+)
+LOW_CONFIDENCE_KEYS = ["SAFE-02", "CORE-07"]
 
 
 def _now() -> str:
@@ -92,6 +99,10 @@ def soft_warning_stub() -> str:
     return "Không có khoản đầu tư nào chắc lời với % cố định. Lợi suất đi kèm rủi ro."
 
 
+def low_confidence_stub() -> str:
+    return LOW_CONFIDENCE_REPLY
+
+
 def service_chat(
     *,
     user_id: str,
@@ -119,11 +130,27 @@ def service_chat(
     rule_hit = pre.get("rule_hit")
     llm_called = False
     model_used = "rule_only"
+    low_conf = False
+
+    answer_confidence = float(pre.get("answer_confidence") if pre.get("answer_confidence") is not None else 0.0)
+    if context_seed and context_seed.get("answer_confidence") is not None:
+        try:
+            answer_confidence = max(0.0, min(1.0, float(context_seed["answer_confidence"])))
+        except (TypeError, ValueError):
+            pass
 
     if guardrail == "deny":
         reply = pre.get("reply") or "Không thể hỗ trợ theo nguyên tắc Welora."
         model_used = "rule_only"
         llm_called = False
+    elif answer_confidence < CONFIDENCE_THRESHOLD:
+        low_conf = True
+        reply = low_confidence_stub()
+        model_used = "rule_only"
+        llm_called = False
+        cta_codes = []
+        if not principle_keys:
+            principle_keys = list(LOW_CONFIDENCE_KEYS)
     elif guardrail == "soft_warning":
         from welora.llm_adapter import safe_call_llm
         reply, model_used, llm_called = safe_call_llm(
@@ -157,6 +184,7 @@ def service_chat(
         "llm_called": llm_called,
         "safety_gate_status": gate_status,
         "cta_offered": cta_codes,
+        "answer_confidence": answer_confidence,
         "raw_response_preview": str(reply)[:300],
     })
 
@@ -177,9 +205,13 @@ def service_chat(
         "decision_log_id": log_id,
         "safety_gate_status": gate_status,
         "months_covered": pre.get("months_covered"),
-        "should_call_llm": pre.get("should_call_llm"),
+        "should_call_llm": False if (guardrail == "deny" or low_conf) else pre.get("should_call_llm"),
         "model_used": model_used,
         "llm_called": llm_called,
+        "answer_confidence": answer_confidence,
+        "confidence_label": (
+            "Chưa đủ tin cậy" if answer_confidence < CONFIDENCE_THRESHOLD else "Đủ tin cậy"
+        ),
     }
 
 

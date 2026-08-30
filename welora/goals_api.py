@@ -1,4 +1,4 @@
-"""Welora Goal API + Safety Gate (P2-E4 mastery wired)."""
+"""Welora Goal API + Safety Gate (P2-OS-01 debt_payoff)."""
 
 from __future__ import annotations
 
@@ -72,12 +72,60 @@ def get_user_flags(user_id: str) -> dict[str, Any]:
     }
 
 
+def _sync_debt_flags(user_id: str, debt) -> None:
+    from welora.goal_debt_payoff import debt_on_track_from_goal, has_dangerous_debt_from_goal
+
+    flags = get_user_flags(user_id)
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=has_dangerous_debt_from_goal(debt),
+        debt_on_track=debt_on_track_from_goal(debt),
+        mastery_no_efund_invest=str(flags.get("mastery_no_efund_invest") or "not_started"),
+    )
+    if _use_db_store():
+        try:
+            from welora.db.repos import set_user_flags_db
+            set_user_flags_db(
+                user_id,
+                has_dangerous_debt=has_dangerous_debt_from_goal(debt),
+                debt_on_track=debt_on_track_from_goal(debt),
+                mastery_no_efund_invest=str(flags.get("mastery_no_efund_invest") or "not_started"),
+            )
+        except Exception:
+            pass
+
+
 def service_create_goal(body: dict) -> tuple[int, dict]:
     user_id = body.get("user_id")
     if not user_id:
         return 400, {"error": "user_id is required"}
-    if body.get("type", "emergency_fund") != "emergency_fund":
-        return 400, {"error": "Only type=emergency_fund supported"}
+    gtype = body.get("type", "emergency_fund")
+    if gtype == "debt_payoff":
+        target = body.get("target_amount")
+        if target is None and isinstance(body.get("target"), dict):
+            target = body["target"].get("amount")
+        if target is None:
+            return 400, {"error": "target_amount is required"}
+        try:
+            target_f = float(target)
+        except (TypeError, ValueError):
+            return 400, {"error": "target_amount must be a number"}
+        try:
+            goal = STORE.create_debt_for_user(
+                str(user_id),
+                target_amount=target_f,
+                current_amount=float(body.get("current_amount") or 0),
+                title=body.get("title"),
+                subtype=body.get("subtype"),
+                monthly_contribution=float(body.get("monthly_contribution") or 0),
+                plan_method=body.get("plan_method") or body.get("method"),
+            )
+        except ValueError as e:
+            return 409 if "already has" in str(e) else 400, {"error": str(e)}
+        _sync_debt_flags(str(user_id), goal)
+        return 201, goal.to_dict()
+    if gtype != "emergency_fund":
+        return 400, {"error": "Only type=emergency_fund or type=debt_payoff supported"}
     essential = body.get("essential_expense_monthly")
     if essential is None:
         return 400, {"error": "essential_expense_monthly is required"}
@@ -111,6 +159,9 @@ def service_get_goal(goal_id: str) -> tuple[int, dict]:
 def service_list_goals(user_id: str, type: Optional[str] = None) -> tuple[int, dict]:
     if not user_id:
         return 400, {"error": "user_id is required"}
+    if hasattr(STORE, "list_for_user"):
+        items = [g.to_dict() for g in STORE.list_for_user(user_id, type)]
+        return 200, {"items": items}
     goal = STORE.get_active_for_user(user_id)
     items = []
     if goal and (type is None or goal.type == type):
@@ -131,6 +182,8 @@ def service_progress(goal_id: str, body: dict) -> tuple[int, dict]:
         return 404, {"error": "goal not found"}
     except ValueError as e:
         return 400, {"error": str(e)}
+    if getattr(goal, "type", None) == "debt_payoff":
+        _sync_debt_flags(goal.user_id, goal)
     return 200, goal.to_dict()
 
 
@@ -142,6 +195,23 @@ def _mastery_block(flags: dict) -> dict:
         "meets_gate": state in ("apply", "mastered"),
         "gate_min": "apply",
     }
+
+
+def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
+    debt = None
+    if hasattr(STORE, "get_debt_for_user"):
+        try:
+            debt = STORE.get_debt_for_user(user_id)
+        except Exception:
+            debt = None
+    if debt:
+        from welora.goal_debt_payoff import debt_on_track_from_goal, has_dangerous_debt_from_goal
+
+        flags["has_dangerous_debt"] = has_dangerous_debt_from_goal(debt)
+        flags["debt_on_track"] = debt_on_track_from_goal(debt)
+        flags["debt_goal_id"] = debt.goal_id
+        flags["debt_goal_progress_percent"] = debt.percent
+    return flags
 
 
 def service_safety_gate(user_id: str) -> tuple[int, dict]:
@@ -165,6 +235,7 @@ def service_safety_gate(user_id: str) -> tuple[int, dict]:
                 flags["mastery_no_efund_invest"] = db.get("mastery_no_efund_invest") or "not_started"
         except Exception:
             pass
+    flags = _apply_debt_goal_flags(user_id, flags)
     if not goal:
         result = compute_safety_gate(
             months_covered=0.0,

@@ -10,13 +10,17 @@ Hard Deny → should_call_llm=False + deny template.
 from __future__ import annotations
 
 import json
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Optional
 from urllib.parse import urlparse
 
 from welora.agent import (
     AgentContext,
+    PreRuleResult,
+    RuleHit,
     SafetyGateSnapshot,
+    compute_answer_confidence,
     evaluate_pre_rules,
     render_deny,
 )
@@ -26,6 +30,7 @@ from welora.onboarding import get_constitution, get_dna
 
 
 def context_from_user(user_id: str) -> AgentContext:
+    """Build AgentContext from live stores (Goal + flags + DNA)."""
     code, gate_dict = service_safety_gate(user_id)
     gate = SafetyGateSnapshot(
         status=gate_dict["status"],
@@ -71,16 +76,24 @@ def context_from_user(user_id: str) -> AgentContext:
         goals={"emergency_fund": ef, "debt_payoff": debt},
         dna_summary={
             "life_stage": (dna.get("identity_context") or {}).get("life_stage"),
-            "near_term_priority": (dna.get("financial_snapshot_self") or {}).get("near_term_priority"),
-            "risk_tolerance_self": (dna.get("psychological_profile_self") or {}).get("risk_tolerance"),
-            "essential_expense_monthly": (dna.get("financial_snapshot_self") or {}).get("essential_expense_monthly"),
+            "near_term_priority": (dna.get("financial_snapshot_self") or {}).get(
+                "near_term_priority"
+            ),
+            "risk_tolerance_self": (dna.get("psychological_profile_self") or {}).get(
+                "risk_tolerance"
+            ),
+            "essential_expense_monthly": (dna.get("financial_snapshot_self") or {}).get(
+                "essential_expense_monthly"
+            ),
         },
         personal_constitution_codes=codes,
-        data_confidence=confidence,
+        data_confidence=confidence,  # type: ignore[arg-type]
+        answer_confidence=compute_answer_confidence(confidence),  # type: ignore[arg-type]
     )
 
 
 def context_from_seed(seed: dict[str, Any]) -> AgentContext:
+    """Build from fixture agent_context_seed."""
     sg = seed["safety_gate"]
     return AgentContext(
         user_id=seed["user_id"],
@@ -96,7 +109,11 @@ def context_from_seed(seed: dict[str, Any]) -> AgentContext:
         goals=seed.get("goals") or {},
         dna_summary=seed.get("dna_summary") or {},
         personal_constitution_codes=seed.get("personal_constitution_codes") or [],
-        data_confidence=seed.get("data_confidence") or "full",
+        data_confidence=seed.get("data_confidence") or "full",  # type: ignore[arg-type]
+        answer_confidence=compute_answer_confidence(
+            seed.get("data_confidence") or "full",  # type: ignore[arg-type]
+            override=seed.get("answer_confidence"),
+        ),
     )
 
 
@@ -126,14 +143,22 @@ def service_evaluate(
         "guardrail_result": pre.result,
         "should_call_llm": pre.should_call_llm,
         "rule_hit": pre.primary_hit.rule_id if pre.primary_hit else None,
-        "principle_keys": list(pre.primary_hit.principle_keys) if pre.primary_hit else [],
+        "principle_keys": (
+            list(pre.primary_hit.principle_keys) if pre.primary_hit else []
+        ),
         "reason": pre.primary_hit.reason if pre.primary_hit else "",
         "cta": list(pre.primary_hit.cta) if pre.primary_hit else [],
         "reply": reply,
         "safety_gate_status": ctx.safety_gate.status,
         "months_covered": ctx.safety_gate.months_covered,
+        "data_confidence": ctx.data_confidence,
+        "answer_confidence": ctx.answer_confidence,
         "hits": [
-            {"rule_id": h.rule_id, "principle_keys": list(h.principle_keys), "reason": h.reason}
+            {
+                "rule_id": h.rule_id,
+                "principle_keys": list(h.principle_keys),
+                "reason": h.reason,
+            }
             for h in pre.hits
         ],
     }
@@ -193,6 +218,7 @@ class PreRuleHandler(BaseHTTPRequestHandler):
 def run_server(host: str = "127.0.0.1", port: int = 8789) -> None:
     httpd = HTTPServer((host, port), PreRuleHandler)
     print(f"Welora Pre-Rule API on http://{host}:{port}")
+    print("  POST /agent/pre-rule")
     httpd.serve_forever()
 
 

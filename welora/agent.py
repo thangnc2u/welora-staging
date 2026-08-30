@@ -18,6 +18,25 @@ GuardrailResult = Literal["deny", "soft_warning", "pass"]
 RuleId = Literal["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09"]
 
 TARGET_MONTHS = 3
+CONFIDENCE_THRESHOLD = 0.80
+
+
+def compute_answer_confidence(
+    data_confidence: Literal["full", "partial", "missing"],
+    override: Optional[float] = None,
+) -> float:
+    """Numeric answer confidence 0..1. Separate from data_confidence enum."""
+    if override is not None:
+        try:
+            v = float(override)
+        except (TypeError, ValueError):
+            v = 0.0
+        return max(0.0, min(1.0, v))
+    if data_confidence == "missing":
+        return 0.40
+    if data_confidence == "partial":
+        return 0.65
+    return 0.90
 
 
 @dataclass
@@ -51,6 +70,7 @@ class AgentContext:
     personal_constitution_codes: list[str]
     stage_agent: str = "advisory_only"
     data_confidence: Literal["full", "partial", "missing"] = "full"
+    answer_confidence: float = 0.90
 
 
 @dataclass
@@ -153,6 +173,7 @@ def build_agent_context(
         },
         personal_constitution_codes=constitution_codes or [],
         data_confidence=confidence,
+        answer_confidence=compute_answer_confidence(confidence),
     )
 
 

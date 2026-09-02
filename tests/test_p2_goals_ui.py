@@ -46,12 +46,13 @@ class TestP2GoalsUi(unittest.TestCase):
         self.assertIn('id="navGoals"', html)
         self.assertIn('href="/app/goals"', html)
 
-    def test_no_create_goal_from_page(self):
+    def test_no_create_emergency_from_page(self):
         html = (STATIC / "goals.html").read_text(encoding="utf-8")
-        self.assertEqual(html.count("method:'POST'"), 1)
         self.assertIn("Chưa có quỹ khẩn cấp", html)
         self.assertIn("ctaOnboarding", html)
         self.assertIn("/app/onboarding", html)
+        self.assertIn("type:'debt_payoff'", html)
+        self.assertNotIn("type:'emergency_fund'", html)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

@@ -131,6 +131,7 @@ def service_chat(
     llm_called = False
     model_used = "rule_only"
     low_conf = False
+    sys_prefix = pre.get("advisory_prefix") or "Welora Agent Stage 1. An Toàn trước. Trụ giáo dục: Welorademy.\n"
 
     answer_confidence = float(pre.get("answer_confidence") if pre.get("answer_confidence") is not None else 0.0)
     if context_seed and context_seed.get("answer_confidence") is not None:
@@ -154,7 +155,7 @@ def service_chat(
     elif guardrail == "soft_warning":
         from welora.llm_adapter import safe_call_llm
         reply, model_used, llm_called = safe_call_llm(
-            call_llm, "CONSTRAINT: Không đưa số % cam kết.", message
+            call_llm, sys_prefix + "CONSTRAINT: Không đưa số % cam kết.", message
         )
         if not llm_called and model_used != "llm_error":
             reply = soft_warning_stub()
@@ -162,7 +163,7 @@ def service_chat(
     else:
         from welora.llm_adapter import safe_call_llm
         reply, model_used, llm_called = safe_call_llm(
-            call_llm, "Welora Agent Stage 1 advisory.", message
+            call_llm, sys_prefix + "Welora Agent Stage 1 advisory.", message
         )
         if not llm_called and model_used != "llm_error":
             reply = advisory_stub(message, gate_status)
@@ -179,12 +180,17 @@ def service_chat(
         "user_query_summary": sanitize_query(message),
         "guardrail_result": guardrail,
         "rule_hit": rule_hit,
+        "rule_id": pre.get("rule_id") or rule_hit,
         "principle_keys": principle_keys,
         "model_used": model_used,
         "llm_called": llm_called,
         "safety_gate_status": gate_status,
         "cta_offered": cta_codes,
         "answer_confidence": answer_confidence,
+        "constitution_version": pre.get("constitution_version") or "",
+        "personal_codes_count": int(pre.get("personal_codes_count") or 0),
+        "core_articles_count": int(pre.get("core_articles_count") or 0),
+        "retrieve_ok": bool(pre.get("retrieve_ok", True)),
         "raw_response_preview": str(reply)[:300],
     })
 
@@ -199,6 +205,7 @@ def service_chat(
         "reply": reply,
         "guardrail_result": guardrail,
         "rule_hit": rule_hit,
+        "rule_id": pre.get("rule_id") or rule_hit,
         "principle_keys": principle_keys,
         "cta": map_cta(cta_codes),
         "content_links": content_links,
@@ -212,6 +219,10 @@ def service_chat(
         "confidence_label": (
             "Chưa đủ tin cậy" if answer_confidence < CONFIDENCE_THRESHOLD else "Đủ tin cậy"
         ),
+        "constitution_version": pre.get("constitution_version") or "",
+        "personal_codes_count": int(pre.get("personal_codes_count") or 0),
+        "core_articles_count": int(pre.get("core_articles_count") or 0),
+        "retrieve_ok": bool(pre.get("retrieve_ok", True)),
     }
 
 

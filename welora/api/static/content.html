@@ -68,8 +68,12 @@ const elGov=document.getElementById('govMeta');
   const risk=d.risk_label||'';
   const reviewed=d.last_reviewed_at||'';
   elGov.textContent=(risk?('Rủi ro: '+risk):'')+(reviewed?(' · Đã review '+reviewed):'');
+  const ac=document.getElementById('ctaAcademy');
+  const pediaKey=d.principle_key||key;
+  ac.href='/app/academy?from=pedia&key='+encodeURIComponent(pediaKey);
   if(d.cta_academy&&d.cta_academy.href){
-    document.getElementById('ctaAcademy').href=d.cta_academy.href;
+    const base=String(d.cta_academy.href).split('?')[0]||'/app/academy';
+    ac.href=base+'?from=pedia&key='+encodeURIComponent(pediaKey);
   }
 })().catch(e=>{elTitle.textContent='Lỗi';elBody.textContent=String(e);});
 </script>

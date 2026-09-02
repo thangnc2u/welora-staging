@@ -101,7 +101,7 @@ _ARTICLES: list[dict[str, Any]] = [
         1,
         "Lần gần nhất tôi quyết định lớn vì cảm xúc là khi nào? Kết quả là gì?",
         ["Khuếch đại FOMO để đẩy all-in", "Cam kết chắc lời"],
-        ["Từ chối cứng trước LLM khi câu hỏi là xúng động ngắn hạn"],
+        ["Từ chối cứng trước LLM khi câu hỏi là xung động ngắn hạn"],
     ),
     _article(
         "CORE-06",
@@ -130,7 +130,7 @@ _ARTICLES: list[dict[str, Any]] = [
     _article(
         "CORE-08",
         "Đa dạng hóa là cơ chế chống bất định",
-        "Không ai đủ thông minh để đặt cược một chiều trong thế giới đầy rủi ro và ngẫu nhiên. Đa dạng hóa không chỉ phân tán tài sản, mà còn nhiều nguồn thu nhập, kỹ năng và lựa chọn.",
+        "Không ai đủ thông minh để đặt cược một chiều trong thế giới đầy rủi ro và ngẫu nhiên. Đa dạng hóa không chỉ là phân tán tài sản, mà còn là xây dựng nhiều nguồn thu nhập, kỹ năng và lựa chọn trong cuộc sống.",
         "Welorapedia / Welorademy dạy đa dạng hóa ở nhiều tầng, không chỉ danh mục. WeloraOS giúp nhìn mức độ tập trung rủi ro. Agent cảnh báo khi hệ thống phụ thuộc một nguồn duy nhất — trong khuôn khổ dữ liệu và nguyên tắc hiện có.",
         "soft_limit",
         ["invest"],

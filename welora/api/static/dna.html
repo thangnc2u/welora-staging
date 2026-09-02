@@ -21,6 +21,21 @@ a{color:#7dd3fc;text-decoration:none}
 <div id="dna"></div>
 <script>
 const KEY='welora_device_id';
+const ENUM_VI={
+  young_single:'Độc thân trẻ',
+  family:'Gia đình',
+  stable:'Ổn định',
+  variable:'Không ổn định',
+  alone:'Sống một mình',
+  with_family:'Sống cùng gia đình',
+  safety:'An Toàn',
+  debt:'Trả nợ',
+  hold:'Giữ',
+  spend:'Tiêu',
+  advisor_only:'Chỉ tư vấn',
+  'true':'Có',
+  'false':'Không'
+};
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
@@ -39,6 +54,13 @@ function pick(obj,key){
   if(obj&&obj[key]!==undefined&&obj[key]!==null&&obj[key]!=='') return obj[key];
   return null;
 }
+function enumLabel(v){
+  if(v===null||v===undefined||v==='') return '—';
+  if(typeof v==='number') return String(v);
+  const key=String(v);
+  if(Object.prototype.hasOwnProperty.call(ENUM_VI,key)) return ENUM_VI[key];
+  return key;
+}
 function row(label,value){
   const el=document.createElement('div');
   el.className='card';
@@ -47,7 +69,7 @@ function row(label,value){
   l.textContent=label;
   const v=document.createElement('div');
   v.className='val';
-  v.textContent=value===null||value===undefined?'—':String(value);
+  v.textContent=enumLabel(value);
   el.appendChild(l);
   el.appendChild(v);
   return el;

@@ -26,7 +26,8 @@ class TestP2ParserUi(unittest.TestCase):
         self.assertNotIn("JSON.stringify(j.category_counts)", html)
         self.assertIn("/app/safety", html)
         self.assertIn("không", html)
-        self.assertIn("bypass Cổng", html)
+        self.assertIn("bỏ qua Cổng", html)
+        self.assertNotIn("bypass Cổng", html)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

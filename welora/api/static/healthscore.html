@@ -22,7 +22,7 @@ a{color:#7dd3fc;text-decoration:none}
   <div class="label">Điểm</div>
   <div id="hsScore">—</div>
   <div class="row"><span class="label">Mức</span><span id="hsLevel">—</span></div>
-  <p class="note" id="hsBypassNote">Điểm không bypass Cổng An Toàn</p>
+  <p class="note" id="hsBypassNote">Điểm không bỏ qua Cổng An Toàn</p>
 </div>
 <div class="card" id="hsComponents"></div>
 <p class="err" id="hsErr"></p>
@@ -66,7 +66,7 @@ function addRow(parent,label,val){
     document.getElementById('hsLevel').textContent=LEVELS[raw]||raw;
     const note=document.getElementById('hsBypassNote');
     if(j.can_bypass_gate_with_score===false || j.can_bypass_gate_with_score==null){
-      note.textContent='Điểm không bypass Cổng An Toàn';
+      note.textContent='Điểm không bỏ qua Cổng An Toàn';
     }
     const box=document.getElementById('hsComponents');
     const comps=j.components||{};

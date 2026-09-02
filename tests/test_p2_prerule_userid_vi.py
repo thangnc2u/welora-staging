@@ -16,7 +16,8 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "prer
 class TestP2PreruleUseridVi(unittest.TestCase):
     def test_muted(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Deny trước LLM. Không hiện mã tài khoản.", html)
+        self.assertIn("Từ chối trước LLM. Không hiện mã tài khoản.", html)
+        self.assertNotIn("Deny trước LLM", html)
         self.assertIn("\u00e3", html)
         self.assertIn("\u00e0", html)
         self.assertIn("\u1ea3", html)

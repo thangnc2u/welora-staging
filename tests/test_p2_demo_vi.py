@@ -49,7 +49,8 @@ class TestP2DemoVi(unittest.TestCase):
         self.assertIn("/agent/chat", html)
         self.assertIn("set_amount", html)
         self.assertIn("guardrail_result", html)
-        self.assertIn("rule_hit", html)
+        self.assertNotIn("rule_hit", html)
+        self.assertNotIn("'HTTP '+r.status", html)
         for nid in ("navHome", "run", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"):
             self.assertIn(f'id="{nid}"', html)
         self.assertIn("7 · C\u1ed5ng", html)

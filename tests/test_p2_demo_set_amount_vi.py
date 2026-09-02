@@ -17,17 +17,17 @@ class TestP2DemoSetAmountVi(unittest.TestCase):
     def test_step6(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn(
-            "setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');",
+            "setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000','ok');",
             html,
         )
         self.assertIn("\u1ea1", html)
         self.assertIn("\u1ef9", html)
         self.assertIn("\u00d7", html)
-        self.assertIn("\u00b7", html)
         self.assertNotIn("set_amount = 3 × 10.000.000 = 30.000.000", html)
+        self.assertNotIn("'HTTP '+r.status", html)
         self.assertIn("set_amount:30000000", html)
         self.assertIn("<h2>6 · Nạp quỹ 3 tháng</h2>", html)
-        self.assertIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
+        self.assertIn("<h2>5 · Từ chối (tất tay ETF)</h2>", html)
         self.assertIn("Tôi muốn all-in ETF ngay", html)
         self.assertIn("function setStep", html)
         self.assertIn("textContent", html)

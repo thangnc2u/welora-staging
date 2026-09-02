@@ -20,6 +20,7 @@ from welora import health_score as hs_svc
 from welora import csv_parser as csv_svc
 from welora import content_map as content_svc
 from welora import core_constitution as core_const_svc
+from welora import academy as academy_svc
 
 
 class DeviceLoginBody(BaseModel):
@@ -69,6 +70,15 @@ class MasteryPatchBody(BaseModel):
 class CsvParseBody(BaseModel):
     text: str
     filename: Optional[str] = None
+
+class AcademyReadBody(BaseModel):
+    user_id: str
+    node_id: str
+
+class AcademyKuatBody(BaseModel):
+    user_id: str
+    node_id: str
+    answers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _respond(code: int, body: dict) -> dict:
@@ -132,6 +142,12 @@ def create_app() -> FastAPI:
     @app.get("/app/core-constitution/", include_in_schema=False)
     def core_constitution_ui() -> FileResponse:
         return FileResponse(static_dir / "core-constitution.html")
+
+    @app.get("/app/academy", include_in_schema=False)
+    @app.get("/app/academy/", include_in_schema=False)
+    @app.get("/app/learn", include_in_schema=False)
+    def academy_ui() -> FileResponse:
+        return FileResponse(static_dir / "academy.html")
 
     @app.get("/app/dna", include_in_schema=False)
     @app.get("/app/dna/", include_in_schema=False)
@@ -249,6 +265,24 @@ def create_app() -> FastAPI:
     @app.get("/constitution/core", tags=["constitution"])
     def get_core_constitution() -> dict:
         return _respond(*core_const_svc.service_get_core_constitution())
+
+    @app.get("/academy/tree", tags=["academy"])
+    def academy_tree(user_id: str = Query(...)) -> dict:
+        return _respond(*academy_svc.service_get_tree(user_id))
+
+    @app.get("/academy/nodes/{node_id}", tags=["academy"])
+    def academy_node(node_id: str, user_id: str = Query(...)) -> dict:
+        return _respond(*academy_svc.service_get_node(user_id, node_id))
+
+    @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
+    def academy_read(node_id: str, body: AcademyReadBody) -> dict:
+        payload = body.model_dump()
+        payload["node_id"] = node_id or payload.get("node_id")
+        return _respond(*academy_svc.service_mark_read(payload))
+
+    @app.post("/academy/kuat", tags=["academy"])
+    def academy_kuat(body: AcademyKuatBody) -> dict:
+        return _respond(*academy_svc.service_submit_kuat(body.model_dump()))
 
     @app.post("/goals", tags=["goals"], status_code=201)
     def goals_create(body: GoalCreateBody) -> dict:

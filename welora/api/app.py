@@ -19,6 +19,7 @@ from welora import pre_rule_service as pre_svc
 from welora import health_score as hs_svc
 from welora import csv_parser as csv_svc
 from welora import content_map as content_svc
+from welora import core_constitution as core_const_svc
 
 
 class DeviceLoginBody(BaseModel):
@@ -126,6 +127,11 @@ def create_app() -> FastAPI:
     @app.get("/app/constitution/", include_in_schema=False)
     def constitution_ui() -> FileResponse:
         return FileResponse(static_dir / "constitution.html")
+
+    @app.get("/app/core-constitution", include_in_schema=False)
+    @app.get("/app/core-constitution/", include_in_schema=False)
+    def core_constitution_ui() -> FileResponse:
+        return FileResponse(static_dir / "core-constitution.html")
 
     @app.get("/app/dna", include_in_schema=False)
     @app.get("/app/dna/", include_in_schema=False)
@@ -239,6 +245,10 @@ def create_app() -> FastAPI:
     @app.get("/users/{user_id}/personal-constitution", tags=["onboarding"])
     def get_constitution(user_id: str) -> dict:
         return _respond(*ob_svc.service_get_constitution(user_id))
+
+    @app.get("/constitution/core", tags=["constitution"])
+    def get_core_constitution() -> dict:
+        return _respond(*core_const_svc.service_get_core_constitution())
 
     @app.post("/goals", tags=["goals"], status_code=201)
     def goals_create(body: GoalCreateBody) -> dict:

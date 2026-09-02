@@ -30,9 +30,15 @@ class TestP2OsMetricsLogsDenyVi(unittest.TestCase):
         self.assertIn("d.hard_deny", METRICS)
         self.assertIn("d.deny_total", METRICS)
 
-    def test_logs_subtitle(self):
+    def test_logs_subtitle_and_result_map(self):
         self.assertIn("Từ chối · luật · gọi LLM · không lộ id", LOGS)
         self.assertNotIn("Deny · luật", LOGS)
+        self.assertIn("RESULT_VI", LOGS)
+        self.assertIn("deny:'Từ chối cứng'", LOGS)
+        self.assertIn("pass:'Cho qua'", LOGS)
+        self.assertIn("soft_warning:'Cảnh báo nhẹ'", LOGS)
+        self.assertIn("function resultLabel", LOGS)
+        self.assertIn("resultLabel(row.guardrail_result)", LOGS)
         self.assertIn("row.guardrail_result", LOGS)
         self.assertIn("/agent/decision-logs?user_id=", LOGS)
         self.assertEqual(TARGET_MONTHS, 3)

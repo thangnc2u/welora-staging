@@ -23,11 +23,11 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 <textarea id="q" placeholder="Ví dụ: Tôi muốn tất tay ETF ngay"></textarea>
 <button type="button" id="go">Chạy Pre-Rule</button>
 <p class="err" id="err"></p>
-<div class="card"><div class="label">guardrail_result</div><div class="val" id="guardrail">—</div></div>
-<div class="card"><div class="label">rule_hit</div><div class="val" id="ruleHit">—</div></div>
-<div class="card"><div class="label">should_call_llm</div><div class="val" id="llmCalled">—</div></div>
-<div class="card"><div class="label">safety_gate_status</div><div class="val" id="gateStatus">—</div></div>
-<div class="card"><div class="label">reply</div><div class="val" id="reply">—</div></div>
+<div class="card"><div class="label">Kết quả</div><div class="val" id="guardrail">—</div></div>
+<div class="card"><div class="label">Luật</div><div class="val" id="ruleHit">—</div></div>
+<div class="card"><div class="label">Gọi LLM</div><div class="val" id="llmCalled">—</div></div>
+<div class="card"><div class="label">Cổng</div><div class="val" id="gateStatus">—</div></div>
+<div class="card"><div class="label">Phản hồi</div><div class="val" id="reply">—</div></div>
 <script>
 const KEY='welora_device_id';
 function deviceId(){
@@ -37,6 +37,15 @@ function deviceId(){
 }
 function setTxt(id,v){
   document.getElementById(id).textContent=(v===undefined||v===null||v==='')?'—':String(v);
+}
+function resultLabel(v){
+  return v==='deny'?'Từ chối cứng':(v==='pass'?'Cho qua':(v==='soft_warning'?'Cảnh báo nhẹ':(v||'')));
+}
+function gateLabel(v){
+  return v==='passed'?'ĐẠT':(v==='not_passed'?'CHƯA ĐẠT':(v||''));
+}
+function yn(v){
+  return v===true||v==='true'?'Có':(v===false||v==='false'?'Không':(v===undefined||v===null||v===''?'':String(v)));
 }
 document.getElementById('go').addEventListener('click', async()=>{
   document.getElementById('err').textContent='';
@@ -49,10 +58,10 @@ document.getElementById('go').addEventListener('click', async()=>{
     const r=await fetch('/agent/pre-rule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message})});
     const d=await r.json();
     if(!r.ok){document.getElementById('err').textContent='Không chạy được Pre-Rule';return;}
-    setTxt('guardrail', d.guardrail_result);
+    setTxt('guardrail', resultLabel(d.guardrail_result));
     setTxt('ruleHit', d.rule_hit);
-    setTxt('llmCalled', d.should_call_llm);
-    setTxt('gateStatus', d.safety_gate_status);
+    setTxt('llmCalled', yn(d.should_call_llm));
+    setTxt('gateStatus', gateLabel(d.safety_gate_status));
     setTxt('reply', d.reply);
   }catch(e){
     document.getElementById('err').textContent='Không chạy được Pre-Rule';

@@ -53,34 +53,34 @@ document.getElementById('run').onclick=async()=>{
   const device=weloraDeviceId();
   let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
   const uid=r.d.user_id;
-  setStep(1,'HTTP '+r.status+' · tài khoản sẵn sàng','ok');
+  setStep(1,'tài khoản sẵn sàng','ok');
 
   r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
   const sid=r.d.session_id;
-  setStep(2,'HTTP '+r.status+' · phiên tạo xong','ok');
+  setStep(2,'phiên tạo xong','ok');
 
   await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({life_stage:'young_single',income_stability:'stable',family_context:'alone'})});
   await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:false,near_term_priority:'safety'})});
   await j('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
   await j('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
   r=await j('/onboarding/session/'+sid+'/complete',{method:'POST'});
-  setStep(3,'HTTP '+r.status+' · DNA + Hiến pháp xong','ok');
+  setStep(3,'DNA + Hiến pháp xong','ok');
 
   r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'emergency_fund',essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
   const gid=r.d.goal_id;
-  setStep(4,'HTTP '+r.status+' · Quỹ khẩn cấp 3 tháng đã tạo','ok');
+  setStep(4,'Quỹ khẩn cấp 3 tháng đã tạo','ok');
 
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Tôi muốn all-in ETF ngay'})});
-  setStep(5,resultLabel(r.d.guardrail_result)+' · '+ (r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');
+  setStep(5,resultLabel(r.d.guardrail_result), r.d.guardrail_result==='deny'?'deny':'ok');
 
   r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
-  setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');
+  setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000','ok');
 
   r=await j('/users/'+uid+'/safety-gate');
   setStep(7,'Trạng thái: '+gateLabel(r.d.status)+' · Tháng phủ: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');
 
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Rút quỹ khẩn cấp để đầu tư cổ phiếu'})});
-  setStep(8,resultLabel(r.d.guardrail_result)+' · '+ (r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');
+  setStep(8,resultLabel(r.d.guardrail_result), r.d.guardrail_result==='deny'?'deny':'ok');
 };
 </script>
 </body>

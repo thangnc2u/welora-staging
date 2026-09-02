@@ -23,7 +23,7 @@ NAVS = (
     ("navLogs", "/app/logs", "Nhật ký quyết định"),
     ("navConstitution", "/app/constitution", "Hiến pháp cá nhân"),
     ("navDna", "/app/dna", "DNA tài chính"),
-    ("navGoals", "/app/goals", "Quỹ khẩn cấp"),
+    ("navGoals", "/app/goals", "Mục tiêu"),
     ("navOtp", "/app/otp", "OTP điện thoại"),
     ("navPreRule", "/app/pre-rule", "Pre-Rule · gỡ lỗi"),
     ("navHealth", "/app/health-score", "Điểm sức khỏe"),
@@ -37,6 +37,7 @@ class TestP2HomeNavVi(unittest.TestCase):
         self.assertNotIn(">Metrics<", html)
         self.assertNotIn(">Decision logs<", html)
         self.assertNotIn(">Health Score<", html)
+        self.assertNotIn(">Quỹ khẩn cấp<", html)
         for nid, href, label in NAVS:
             self.assertIn(f'id="{nid}"', html)
             self.assertIn(f'href="{href}"', html)
@@ -47,6 +48,7 @@ class TestP2HomeNavVi(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("Bắt đầu · Hiến pháp", r.text)
         self.assertIn("Điểm sức khỏe", r.text)
+        self.assertIn("Mục tiêu", r.text)
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

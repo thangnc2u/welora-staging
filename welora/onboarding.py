@@ -206,10 +206,27 @@ def complete_session(session_id: str) -> dict[str, Any]:
     s.current_step = 5
 
     essential = (dna["financial_snapshot_self"].get("essential_expense_monthly") or 0)
+    cta = {
+        "code": "create_emergency_fund_goal",
+        "prefill_body": {
+            "user_id": s.user_id,
+            "essential_expense_monthly": essential,
+            "months": 3,
+            "type": "emergency_fund",
+        },
+    }
+    os_nudge = {
+        "kind": "create_goal",
+        "goal_type": "emergency_fund",
+        "href": "/app/goals",
+        "reason": "Hiến pháp Cá nhân đã xác nhận — tạo Goal quỹ khẩn cấp trên WeloraOS.",
+        "principle_key": "SAFE-01",
+    }
     return {
         "session": s.to_dict(),
         "dna": dna,
         "personal_constitution": constitution,
+        "cta": cta,
         "cta_goal": {
             "type": "emergency_fund",
             "months_of_expense": 3,
@@ -217,6 +234,7 @@ def complete_session(session_id: str) -> dict[str, Any]:
             "linked_from_onboarding": True,
             "current_amount": 0,
         },
+        "os_nudge": os_nudge,
     }
 
 

@@ -11,6 +11,8 @@ a{color:#7dd3fc;text-decoration:none}
 .muted{color:#8b9bb4;font-size:13px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600;width:100%}
 .status{font-size:12px;color:#8b9bb4}
+.card.focus{border-color:#38bdf8;box-shadow:0 0 0 1px #38bdf8}
+.nudge{display:block;margin-top:10px;background:#142033;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eef7;text-decoration:none;font-weight:600}
 .q{margin:10px 0}
 label{display:block;margin:4px 0}
 </style>
@@ -20,6 +22,8 @@ label{display:block;margin:4px 0}
 <h1>Welorademy</h1>
 <p class="muted">An Toàn Tài Chính · KUAT ≥ 70%</p>
 <p class="muted" id="xpLine">XP —</p>
+<p class="muted" id="focusLine"></p>
+<a id="osNudge" class="nudge" href="/app/goals" hidden>Tạo Goal trên WeloraOS</a>
 <div id="tree"></div>
 <div id="lesson" hidden>
   <h2 id="lessonTitle"></h2>
@@ -40,6 +44,9 @@ function deviceId(){
 }
 let uid='';
 let current=null;
+const params=new URLSearchParams(location.search);
+const fromPedia=params.get('from')==='pedia';
+const focusKey=(params.get('key')||params.get('principle_key')||'').toUpperCase();
 function statusVi(s){
   return s==='locked'?'khóa':s==='available'?'học':s==='learning'?'học':s==='kuat_pending'?'KUAT':s==='mastered'?'đã thành thạo':(s||'');
 }
@@ -58,11 +65,22 @@ function showTree(data){
     s.className='status';
     s.textContent=statusVi(n.status)+' · '+n.principle_key;
     el.appendChild(t);el.appendChild(s);
+    const keys=(n.core_map||[]).concat(n.principle_key||[]);
+    if(fromPedia&&focusKey&&keys.indexOf(focusKey)>=0){
+      el.className='card focus';
+      el.id='focusNode';
+    }
     if(n.status!=='locked'){
       el.addEventListener('click',()=>openNode(n.node_id));
     }
     box.appendChild(el);
   });
+  const fl=document.getElementById('focusLine');
+  if(fromPedia&&focusKey){
+    fl.textContent='Từ Welorapedia · '+focusKey;
+  }else{
+    fl.textContent='';
+  }
 }
 async function loadTree(){
   const r=await fetch('/academy/tree?user_id='+encodeURIComponent(uid));
@@ -115,6 +133,14 @@ document.getElementById('btnKuat').onclick=async()=>{
   const d=await r.json();
   const kr=d.kuat_result||{};
   document.getElementById('kuatOut').textContent=(kr.passed?'ĐẠT':'CHƯA ĐẠT')+' · '+(kr.score!=null?Math.round(kr.score*100)+'%':'');
+  const nudge=document.getElementById('osNudge');
+  if(d.os_nudge&&d.os_nudge.href){
+    nudge.hidden=false;
+    nudge.href=d.os_nudge.href;
+    nudge.textContent='Tạo Goal trên WeloraOS';
+  }else{
+    nudge.hidden=true;
+  }
 };
 document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();};
 (async()=>{

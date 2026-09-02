@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Hiến pháp Cốt lõi</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.code{color:#7dd3fc;font-weight:700;font-size:13px}
+.title{margin-top:4px;font-weight:700}
+.text,.expl{margin-top:6px;line-height:1.45}
+.muted{color:#8b9bb4;font-size:13px}
+.tag{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:999px;border:1px solid #243041;font-size:12px;color:#8b9bb4}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Hiến pháp Cốt lõi</h1>
+<p class="muted">10 Nguyên lý Bất biến · Welorademy</p>
+<p><a id="ctaPersonal" href="/app/constitution">Hiến pháp Cá nhân</a></p>
+<div id="articles"></div>
+<script>
+function constraintVi(v){
+  return v==='hard_ban'?'Cấm cứng':(v==='soft_limit'?'Giới hạn mềm':(v==='priority_guidance'?'Ưu tiên dẫn hướng':(v||'')));
+}
+function render(list){
+  const box=document.getElementById('articles');
+  box.textContent='';
+  (list||[]).forEach(a=>{
+    const el=document.createElement('div');
+    el.className='card';
+    const c=document.createElement('div');
+    c.className='code';
+    c.textContent=a.code||'';
+    const t=document.createElement('div');
+    t.className='title';
+    t.textContent=a.title||'';
+    const p=document.createElement('div');
+    p.className='text';
+    p.textContent=a.principle||'';
+    const e=document.createElement('div');
+    e.className='expl muted';
+    e.textContent=a.explanation||'';
+    const tag=document.createElement('div');
+    tag.className='tag';
+    tag.textContent=constraintVi(a.constraint_type);
+    el.appendChild(c);el.appendChild(t);el.appendChild(p);el.appendChild(e);el.appendChild(tag);
+    box.appendChild(el);
+  });
+}
+(async()=>{
+  try{
+    const r=await fetch('/constitution/core');
+    const d=await r.json();
+    render(d.articles||[]);
+  }catch(e){
+    const box=document.getElementById('articles');
+    box.textContent='Không đọc được Hiến pháp Cốt lõi';
+  }
+})();
+</script>
+</body>
+</html>

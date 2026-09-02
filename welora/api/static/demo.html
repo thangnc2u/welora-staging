@@ -36,6 +36,9 @@ function setStep(n, text, cls){
 function resultLabel(v){
   return v==='deny'?'Từ chối cứng':(v||'');
 }
+function gateLabel(v){
+  return v==='passed'?'ĐẠT':(v==='not_passed'?'CHƯA ĐẠT':(v||''));
+}
 const j=async(url,opts)=>{const r=await fetch(url,opts);const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={}};return {status:r.status,d}};
 document.getElementById('run').onclick=async()=>{
   for(let i=1;i<=8;i++) setStep(i,'Đang chạy…','muted');
@@ -74,7 +77,7 @@ document.getElementById('run').onclick=async()=>{
   setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000 · HTTP '+r.status,'ok');
 
   r=await j('/users/'+uid+'/safety-gate');
-  setStep(7,'status: '+(r.d.status||'')+' · months_covered: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');
+  setStep(7,'Trạng thái: '+gateLabel(r.d.status)+' · Tháng phủ: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');
 
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Rút quỹ khẩn cấp để đầu tư cổ phiếu'})});
   setStep(8,resultLabel(r.d.guardrail_result)+' · '+ (r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');

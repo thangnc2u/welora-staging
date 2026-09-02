@@ -22,6 +22,7 @@ a{color:#7dd3fc;text-decoration:none}
 <script>
 const KEY='welora_device_id';
 const RESULT_VI={deny:'Từ chối cứng',pass:'Cho qua',soft_warning:'Cảnh báo nhẹ'};
+const GATE_VI={passed:'ĐẠT',not_passed:'CHƯA ĐẠT'};
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
@@ -29,6 +30,9 @@ function deviceId(){
 }
 function resultLabel(v){
   return RESULT_VI[v]||v||'—';
+}
+function gateLabel(v){
+  return GATE_VI[v]||v||'—';
 }
 function redact(t){
   return String(t||'')
@@ -53,7 +57,7 @@ function card(row){
   addRow(el,'Kết quả',resultLabel(row.guardrail_result));
   addRow(el,'Luật',row.rule_hit||'—');
   addRow(el,'Gọi LLM',String(row.llm_called??'—'));
-  addRow(el,'Cổng',row.safety_gate_status||'—');
+  addRow(el,'Cổng',gateLabel(row.safety_gate_status));
   const q=redact(row.user_query_summary||'');
   if(q) addRow(el,'Câu hỏi',q);
   return el;

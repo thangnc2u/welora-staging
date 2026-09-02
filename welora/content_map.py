@@ -76,6 +76,12 @@ FALLBACK_BODY: dict[str, str] = {
         "để lại hướng dẫn rõ trước khi cần đến.\n\n"
         "Không phải tư vấn pháp lý. Quyết định thuộc về bạn; Agent giữ An Toàn và Hiến pháp."
     ),
+    "TAX-01": (
+        "## Tối ưu thuế hợp lý\n\n"
+        "Thuế là chi phí cấu trúc của dòng tiền. Tối ưu bằng cách hợp pháp, "
+        "không giấu, không khai sai.\n\n"
+        "Không phải tư vấn thuế. Quyết định thuộc về bạn; Agent không khuyến khích trốn thuế."
+    ),
 }
 
 CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
@@ -186,6 +192,17 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "wa": ["WA-04-05"],
         "path_wp": "WP-04-06-di-san-thua-ke.md",
         "path_wa": "WA-04-05-di-san-thua-ke.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "TAX-01": {
+        "title": "Tối ưu thuế hợp lý",
+        "module": "06",
+        "module_title": "Thuế & cấu trúc hợp pháp",
+        "wp": ["WP-06-01"],
+        "wa": ["WA-06-01"],
+        "path_wp": "WP-06-01-toi-uu-thue-hop-ly.md",
+        "path_wa": "WA-06-01-toi-uu-thue-hop-ly.md",
         "risk_level": "medium",
         "academy_href": "/app/academy",
     },

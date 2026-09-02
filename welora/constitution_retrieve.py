@@ -211,3 +211,10 @@ def audit_fields(bundle: ConstitutionBundle, *, llm_called: bool = False) -> dic
         "retrieve_ok": bundle.ok,
         "llm_called": llm_called,
     }
+
+
+def os_nudge_for(node_id: str, *, first_pass: bool = True) -> dict[str, Any] | None:
+    """Re-export — map node → Goal nudge sống ở welora.academy."""
+    from welora.academy import os_nudge_for as _academy_nudge
+
+    return _academy_nudge(node_id, first_pass=first_pass)

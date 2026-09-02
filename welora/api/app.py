@@ -35,8 +35,11 @@ class OtpVerifyBody(BaseModel):
 class GoalCreateBody(BaseModel):
     user_id: str
     type: str = "emergency_fund"
-    essential_expense_monthly: float
+    essential_expense_monthly: Optional[float] = None
+    target_amount: Optional[float] = None
     current_amount: float = 0
+    title: Optional[str] = None
+    subtype: Optional[str] = None
     linked_from_onboarding: bool = False
     monthly_contribution: float = 0
     plan_method: Optional[str] = None
@@ -239,7 +242,7 @@ def create_app() -> FastAPI:
 
     @app.post("/goals", tags=["goals"], status_code=201)
     def goals_create(body: GoalCreateBody) -> dict:
-        code, out = goals_svc.service_create_goal(body.model_dump())
+        code, out = goals_svc.service_create_goal(body.model_dump(exclude_none=True))
         if code == 201:
             return out
         return _respond(code, out)

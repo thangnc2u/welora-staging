@@ -16,10 +16,11 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "pars
 class TestP2ParserNoteVi(unittest.TestCase):
     def test_note(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Goal đã có · không ghi đè. Hiện tại ", html)
+        self.assertIn("Quỹ đã có · không ghi đè. Hiện tại ", html)
         self.assertIn("\u00e3", html)
         self.assertIn("\u00e8", html)
         self.assertIn("Hi\u1ec7n", html)
+        self.assertNotIn("Goal đã có", html)
         self.assertNotIn("Goal đã có —", html)
         self.assertIn("thiết yếu · <strong>không</strong>", html)
         self.assertIn("<h1>Parser CSV ngân hàng</h1>", html)

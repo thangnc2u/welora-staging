@@ -31,7 +31,7 @@ class TestP2ChatH1Vi(unittest.TestCase):
         self.assertIn("user_id:uid", html)
         self.assertIn("message:q", html)
         self.assertIn("guardrail_result", html)
-        self.assertIn("rule_hit", html)
+        self.assertNotIn("rule_hit", html)
         self.assertIn("safety_gate_status", html)
         self.assertNotIn("innerHTML", html)
 

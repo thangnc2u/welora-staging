@@ -182,6 +182,37 @@ class SqliteEmergencyFundStore:
         updated = apply_progress(goal, set_amount=set_amount, add_amount=add_amount)
         return self.save(updated)
 
+    def get_debt_for_user(self, user_id: str) -> Optional[EmergencyFundGoal]:
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM goals WHERE user_id=? AND type='debt_payoff' "
+                "AND status IN ('active','completed') ORDER BY updated_at DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            return self._row_to_goal(row) if row else None
+        finally:
+            conn.close()
+
+    def list_for_user(self, user_id: str, type: Optional[str] = None):
+        items = []
+        ef = self.get_active_for_user(user_id)
+        debt = self.get_debt_for_user(user_id)
+        for g in (ef, debt):
+            if g and (type is None or g.type == type):
+                items.append(g)
+        return items
+
+    def create_debt_for_user(self, user_id: str, **kwargs: Any) -> EmergencyFundGoal:
+        from welora.goal_debt_payoff import create_debt_payoff_goal
+        existing = self.get_debt_for_user(user_id)
+        if existing and existing.status in ("active", "completed"):
+            raise ValueError(
+                f"User {user_id} already has debt_payoff goal {existing.goal_id} ({existing.status})"
+            )
+        goal = create_debt_payoff_goal(user_id=user_id, **kwargs)
+        return self.save(goal)
+
     def _row_to_goal(self, row) -> EmergencyFundGoal:
         plan = {}
         try:
@@ -197,7 +228,7 @@ class SqliteEmergencyFundStore:
             type=row["type"],
             title=row["title"] or "Quỹ khẩn cấp",
             status=row["status"],
-            principle_keys=["SAFE-01", "CORE-07"],
+            principle_keys=(["DEBT-01", "DEBT-03", "CORE-07"] if row["type"] == "debt_payoff" else ["SAFE-01", "CORE-07"]),
             target_amount=float(row["target_amount"] or 0),
             target_unit="VND",
             months_of_expense=int(row["months_of_expense"] or 3),
@@ -230,7 +261,6 @@ class SqliteOnboardingRepository:
 
     def complete_session(self, session_id: str) -> dict:
         result = ob.complete_session(session_id)
-        # persist DNA + constitution lightly
         dna = result["dna"]
         constitution = result["personal_constitution"]
         user_id = result["session"]["user_id"]

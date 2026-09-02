@@ -102,6 +102,8 @@ def create_emergency_fund_goal(
     plan_method: Optional[PlanMethod] = None,
     linked_from_onboarding: bool = False,
 ) -> EmergencyFundGoal:
+    if essential_expense_monthly <= 0:
+        raise ValueError("essential_expense_monthly must be > 0")
     if months_of_expense < TARGET_MONTHS:
         months_of_expense = TARGET_MONTHS
     target = compute_target_amount(essential_expense_monthly, months_of_expense)
@@ -182,13 +184,15 @@ class InMemoryEmergencyFundStore:
     def __init__(self) -> None:
         self._by_id: dict[str, EmergencyFundGoal] = {}
         self._active_by_user: dict[str, str] = {}
+        self._debt_by_user: dict[str, str] = {}
 
     def save(self, goal: EmergencyFundGoal) -> EmergencyFundGoal:
         self._by_id[goal.goal_id] = goal
+        pointer = self._debt_by_user if goal.type == "debt_payoff" else self._active_by_user
         if goal.status in ("active", "completed"):
-            self._active_by_user[goal.user_id] = goal.goal_id
-        elif self._active_by_user.get(goal.user_id) == goal.goal_id:
-            del self._active_by_user[goal.user_id]
+            pointer[goal.user_id] = goal.goal_id
+        elif pointer.get(goal.user_id) == goal.goal_id:
+            del pointer[goal.user_id]
         return goal
 
     def get(self, goal_id: str) -> Optional[EmergencyFundGoal]:
@@ -196,7 +200,26 @@ class InMemoryEmergencyFundStore:
 
     def get_active_for_user(self, user_id: str) -> Optional[EmergencyFundGoal]:
         gid = self._active_by_user.get(user_id)
-        return self._by_id.get(gid) if gid else None
+        g = self._by_id.get(gid) if gid else None
+        if g and g.type == "debt_payoff":
+            return None
+        return g
+
+    def get_debt_for_user(self, user_id: str) -> Optional[EmergencyFundGoal]:
+        gid = self._debt_by_user.get(user_id)
+        g = self._by_id.get(gid) if gid else None
+        if g and g.type == "debt_payoff":
+            return g
+        return None
+
+    def list_for_user(self, user_id: str, type: Optional[str] = None) -> list[EmergencyFundGoal]:
+        out: list[EmergencyFundGoal] = []
+        ef = self.get_active_for_user(user_id)
+        debt = self.get_debt_for_user(user_id)
+        for g in (ef, debt):
+            if g and (type is None or g.type == type):
+                out.append(g)
+        return out
 
     def create_for_user(
         self,
@@ -214,6 +237,17 @@ class InMemoryEmergencyFundStore:
             essential_expense_monthly=essential_expense_monthly,
             **kwargs,
         )
+        return self.save(goal)
+
+    def create_debt_for_user(self, user_id: str, **kwargs: Any) -> EmergencyFundGoal:
+        from welora.goal_debt_payoff import create_debt_payoff_goal
+
+        existing = self.get_debt_for_user(user_id)
+        if existing and existing.status in ("active", "completed"):
+            raise ValueError(
+                f"User {user_id} already has debt_payoff goal {existing.goal_id} ({existing.status})"
+            )
+        goal = create_debt_payoff_goal(user_id=user_id, **kwargs)
         return self.save(goal)
 
     def record_progress(

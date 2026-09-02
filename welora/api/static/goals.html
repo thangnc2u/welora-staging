@@ -13,6 +13,8 @@ a{color:#7dd3fc;text-decoration:none}
 .val{margin-top:2px;font-weight:600}
 .muted{color:#8b9bb4;font-size:13px}
 .empty{color:#8b9bb4;margin-top:16px}
+.pedia{margin-top:12px;padding-top:10px;border-top:1px solid #243041}
+.pedia a{display:block;margin-top:6px;font-weight:600}
 input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
 .err{color:#ff6b6b}
@@ -48,6 +50,11 @@ function deviceId(){
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
   return d;
 }
+function pediaKeys(t){
+  if(t==='debt_payoff') return ['DEBT-01','DEBT-02','DEBT-03'];
+  if(t==='emergency_fund') return ['SAFE-01'];
+  return [];
+}
 function showEmpty(){
   const box=document.getElementById('goalList');
   box.textContent='';
@@ -80,6 +87,51 @@ function typeLabel(t){
   if(t==='debt_payoff') return 'Trả nợ';
   if(t==='emergency_fund') return 'Quỹ khẩn cấp';
   return t||'—';
+}
+function excerpt(md){
+  let s=String(md||'').replace(/^#+\s*/gm,'').replace(/[*_`]/g,' ');
+  s=s.replace(/\s+/g,' ').trim();
+  if(s.length<=220) return s;
+  return s.slice(0,220).replace(/\s+\S*$/,'')+'…';
+}
+function fillPedia(box, keys){
+  box.textContent='';
+  const h=document.createElement('div');
+  h.className='label';
+  h.textContent='Học thêm';
+  box.appendChild(h);
+  keys.forEach(key=>{
+    const row=document.createElement('div');
+    row.style.marginTop='8px';
+    const t=document.createElement('div');
+    t.className='val';
+    t.textContent=key;
+    const ex=document.createElement('p');
+    ex.className='muted';
+    ex.textContent='Đang tải…';
+    const full=document.createElement('a');
+    full.href='/app/content?key='+encodeURIComponent(key);
+    full.textContent='Xem đầy đủ';
+    const ac=document.createElement('a');
+    ac.href='/app/academy?from=pedia&key='+encodeURIComponent(key);
+    ac.textContent='Học sâu hơn · Welorademy';
+    row.appendChild(t);
+    row.appendChild(ex);
+    row.appendChild(full);
+    row.appendChild(ac);
+    box.appendChild(row);
+    fetch('/content/'+encodeURIComponent(key)).then(r=>r.json()).then(d=>{
+      if(!d || d.ok===false){
+        ex.textContent='Chưa có bài cho '+key;
+        return;
+      }
+      t.textContent=d.title||key;
+      ex.textContent=excerpt(d.body_markdown||'');
+      if(d.href) full.href=d.href;
+    }).catch(()=>{
+      ex.textContent='Không tải được bài.';
+    });
+  });
 }
 function fillPick(items){
   const sel=document.getElementById('goalPick');
@@ -131,6 +183,10 @@ function renderItems(items){
       el.appendChild(line('Phần trăm', cur.percent));
       el.appendChild(line('Tháng chi hiện tại', cur.months_covered));
     }
+    const ped=document.createElement('div');
+    ped.className='pedia';
+    fillPedia(ped, pediaKeys(g.type));
+    el.appendChild(ped);
     el.addEventListener('click',()=>{
       lastId=g.goal_id||lastId;
       document.getElementById('goalPick').value=lastId;

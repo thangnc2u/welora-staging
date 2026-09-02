@@ -16,15 +16,19 @@ a{color:#7dd3fc;text-decoration:none}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Nhật ký quyết định</h1>
-<p class="label">Deny · luật · gọi LLM · không lộ id</p>
+<p class="label">Từ chối · luật · gọi LLM · không lộ id</p>
 <div id="logList"></div>
 <p class="err" id="logErr"></p>
 <script>
 const KEY='welora_device_id';
+const RESULT_VI={deny:'Từ chối cứng',pass:'Cho qua',soft_warning:'Cảnh báo nhẹ'};
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
   return d;
+}
+function resultLabel(v){
+  return RESULT_VI[v]||v||'—';
 }
 function redact(t){
   return String(t||'')
@@ -46,7 +50,7 @@ function addRow(el,label,val){
 function card(row){
   const el=document.createElement('div');
   el.className='card';
-  addRow(el,'Kết quả',row.guardrail_result||'—');
+  addRow(el,'Kết quả',resultLabel(row.guardrail_result));
   addRow(el,'Luật',row.rule_hit||'—');
   addRow(el,'Gọi LLM',String(row.llm_called??'—'));
   addRow(el,'Cổng',row.safety_gate_status||'—');

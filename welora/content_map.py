@@ -70,6 +70,12 @@ FALLBACK_BODY: dict[str, str] = {
         "Sợ hãi hoặc hưng phấn dễ đẩy tới quyết định vội: rút quỹ, vay nóng, all-in. Giữ nguyên tắc An Toàn dù thị trường biến động.\n\n"
         "Không dùng cảm xúc để phá quỹ 3 tháng hay nhận lời hứa lợi suất cố định."
     ),
+    "CORE-10": (
+        "## Tiền phục vụ cuộc đời\n\n"
+        "Di sản không tự xảy ra: liệt kê tài sản và nghĩa vụ, ghi người thụ hưởng, "
+        "để lại hướng dẫn rõ trước khi cần đến.\n\n"
+        "Không phải tư vấn pháp lý. Quyết định thuộc về bạn; Agent giữ An Toàn và Hiến pháp."
+    ),
 }
 
 CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
@@ -169,6 +175,17 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "wa": ["WA-02-01", "WA-02-07"],
         "path_wp": "WP-02-01-quy-khan-cap-la-gi.md",
         "path_wa": "WA-02-01-xay-dung-quy-khan-cap.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "CORE-10": {
+        "title": "Tiền phục vụ cuộc đời",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-06"],
+        "wa": ["WA-04-05"],
+        "path_wp": "WP-04-06-di-san-thua-ke.md",
+        "path_wa": "WA-04-05-di-san-thua-ke.md",
         "risk_level": "medium",
         "academy_href": "/app/academy",
     },

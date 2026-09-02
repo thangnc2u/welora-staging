@@ -22,7 +22,7 @@
   <p><a id="navHome" href="/app">← Welora</a></p>
   <p><a href="/app/safety">← An Toàn</a></p>
   <h1>Parser CSV ngân hàng</h1>
-  <p class="muted">Gợi ý chi tiêu thiết yếu · <strong>không</strong> ghi đè Goal/DNA tự động, không bypass Cổng.</p>
+  <p class="muted">Gợi ý chi tiêu thiết yếu · <strong>không</strong> ghi đè quỹ/DNA tự động, không bypass Cổng.</p>
   <textarea id="csv" placeholder="Dán CSV (date,amount,description)…"></textarea>
   <button id="go">Phân tích</button>
   <div id="out">
@@ -35,10 +35,10 @@
       <ul id="categories"></ul>
     </div>
     <div class="card" id="goalDraft">
-      <p class="muted">Gợi ý Goal quỹ 3 tháng</p>
+      <p class="muted">Gợi ý quỹ khẩn cấp 3 tháng</p>
       <div id="goalDraftText">—</div>
       <p class="muted" id="goalExistingNote"></p>
-      <button type="button" id="createGoalBtn" disabled>Tạo Goal</button>
+      <button type="button" id="createGoalBtn" disabled>Tạo quỹ khẩn cấp</button>
     </div>
   </div>
   <script>
@@ -117,7 +117,7 @@
         if (existingGoal) {
           const cur = (existingGoal.current && existingGoal.current.amount) || existingGoal.current_amount || 0;
           const tgt = (existingGoal.target && existingGoal.target.amount) || existingGoal.target_amount || 0;
-          noteEl.textContent = 'Goal đã có · không ghi đè. Hiện tại ' + vnd(cur) + ' / mục tiêu ' + vnd(tgt);
+          noteEl.textContent = 'Quỹ đã có · không ghi đè. Hiện tại ' + vnd(cur) + ' / mục tiêu ' + vnd(tgt);
           btn.disabled = true;
         } else if (draftEssential > 0) {
           btn.disabled = false;
@@ -145,7 +145,7 @@
           current_amount: 0,
         }),
       });
-      document.getElementById('goalExistingNote').textContent = 'Đã tạo Goal quỹ 3 tháng.';
+      document.getElementById('goalExistingNote').textContent = 'Đã tạo quỹ khẩn cấp 3 tháng.';
       document.getElementById('createGoalBtn').disabled = true;
     };
   </script>

@@ -14,8 +14,8 @@
     .muted { color: #6b7280; font-size: 13px; }
     .err { color: #b91c1c; }
     a { color: #0f766e; }
-    #categories { list-style: none; padding: 0; margin: 8px 0 0; }
-    #categories li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+    #categories, #budgetLines { list-style: none; padding: 0; margin: 8px 0 0; }
+    #categories li, #budgetLines li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -40,11 +40,19 @@
       <p class="muted" id="goalExistingNote"></p>
       <button type="button" id="createGoalBtn" disabled>Tạo quỹ khẩn cấp</button>
     </div>
+    <div class="card" id="budgetDraft">
+      <p class="muted">Ngân sách theo danh mục</p>
+      <ul id="budgetLines"></ul>
+      <p class="muted" id="budgetNote"></p>
+      <button type="button" id="budgetApplyBtn" disabled>Tạo / cập nhật ngân sách</button>
+    </div>
   </div>
   <script>
     const KEY = 'welora_device_id';
     let draftEssential = 0;
     let existingGoal = null;
+    let budgetDraft = null;
+    let existingBudget = null;
     function deviceId(){
       let d = localStorage.getItem(KEY);
       if(!d){ d = 'dev-' + Math.random().toString(36).slice(2,10); localStorage.setItem(KEY, d); }
@@ -66,6 +74,14 @@
       noteEl.textContent = '';
       btn.disabled = true;
       existingGoal = null;
+      budgetDraft = null;
+      existingBudget = null;
+      const bLines = document.getElementById('budgetLines');
+      const bNote = document.getElementById('budgetNote');
+      const bBtn = document.getElementById('budgetApplyBtn');
+      bLines.textContent = '';
+      bNote.textContent = '';
+      bBtn.disabled = true;
       try {
         const r = await fetch('/parser/csv', {
           method: 'POST',
@@ -122,6 +138,34 @@
         } else if (draftEssential > 0) {
           btn.disabled = false;
         }
+        budgetDraft = j.budget_draft || null;
+        const lines = (budgetDraft && budgetDraft.lines) || [];
+        if (!lines.length) {
+          const li = document.createElement('li');
+          li.className = 'muted';
+          li.textContent = 'Chưa có dòng ngân sách';
+          bLines.appendChild(li);
+        } else {
+          lines.forEach((row) => {
+            const li = document.createElement('li');
+            const a = document.createElement('span');
+            a.textContent = row.category || '';
+            const b = document.createElement('span');
+            b.textContent = String(row.count || 0) + ' · ' + vnd(row.outflow || 0);
+            li.appendChild(a);
+            li.appendChild(b);
+            bLines.appendChild(li);
+          });
+        }
+        const br = await fetch('/budget?user_id=' + encodeURIComponent(uid));
+        const bj = await br.json();
+        existingBudget = (bj && bj.budget) || null;
+        if (existingBudget) {
+          bNote.textContent = 'Ngân sách đã có · không ghi đè im lặng.';
+          bBtn.disabled = false;
+        } else if (lines.length) {
+          bBtn.disabled = false;
+        }
       } catch (e) {
         suggestionEl.textContent = String(e.message || e);
       }
@@ -147,6 +191,34 @@
       });
       document.getElementById('goalExistingNote').textContent = 'Đã tạo quỹ khẩn cấp 3 tháng.';
       document.getElementById('createGoalBtn').disabled = true;
+    };
+    document.getElementById('budgetApplyBtn').onclick = async () => {
+      if (!budgetDraft || !(budgetDraft.lines || []).length) return;
+      const auth = await fetch('/auth/device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId() }),
+      });
+      const a = await auth.json();
+      const uid = a.user_id || '';
+      const r = await fetch('/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: uid,
+          confirm: true,
+          replace_existing: !!existingBudget,
+          draft: budgetDraft,
+        }),
+      });
+      const note = document.getElementById('budgetNote');
+      if (!r.ok) {
+        note.textContent = 'Ngân sách đã có · không ghi đè im lặng.';
+        return;
+      }
+      note.textContent = existingBudget ? 'Đã cập nhật ngân sách.' : 'Đã lưu ngân sách.';
+      existingBudget = (await r.json()).budget || existingBudget;
+      document.getElementById('budgetApplyBtn').disabled = true;
     };
   </script>
 </body>

@@ -132,7 +132,10 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         "auto_overwrite": False,
         "category_counts": counts,
     }
-    return attach_goal_draft(out)
+    out = attach_goal_draft(out)
+    from welora.budget import attach_budget_draft
+
+    return attach_budget_draft(out)
 
 
 def service_parse_csv(*, text: str, filename: str = "") -> tuple[int, dict]:

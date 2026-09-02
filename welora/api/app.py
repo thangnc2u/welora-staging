@@ -18,6 +18,7 @@ from welora import onboarding_api as ob_svc
 from welora import pre_rule_service as pre_svc
 from welora import health_score as hs_svc
 from welora import csv_parser as csv_svc
+from welora import budget as budget_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
@@ -71,6 +72,13 @@ class CsvParseBody(BaseModel):
     text: str
     filename: Optional[str] = None
 
+class BudgetApplyBody(BaseModel):
+    user_id: str
+    confirm: bool = False
+    replace_existing: bool = False
+    draft: Optional[dict[str, Any]] = None
+    lines: Optional[list[dict[str, Any]]] = None
+
 class AcademyReadBody(BaseModel):
     user_id: str
     node_id: str
@@ -121,6 +129,11 @@ def create_app() -> FastAPI:
 
     @app.get("/app/parser", include_in_schema=False)
     def parser_ui() -> FileResponse:
+        return FileResponse(static_dir / "parser.html")
+
+    @app.get("/app/budget", include_in_schema=False)
+    @app.get("/app/budget/", include_in_schema=False)
+    def budget_ui() -> FileResponse:
         return FileResponse(static_dir / "parser.html")
 
     @app.get("/app/metrics", include_in_schema=False)
@@ -339,6 +352,14 @@ def create_app() -> FastAPI:
     @app.post("/parser/csv", tags=["parser"])
     def parse_csv(body: CsvParseBody) -> dict:
         return _respond(*csv_svc.service_parse_csv(text=body.text, filename=body.filename or ""))
+
+    @app.get("/budget", tags=["budget"])
+    def budget_get(user_id: str = Query(...)) -> dict:
+        return _respond(*budget_svc.service_get(user_id))
+
+    @app.post("/budget", tags=["budget"])
+    def budget_post(body: BudgetApplyBody) -> dict:
+        return _respond(*budget_svc.service_apply(body.model_dump()))
 
     @app.get("/content", tags=["content"])
     def content_index() -> dict:

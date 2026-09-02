@@ -59,6 +59,18 @@ const HS_LABELS={
   savings_invest_rate:'Tiết kiệm / đầu tư',
   behavior_consistency:'Hành vi nhất quán'
 };
+const GATE_REASON_VI={
+  data_missing:'Thiếu dữ liệu',
+  emergency_fund_below_3_months:'Quỹ khẩn cấp dưới 3 tháng',
+  dangerous_debt_unhandled:'Nợ nguy hiểm chưa xử lý',
+  mastery_missing:'Chưa đạt làm chủ (cần Áp dụng)',
+  recent_hard_rule_violation:'Vi phạm Hard Rule gần đây'
+};
+function formatGateReasons(reasons, passed){
+  const list=reasons||[];
+  if(!list.length) return passed?'—':'';
+  return list.map(c=>GATE_REASON_VI[c]||c).join(' · ');
+}
 const state={userId:null,goal:null,debt:null,gate:null,health:null,mastery:null};
 async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});return r.json();}
 async function load(){
@@ -95,7 +107,7 @@ function render(){
   const passed=state.gate&&state.gate.status==="passed";
   document.getElementById("gateCard").className="badge-card "+(passed?"ok":"fail");
   document.getElementById("gateStatus").textContent=passed?"ĐẠT":"CHƯA ĐẠT";
-  document.getElementById("gateMeta").textContent=(state.gate&&state.gate.reasons||[]).join(", ");
+  document.getElementById("gateMeta").textContent=formatGateReasons(state.gate&&state.gate.reasons, passed);
   const st=(state.mastery&&state.mastery.state)||"not_started";
   const ok=!!(state.mastery&&state.mastery.meets_gate);
   document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");

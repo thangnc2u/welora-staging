@@ -19,7 +19,7 @@ button.secondary{background:#243041}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Hiến pháp Cá nhân</h1>
-<p class="muted">B0–B5 · DNA · Goal quỹ 3 tháng</p>
+<p class="muted">B0–B5 · DNA · Quỹ khẩn cấp 3 tháng</p>
 
 <div class="card" id="step0">
   <h2>B0 · Chào</h2>
@@ -94,9 +94,9 @@ button.secondary{background:#243041}
 </div>
 
 <div class="card hidden" id="step5">
-  <h2>B5 · Tóm tắt + Goal quỹ 3 tháng</h2>
+  <h2>B5 · Tóm tắt + Quỹ khẩn cấp 3 tháng</h2>
   <p class="muted" id="summary"></p>
-  <button type="button" id="ctaGoal">Tạo Goal quỹ khẩn cấp 3 tháng</button>
+  <button type="button" id="ctaGoal">Tạo quỹ khẩn cấp 3 tháng</button>
   <p class="err" id="err5"></p>
 </div>
 
@@ -177,7 +177,7 @@ document.getElementById('ctaGoal').onclick=async()=>{
       current_amount:0,
       linked_from_onboarding:true
     })});
-    if(!r.ok){ document.getElementById('err5').textContent='Không tạo được Goal'; return; }
+    if(!r.ok){ document.getElementById('err5').textContent='Không tạo được quỹ khẩn cấp'; return; }
     location.href='/app/safety?user_id='+encodeURIComponent(uid);
   }catch(e){ document.getElementById('err5').textContent=String(e); }
 };

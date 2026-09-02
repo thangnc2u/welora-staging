@@ -14,7 +14,8 @@ class TestP2OsSafetyGoalsDebt(unittest.TestCase):
     def test_section_muc_tieu(self):
         self.assertIn('class="section-title">Mục tiêu<', HTML)
         self.assertNotIn('class="section-title">Goal quỹ<', HTML)
-        self.assertIn("Tạo Goal quỹ 3 tháng", HTML)
+        self.assertIn("Tạo quỹ khẩn cấp 3 tháng", HTML)
+        self.assertNotIn("Tạo Goal quỹ 3 tháng", HTML)
         self.assertIn('id="essential"', HTML)
         self.assertIn('id="btnCreate"', HTML)
         self.assertIn('id="btnSave"', HTML)

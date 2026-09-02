@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Welorademy</title>
+<style>
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+a{color:#7dd3fc;text-decoration:none}
+.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.muted{color:#8b9bb4;font-size:13px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600;width:100%}
+.status{font-size:12px;color:#8b9bb4}
+.q{margin:10px 0}
+label{display:block;margin:4px 0}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a></p>
+<h1>Welorademy</h1>
+<p class="muted">An Toàn Tài Chính · KUAT ≥ 70%</p>
+<p class="muted" id="xpLine">XP —</p>
+<div id="tree"></div>
+<div id="lesson" hidden>
+  <h2 id="lessonTitle"></h2>
+  <p class="muted" id="lessonStub"></p>
+  <p><a id="pediaLink" href="/app/content">Welorapedia</a></p>
+  <button type="button" id="btnRead">Đánh dấu đã đọc</button>
+  <div id="kuatBox"></div>
+  <button type="button" id="btnKuat">Nộp KUAT</button>
+  <p class="muted" id="kuatOut"></p>
+  <p><a id="backTree" href="#">← Cây</a></p>
+</div>
+<script>
+const KEY='welora_device_id';
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+let uid='';
+let current=null;
+function statusVi(s){
+  return s==='locked'?'khóa':s==='available'?'học':s==='learning'?'học':s==='kuat_pending'?'KUAT':s==='mastered'?'đã thành thạo':(s||'');
+}
+function showTree(data){
+  document.getElementById('lesson').hidden=true;
+  document.getElementById('tree').hidden=false;
+  const box=document.getElementById('tree');
+  box.textContent='';
+  document.getElementById('xpLine').textContent='XP '+((data&&data.xp)||0);
+  (data.nodes||[]).forEach(n=>{
+    const el=document.createElement('div');
+    el.className='card';
+    const t=document.createElement('div');
+    t.textContent=n.node_id+' · '+n.title;
+    const s=document.createElement('div');
+    s.className='status';
+    s.textContent=statusVi(n.status)+' · '+n.principle_key;
+    el.appendChild(t);el.appendChild(s);
+    if(n.status!=='locked'){
+      el.addEventListener('click',()=>openNode(n.node_id));
+    }
+    box.appendChild(el);
+  });
+}
+async function loadTree(){
+  const r=await fetch('/academy/tree?user_id='+encodeURIComponent(uid));
+  const d=await r.json();
+  showTree(d);
+}
+async function openNode(id){
+  const r=await fetch('/academy/nodes/'+encodeURIComponent(id)+'?user_id='+encodeURIComponent(uid));
+  const n=await r.json();
+  current=n;
+  document.getElementById('tree').hidden=true;
+  document.getElementById('lesson').hidden=false;
+  document.getElementById('lessonTitle').textContent=n.node_id+' · '+n.title;
+  document.getElementById('lessonStub').textContent=n.lesson_stub||'';
+  const a=document.getElementById('pediaLink');
+  a.href=n.content_href||('/app/content?key='+(n.principle_key||''));
+  const box=document.getElementById('kuatBox');
+  box.textContent='';
+  (n.questions||[]).forEach(q=>{
+    const wrap=document.createElement('div');
+    wrap.className='q';
+    wrap.dataset.qid=q.id;
+    const p=document.createElement('div');
+    p.textContent=q.prompt;
+    wrap.appendChild(p);
+    (q.choices||[]).forEach((c,i)=>{
+      const lab=document.createElement('label');
+      const inp=document.createElement('input');
+      inp.type='radio'; inp.name='q-'+q.id; inp.value=String(i);
+      lab.appendChild(inp);
+      lab.appendChild(document.createTextNode(' '+c));
+      wrap.appendChild(lab);
+    });
+    box.appendChild(wrap);
+  });
+  document.getElementById('kuatOut').textContent='';
+}
+document.getElementById('btnRead').onclick=async()=>{
+  if(!current) return;
+  await fetch('/academy/nodes/'+encodeURIComponent(current.node_id)+'/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id})});
+};
+document.getElementById('btnKuat').onclick=async()=>{
+  if(!current) return;
+  const answers=[];
+  document.querySelectorAll('#kuatBox .q').forEach(w=>{
+    const sel=w.querySelector('input:checked');
+    answers.push({question_id:w.dataset.qid,choice:sel?Number(sel.value):-1});
+  });
+  const r=await fetch('/academy/kuat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id,answers})});
+  const d=await r.json();
+  const kr=d.kuat_result||{};
+  document.getElementById('kuatOut').textContent=(kr.passed?'ĐẠT':'CHƯA ĐẠT')+' · '+(kr.score!=null?Math.round(kr.score*100)+'%':'');
+};
+document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();};
+(async()=>{
+  const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+  const a=await auth.json();
+  uid=a.user_id||'';
+  await loadTree();
+})();
+</script>
+</body>
+</html>

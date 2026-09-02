@@ -13,22 +13,27 @@ article h1{font-size:1.25rem;margin:8px 0 12px}
 #contentBody{white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.55;margin:0}
 .muted{color:#8b9bb4;font-size:13px}
 .nav{margin-bottom:12px}
+.cta{display:block;margin-top:10px;background:#141c2e;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eefc;text-decoration:none;font-weight:600}
 </style>
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <p class="nav"><a href="/app/chat">← Chat với Agent</a> · <a href="/app/safety">An Toàn</a></p>
 <p id="contentKey" class="key">…</p>
+<p class="muted" id="govMeta"></p>
 <article>
   <h1 id="contentTitle">Đang tải…</h1>
   <div id="contentBody"></div>
 </article>
+<p><a id="ctaAcademy" class="cta" href="/app/academy">Học sâu hơn</a></p>
+<p><a id="ctaConstitution" class="cta" href="/app/constitution">Xây Hiến pháp Cá nhân</a></p>
 <script>
 const params=new URLSearchParams(location.search);
 const key=params.get('key')||'';
 const elKey=document.getElementById('contentKey');
 const elTitle=document.getElementById('contentTitle');
 const elBody=document.getElementById('contentBody');
+const elGov=document.getElementById('govMeta');
 (async()=>{
   if(!key){
     const r=await fetch('/content');
@@ -36,7 +41,11 @@ const elBody=document.getElementById('contentBody');
     elKey.textContent='danh sách';
     elTitle.textContent='Welorapedia';
     elBody.textContent='';
-    (j.items||[]).forEach(i=>{
+    const h=document.createElement('p');
+    h.textContent='An Toàn Tài Chính';
+    elBody.appendChild(h);
+    const pack=(j.modules&&j.modules['02']&&j.modules['02'].items)||(j.items||[]).filter(i=>i.module==='02');
+    pack.forEach(i=>{
       const p=document.createElement('p');
       const a=document.createElement('a');
       a.href='/app/content?key='+encodeURIComponent(i.principle_key||'');
@@ -56,6 +65,12 @@ const elBody=document.getElementById('contentBody');
   }
   elTitle.textContent=d.title||key;
   elBody.textContent=d.body_markdown||'';
+  const risk=d.risk_label||'';
+  const reviewed=d.last_reviewed_at||'';
+  elGov.textContent=(risk?('Rủi ro: '+risk):'')+(reviewed?(' · Đã review '+reviewed):'');
+  if(d.cta_academy&&d.cta_academy.href){
+    document.getElementById('ctaAcademy').href=d.cta_academy.href;
+  }
 })().catch(e=>{elTitle.textContent='Lỗi';elBody.textContent=String(e);});
 </script>
 </body>

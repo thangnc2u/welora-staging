@@ -1,7 +1,6 @@
 """
 Welora P1-E8 — Content deep-link from principle_key / Deny CTA
-
-Maps Hard Guardrail keys → WP (Pedia) + WA (Academy).
+P1 Pedia ship An Toàn: full WP-02 + governance + CTA Welorademy.
 """
 
 from __future__ import annotations
@@ -9,6 +8,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Optional
+
+GOVERNANCE_DEFAULT = {
+    "version": "1.0.0",
+    "last_reviewed_at": "2026-09-02",
+    "status": "published",
+}
+
+RISK_VI = {"low": "Thấp", "medium": "Trung bình", "high": "Cao"}
 
 FALLBACK_BODY: dict[str, str] = {
     "SAFE-01": (
@@ -69,50 +76,70 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
     "SAFE-01": {
         "title": "Quỹ khẩn cấp là lớp sống còn",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-01", "WP-02-02"],
         "wa": ["WA-02-01"],
         "path_wp": "WP-02-01-quy-khan-cap-la-gi.md",
+        "path_wp_extra": ["WP-02-02-cach-xay-dung-quy-khan-cap.md"],
         "path_wa": "WA-02-01-xay-dung-quy-khan-cap.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
     },
     "SAFE-02": {
         "title": "Chỉ dùng quỹ cho sự cố bất ngờ",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-03"],
         "wa": ["WA-02-02"],
         "path_wp": "WP-02-03-khi-nao-duoc-dung-quy-khan-cap.md",
         "path_wa": "WA-02-02-nguyen-tac-su-dung-quy-khan-cap.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
     },
     "SAFE-03": {
         "title": "Quỹ thanh khoản cao & tách biệt",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-04"],
         "wa": ["WA-02-03"],
         "path_wp": "WP-02-04-nen-de-quy-khan-cap-o-dau.md",
         "path_wa": "WA-02-03-lua-chon-noi-giu-quy-khan-cap.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
     },
     "DEBT-01": {
         "title": "Nợ tốt vs Nợ xấu",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-06"],
         "wa": ["WA-02-05"],
         "path_wp": "WP-02-06-no-tot-va-no-xau.md",
         "path_wa": "WA-02-05-nhan-dien-no-tot-no-xau.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
     },
     "DEBT-02": {
         "title": "Phương pháp trả nợ",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-05", "WP-02-07"],
         "wa": ["WA-02-04", "WA-02-06"],
         "path_wp": "WP-02-05-snowball-va-avalanche.md",
+        "path_wp_extra": ["WP-02-07-cach-lap-ke-hoach-tra-no.md"],
         "path_wa": "WA-02-04-chon-phuong-phap-tra-no.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
     },
     "DEBT-03": {
         "title": "An Toàn trước đầu tư",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-08"],
         "wa": ["WA-02-07"],
         "path_wp": "WP-02-08-co-nen-tra-het-no-truoc-khi-dau-tu.md",
         "path_wa": "WA-02-07-sap-xep-uu-tien-tra-no-va-dau-tu.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
     },
     "CORE-01": {
         "title": "Trách nhiệm tuyệt đối",
@@ -121,6 +148,8 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "wa": ["WA-01-01"],
         "path_wp": "WP-01-01-tu-duy-ve-tien-la-gi.md",
         "path_wa": "WA-01-01-xay-dung-tu-duy-ve-tien.md",
+        "risk_level": "low",
+        "academy_href": "/app/academy",
     },
     "CORE-05": {
         "title": "Cảm xúc không ra quyết định",
@@ -129,14 +158,19 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "wa": ["WA-01-06"],
         "path_wp": "WP-01-07-muc-tieu-tai-chinh.md",
         "path_wa": "WA-01-06-dat-muc-tieu-tai-chinh.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
     },
     "CORE-07": {
         "title": "Phòng thủ đi trước tăng trưởng",
         "module": "02",
+        "module_title": "An Toàn Tài Chính",
         "wp": ["WP-02-01", "WP-02-08"],
         "wa": ["WA-02-01", "WA-02-07"],
         "path_wp": "WP-02-01-quy-khan-cap-la-gi.md",
         "path_wa": "WA-02-01-xay-dung-quy-khan-cap.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
     },
 }
 
@@ -196,6 +230,26 @@ def content_root() -> Path:
     return Path(__file__).resolve().parents[1] / "content"
 
 
+def _gov(meta: dict[str, Any]) -> dict[str, str]:
+    level = meta.get("risk_level") or "medium"
+    return {
+        "risk_level": level,
+        "risk_label": RISK_VI.get(level, level),
+        "version": GOVERNANCE_DEFAULT["version"],
+        "last_reviewed_at": GOVERNANCE_DEFAULT["last_reviewed_at"],
+        "status": GOVERNANCE_DEFAULT["status"],
+    }
+
+
+def _read_rel(root: Path, rel: Optional[str]) -> tuple[str, Optional[str]]:
+    if not rel:
+        return "", None
+    path = root / rel
+    if path.is_file():
+        return path.read_text(encoding="utf-8", errors="replace"), path.name
+    return "", None
+
+
 def resolve_keys(keys: list[str]) -> list[dict[str, Any]]:
     out = []
     seen = set()
@@ -230,36 +284,49 @@ def get_article(key: str) -> dict[str, Any]:
     if not meta:
         return {"ok": False, "error": "unknown principle_key", "principle_key": key}
     root = content_root()
-    body = ""
-    path_used = None
-    for rel in (meta.get("path_wp"), meta.get("path_wa")):
-        if not rel:
-            continue
-        path = root / rel
-        if path.is_file():
-            body = path.read_text(encoding="utf-8", errors="replace")
-            path_used = str(path.name)
-            break
+    body, path_used = _read_rel(root, meta.get("path_wp"))
+    extras = []
+    for rel in meta.get("path_wp_extra") or []:
+        extra, extra_name = _read_rel(root, rel)
+        if extra.strip():
+            extras.append(extra)
+            if extra_name:
+                extras_name = extra_name
+    if extras:
+        body = (body.rstrip() + "\n\n---\n\n" + "\n\n---\n\n".join(extras)).strip()
+    if not (body or "").strip():
+        wa_body, wa_name = _read_rel(root, meta.get("path_wa"))
+        if wa_body.strip():
+            body, path_used = wa_body, wa_name
     if not (body or "").strip():
         body = FALLBACK_BODY.get(key) or ""
         if body:
             path_used = path_used or "fallback"
     preview = body
     truncated = False
-    if len(preview) > 12000:
-        preview = preview[:12000] + "\n\n… (truncated)"
+    if len(preview) > 20000:
+        preview = preview[:20000] + "\n\n… (truncated)"
         truncated = True
+    gov = _gov(meta)
     return {
         "ok": True,
         "principle_key": key,
         "title": meta["title"],
         "module": meta["module"],
+        "module_title": meta.get("module_title") or "",
         "wp": meta.get("wp"),
         "wa": meta.get("wa"),
         "source_file": path_used,
         "body_markdown": preview,
         "truncated": truncated,
         "href": f"/app/content?key={key}",
+        "risk_level": gov["risk_level"],
+        "risk_label": gov["risk_label"],
+        "version": gov["version"],
+        "last_reviewed_at": gov["last_reviewed_at"],
+        "status": gov["status"],
+        "cta_academy": {"label": "Học sâu hơn", "href": meta.get("academy_href") or "/app/academy"},
+        "cta_constitution": {"label": "Xây Hiến pháp Cá nhân", "href": "/app/constitution"},
     }
 
 
@@ -277,8 +344,18 @@ def service_get_content(key: str) -> tuple[int, dict]:
 
 
 def service_list_content_keys() -> tuple[int, dict]:
-    items = [
-        {"principle_key": k, "title": v["title"], "href": f"/app/content?key={k}"}
-        for k, v in CONTENT_BY_KEY.items()
-    ]
-    return 200, {"items": items}
+    items = []
+    an_toan = []
+    for k, v in CONTENT_BY_KEY.items():
+        row = {
+            "principle_key": k,
+            "title": v["title"],
+            "module": v.get("module"),
+            "module_title": v.get("module_title") or "",
+            "href": f"/app/content?key={k}",
+            "wp": v.get("wp") or [],
+        }
+        items.append(row)
+        if v.get("module") == "02":
+            an_toan.append(row)
+    return 200, {"items": items, "modules": {"02": {"title": "An Toàn Tài Chính", "items": an_toan}}}

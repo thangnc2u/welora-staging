@@ -10,15 +10,12 @@ Hard Deny → should_call_llm=False + deny template.
 from __future__ import annotations
 
 import json
-import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Optional
 from urllib.parse import urlparse
 
 from welora.agent import (
     AgentContext,
-    PreRuleResult,
-    RuleHit,
     SafetyGateSnapshot,
     compute_answer_confidence,
     evaluate_pre_rules,
@@ -133,16 +130,49 @@ def service_evaluate(
     else:
         return 400, {"error": "user_id or context_seed required"}
 
+    from welora.constitution_retrieve import (
+        advisory_system_prefix,
+        retrieve_constitution,
+        retrieve_missing_deny_reply,
+        audit_fields,
+    )
+
+    bundle = retrieve_constitution(
+        personal_codes=list(ctx.personal_constitution_codes or []),
+        user_id=str(ctx.user_id or user_id or ""),
+    )
+    audit = audit_fields(bundle, llm_called=False)
+    audit["advisory_prefix"] = advisory_system_prefix(bundle) if bundle.ok else ""
+
+    if not bundle.ok:
+        return 200, {
+            "guardrail_result": "deny",
+            "should_call_llm": False,
+            "rule_hit": None,
+            "rule_id": None,
+            "principle_keys": [],
+            "reason": bundle.error,
+            "cta": [],
+            "reply": retrieve_missing_deny_reply(bundle.error),
+            "safety_gate_status": ctx.safety_gate.status,
+            "months_covered": ctx.safety_gate.months_covered,
+            "data_confidence": ctx.data_confidence,
+            "answer_confidence": ctx.answer_confidence,
+            "hits": [],
+            **audit,
+        }
+
     pre = evaluate_pre_rules(str(message), ctx)
 
     reply = None
     if pre.result == "deny" and pre.primary_hit:
-        reply = render_deny(pre.primary_hit)
+        reply = render_deny(pre.primary_hit, bundle)
 
     return 200, {
         "guardrail_result": pre.result,
         "should_call_llm": pre.should_call_llm,
         "rule_hit": pre.primary_hit.rule_id if pre.primary_hit else None,
+        "rule_id": pre.primary_hit.rule_id if pre.primary_hit else None,
         "principle_keys": (
             list(pre.primary_hit.principle_keys) if pre.primary_hit else []
         ),
@@ -161,6 +191,7 @@ def service_evaluate(
             }
             for h in pre.hits
         ],
+        **audit,
     }
 
 

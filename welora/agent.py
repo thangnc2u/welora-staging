@@ -278,11 +278,17 @@ DENY_TEMPLATES: dict[str, str] = {
 }
 
 
-def render_deny(hit: RuleHit) -> str:
-    return DENY_TEMPLATES.get(
+def render_deny(hit: RuleHit, bundle: Any = None) -> str:
+    body = DENY_TEMPLATES.get(
         hit.rule_id,
         f"Không thể hỗ trợ theo {', '.join(hit.principle_keys)}. Quyết định cuối cùng thuộc về bạn.",
     )
+    try:
+        from welora.constitution_retrieve import enrich_deny_reply
+
+        return enrich_deny_reply(hit.rule_id, body, bundle)
+    except Exception:
+        return body
 
 
 def handle_chat(
@@ -293,43 +299,75 @@ def handle_chat(
     call_llm: Optional[Callable[[str, str], str]] = None,
     logs: Optional[list[dict]] = None,
 ) -> dict:
-    pre = evaluate_pre_rules(message, ctx)
-    logs = logs if logs is not None else []
+    from welora.constitution_retrieve import (
+        advisory_system_prefix,
+        retrieve_constitution,
+        retrieve_missing_deny_reply,
+        audit_fields,
+    )
 
-    if pre.result == "deny" and pre.primary_hit:
-        reply = render_deny(pre.primary_hit)
+    bundle = retrieve_constitution(
+        personal_codes=list(ctx.personal_constitution_codes or []),
+        user_id=user_id,
+    )
+    logs = logs if logs is not None else []
+    llm_called = False
+
+    if not bundle.ok:
+        reply = retrieve_missing_deny_reply(bundle.error)
+        pre_result: GuardrailResult = "deny"
+        rule_id = None
+        principle_keys: list[str] = []
+        cta: list[str] = []
         model = "rule_only"
-    elif call_llm:
-        system = "Bạn là Welora Agent Stage 1. An Toàn trước. Không hứa %. Không đưa mã khi chưa Passed.\nCONTEXT: " + str(ctx)
-        reply = call_llm(system, message)
-        model = "llm"
     else:
-        reply = (
-            "Không có khoản nào chắc lời với % cố định trong mọi tình huống."
-            if pre.result == "soft_warning"
-            else "Tôi có thể hỗ trợ trong phạm vi An Toàn. Bạn muốn làm rõ Goal quỹ hay Cổng An Toàn?"
-        )
-        model = "rule_only"
+        pre = evaluate_pre_rules(message, ctx)
+        pre_result = pre.result
+        rule_id = pre.primary_hit.rule_id if pre.primary_hit else None
+        principle_keys = list(pre.primary_hit.principle_keys) if pre.primary_hit else []
+        cta = list(pre.primary_hit.cta) if pre.primary_hit else []
+        if pre.result == "deny" and pre.primary_hit:
+            reply = render_deny(pre.primary_hit, bundle)
+            model = "rule_only"
+        elif call_llm:
+            system = advisory_system_prefix(bundle) + "CONTEXT: " + str(ctx)
+            reply = call_llm(system, message)
+            model = "llm"
+            llm_called = True
+        else:
+            reply = (
+                "Không có khoản nào chắc lời với % cố định trong mọi tình huống."
+                if pre.result == "soft_warning"
+                else "Tôi có thể hỗ trợ trong phạm vi An Toàn. Bạn muốn làm rõ Goal quỹ hay Cổng An Toàn?"
+            )
+            model = "rule_only"
 
     log_id = str(uuid.uuid4())
-    logs.append({
+    entry = {
         "id": log_id,
         "user_id": user_id,
         "query": message[:200],
-        "guardrail_result": pre.result,
-        "rule_hit": pre.primary_hit.rule_id if pre.primary_hit else None,
-        "principle_keys": pre.primary_hit.principle_keys if pre.primary_hit else [],
+        "guardrail_result": pre_result,
+        "rule_id": rule_id,
+        "rule_hit": rule_id,
+        "principle_keys": principle_keys,
         "model_used": model,
         "safety_gate_status": ctx.safety_gate.status,
-    })
+        **audit_fields(bundle, llm_called=llm_called),
+    }
+    logs.append(entry)
 
     return {
         "reply": reply,
-        "guardrail_result": pre.result,
-        "principle_keys": pre.primary_hit.principle_keys if pre.primary_hit else [],
-        "cta": pre.primary_hit.cta if pre.primary_hit else [],
+        "guardrail_result": pre_result,
+        "principle_keys": principle_keys,
+        "cta": cta,
         "decision_log_id": log_id,
         "safety_gate_status": ctx.safety_gate.status,
+        "rule_id": rule_id,
+        "llm_called": llm_called,
+        "constitution_version": bundle.constitution_version,
+        "personal_codes_count": bundle.personal_codes_count,
     }
 
 

@@ -16,12 +16,14 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "demo
 class TestP2DemoOnboardVi(unittest.TestCase):
     def test_copy(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Đăng nhập → Bắt đầu → Goal quỹ → Deny → Nạp quỹ 3 tháng → Cổng → R01 vẫn deny", html)
+        self.assertIn("Đăng nhập → Bắt đầu → Quỹ khẩn cấp → Deny → Nạp quỹ 3 tháng → Cổng → R01 vẫn deny", html)
         self.assertIn("<h2>2 · Phiên Bắt đầu</h2>", html)
         self.assertIn("Chạy đủ demo 8 bước", html)
         self.assertIn("<h1>Welora · Demo 8 bước</h1>", html)
         self.assertIn("Chạy demo 8 bước", html)
-        self.assertIn("<h2>4 · Goal quỹ</h2>", html)
+        self.assertIn("<h2>4 · Quỹ khẩn cấp</h2>", html)
+        self.assertIn("Quỹ khẩn cấp 3 tháng đã tạo", html)
+        self.assertNotIn("Goal quỹ", html)
         self.assertIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
         self.assertIn("<h2>8 · R01 vẫn deny</h2>", html)
         self.assertIn("\u1eaf", html)

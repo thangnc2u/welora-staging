@@ -33,7 +33,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
   <div class="section-title">Điểm sức khỏe</div>
   <div class="hs-card" id="hsCard"><div id="hsScore">— / 1000</div><div id="hsBars"></div>
     <div class="hs-note">Điểm không bypass Cổng An Toàn</div></div>
-  <div class="section-title">Goal quỹ</div>
+  <div class="section-title">Mục tiêu</div>
   <div class="goal-card">
     <div class="bar"><i id="barFill" style="width:0%"></i></div>
     <div class="meta" id="goalMeta">Chưa có Goal</div>
@@ -44,6 +44,12 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
     <input id="amount" type="number" value="0"/>
     <button id="btnSave">Lưu số dư</button>
   </div>
+  <div class="goal-card" id="debtCard">
+    <div class="meta" id="debtTitle">Trả nợ</div>
+    <div class="bar"><i id="debtBarFill" style="width:0%"></i></div>
+    <div class="meta" id="debtMeta">Chưa có mục tiêu trả nợ</div>
+    <p><a id="ctaGoalsDebt" href="/app/goals">Mở Mục tiêu</a></p>
+  </div>
 </div>
 <script>
 const HS_LABELS={
@@ -53,7 +59,7 @@ const HS_LABELS={
   savings_invest_rate:'Tiết kiệm / đầu tư',
   behavior_consistency:'Hành vi nhất quán'
 };
-const state={userId:null,goal:null,gate:null,health:null,mastery:null};
+const state={userId:null,goal:null,debt:null,gate:null,health:null,mastery:null};
 async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});return r.json();}
 async function load(){
   const id=localStorage.getItem("welora_device_id")||("web-"+Math.random().toString(36).slice(2,10));
@@ -62,6 +68,9 @@ async function load(){
   state.userId=auth.user_id;
   const list=await api("/goals?user_id="+encodeURIComponent(state.userId)+"&type=emergency_fund");
   state.goal=(list.items&&list.items[0])||null;
+  const debts=await api("/goals?user_id="+encodeURIComponent(state.userId)+"&type=debt_payoff");
+  const items=(debts.items||[]).filter(g=>g.type==="debt_payoff");
+  state.debt=items[0]||null;
   state.gate=await api("/users/"+state.userId+"/safety-gate");
   try{state.health=await api("/users/"+state.userId+"/health-score")}catch(_){state.health=null}
   try{state.mastery=await api("/users/"+state.userId+"/mastery?node_id=no_efund_invest")}catch(_){state.mastery={state:"not_started",meets_gate:false}}
@@ -102,6 +111,24 @@ function render(){
     document.getElementById("barFill").style.width=pct+"%";
     document.getElementById("goalMeta").textContent=(state.goal.current&&state.goal.current.amount||0)+" / "+(state.goal.target&&state.goal.target.amount||0);
     document.getElementById("amount").value=state.goal.current&&state.goal.current.amount||0;
+  }
+  const dt=document.getElementById("debtTitle");
+  const dm=document.getElementById("debtMeta");
+  const db=document.getElementById("debtBarFill");
+  const link=document.getElementById("ctaGoalsDebt");
+  if(state.debt){
+    dt.textContent=state.debt.title||"Trả nợ nguy hiểm";
+    const paid=state.debt.current&&state.debt.current.amount||0;
+    const tgt=state.debt.target&&state.debt.target.amount||0;
+    const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
+    dm.textContent=paid+" / "+tgt+" · "+pct+"%";
+    db.style.width=pct+"%";
+    link.textContent="Mở Mục tiêu";
+  }else{
+    dt.textContent="Trả nợ";
+    dm.textContent="Chưa có mục tiêu trả nợ";
+    db.style.width="0%";
+    link.textContent="Tạo trả nợ ở Mục tiêu";
   }
 }
 document.getElementById("masteryState").onchange=async e=>{

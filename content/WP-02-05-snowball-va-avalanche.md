@@ -1,12 +1,10 @@
-# WP-02-05 Snowball và Avalanche
-
+# WP-02-05: Snowball và Avalanche – Hai phương pháp trả nợ
 **principle_key:** DEBT-02
+**version:** 1.0.0
+**last_reviewed_at:** 2026-09-02
 
-Hai cách trả nợ phổ biến:
+**Debt Snowball** (quả bóng tuyết) và **Debt Avalanche** (thác đổ) đều: trả tối thiểu mọi khoản, dồn dư vào một khoản ưu tiên.
 
-- **Snowball:** trả hết khoản nhỏ nhất trước để giảm số món, dễ duy trì thói quen.
-- **Avalanche:** trả khoản lãi cao nhất trước để giảm chi phí lãi.
+Khác biệt: Snowball ưu tiên số dư nhỏ nhất. Avalanche ưu tiên lãi suất cao nhất.
 
-Không có cách nào luôn đúng mọi người. Chọn một cách, ghi ra, theo dõi hàng tháng.
-
-Không vay mới để đảo nợ nếu chưa rõ khả năng trả. Không phá quỹ 3 tháng để đóng nợ không khẩn. Không cam kết “trả xong là giàu”.
+Không có phương pháp nào luôn đúng. Không vay mới để đảo nợ nếu chưa rõ khả năng trả. Không cam kết lợi suất cố định.

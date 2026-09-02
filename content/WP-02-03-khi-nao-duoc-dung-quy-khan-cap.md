@@ -1,11 +1,13 @@
-# WP-02-03 Khi nào được dùng quỹ khẩn cấp
-
+# WP-02-03: Khi nào được dùng và không được dùng quỹ khẩn cấp?
 **principle_key:** SAFE-02
+**version:** 1.0.0
+**last_reviewed_at:** 2026-09-02
 
-Chỉ dùng quỹ khi sự cố **bất ngờ và cần thiết**: bệnh, mất việc, hỏng phương tiện phải sửa để đi làm hoặc sống.
+Quỹ khẩn cấp dùng cho sự cố tài chính **bất ngờ, cần thiết và không thể trì hoãn**.
 
-Không dùng quỹ cho du lịch, mua sắm, đám cưới lên kế hoạch, hay “cơ hội đầu tư”. Đó không phải sự cố khẩn.
+Hãy nghĩ quỹ khẩn cấp như một bình chữa cháy đặt trong nhà. Bình chữa cháy chỉ dùng khi có cháy thật. Không tưới cây, không rửa xe.
 
-Nếu đã rút, ưu tiên xây lại đủ 3 tháng trước khi mở quyền đầu tư. Cổng An Toàn không bị Health Score bypass.
+Được dùng: mất việc, y tế bất ngờ, sửa nhà/xe ảnh hưởng sinh hoạt thiết yếu.
+Không dùng: du lịch, mua sắm, đầu tư ETF, all-in.
 
-Hỏi 3 câu: Có bất ngờ không? Có cần ngay để sống/làm việc không? Có nguồn khác ngoài quỹ không? Chỉ rút khi hai câu đầu là có và câu thứ ba là không.
+Sau khi rút, nạp lại đủ 3 tháng trước khi mở quyền đầu tư. Không cam kết lợi suất cố định.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import unittest
 
 from fastapi.testclient import TestClient
@@ -13,6 +14,11 @@ from welora.safety_gate import TARGET_MONTHS
 
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "core-constitution.html"
 HOME = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "home.html"
+
+CORE08_PRINCIPLE = (
+    "Không ai đủ thông minh để đặt cược một chiều trong thế giới đầy rủi ro và ngẫu nhiên. "
+    "Đa dạng hóa không chỉ là phân tán tài sản, mà còn là xây dựng nhiều nguồn thu nhập, kỹ năng và lựa chọn trong cuộc sống."
+)
 
 REQUIRED = (
     "article_id",
@@ -55,6 +61,11 @@ class TestP0CoreConstitutionV1(unittest.TestCase):
         blob = " ".join(codes)
         self.assertNotIn("SAFE-", blob)
         self.assertNotIn("DEBT-", blob)
+        core08 = next(a for a in arts if a["code"] == "CORE-08")
+        self.assertEqual(core08["principle"], CORE08_PRINCIPLE)
+        dumped = json.dumps(data, ensure_ascii=False)
+        self.assertNotIn("xúng động", dumped)
+        self.assertIn("xung động", dumped)
 
     def test_api_readonly(self):
         r = TestClient(create_app()).get("/constitution/core")
@@ -63,6 +74,7 @@ class TestP0CoreConstitutionV1(unittest.TestCase):
         self.assertEqual(b["owner_type"], "welora_core")
         self.assertEqual(len(b["articles"]), 10)
         self.assertEqual(b["articles"][0]["code"], "CORE-01")
+        self.assertEqual(b["articles"][7]["principle"], CORE08_PRINCIPLE)
 
     def test_html_core_cta(self):
         html = HTML.read_text(encoding="utf-8")

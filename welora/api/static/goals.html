@@ -3,27 +3,37 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Quỹ khẩn cấp</title>
+<title>Welora · Mục tiêu</title>
 <style>
 body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
 a{color:#7dd3fc;text-decoration:none}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
+.card.sel{border-color:#1d4ed8}
 .label{color:#8b9bb4;font-size:13px}
 .val{margin-top:2px;font-weight:600}
 .muted{color:#8b9bb4;font-size:13px}
 .empty{color:#8b9bb4;margin-top:16px}
-input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
+input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
 .err{color:#ff6b6b}
 </style>
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
-<h1>Quỹ khẩn cấp</h1>
-<p class="muted">Mục tiêu 3 tháng chi thiết yếu</p>
+<h1>Mục tiêu</h1>
+<p class="muted">Quỹ khẩn cấp 3 tháng · Trả nợ nguy hiểm</p>
 <div id="goalList"></div>
+<div class="card" id="debtBox">
+  <div class="label">Tạo mục tiêu trả nợ</div>
+  <input id="debtTitle" type="text" placeholder="Tên (tùy chọn)"/>
+  <input id="debtSubtype" type="text" placeholder="Loại nợ, vd credit_card (tùy chọn)"/>
+  <input id="debtTarget" type="number" min="1" step="1000" inputmode="numeric" placeholder="Số tiền cần trả (VND)"/>
+  <button type="button" id="debtCreateBtn">Tạo trả nợ</button>
+  <p class="err" id="debtErr"></p>
+</div>
 <div class="card" id="addBox">
   <div class="label">Cộng tiến độ (VND)</div>
+  <select id="goalPick"></select>
   <input id="addAmount" type="number" min="1" step="1000" inputmode="numeric"/>
   <button type="button" id="addBtn">Cộng tiền</button>
   <p class="err" id="addErr"></p>
@@ -32,6 +42,7 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 const KEY='welora_device_id';
 let lastId='';
 let uid='';
+const goalsById={};
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
@@ -50,6 +61,7 @@ function showEmpty(){
   box.appendChild(p);
   box.appendChild(a);
   lastId='';
+  fillPick([]);
 }
 function line(label,value){
   const wrap=document.createElement('div');
@@ -64,42 +76,112 @@ function line(label,value){
   wrap.appendChild(v);
   return wrap;
 }
+function typeLabel(t){
+  if(t==='debt_payoff') return 'Trả nợ';
+  if(t==='emergency_fund') return 'Quỹ khẩn cấp';
+  return t||'—';
+}
+function fillPick(items){
+  const sel=document.getElementById('goalPick');
+  sel.textContent='';
+  (items||[]).forEach((g,i)=>{
+    const o=document.createElement('option');
+    o.value=g.goal_id||'';
+    o.textContent=typeLabel(g.type)+' · '+(g.title||'Mục tiêu');
+    if((g.goal_id||'')===lastId || (!lastId && i===0)) o.selected=true;
+    sel.appendChild(o);
+  });
+  if(sel.value) lastId=sel.value;
+}
 function renderItems(items){
   const box=document.getElementById('goalList');
   box.textContent='';
+  Object.keys(goalsById).forEach(k=>delete goalsById[k]);
   if(!items||!items.length){showEmpty();return;}
-  lastId=items[0].goal_id||'';
+  const hasEf=items.some(g=>g.type==='emergency_fund');
+  if(!hasEf){
+    const p=document.createElement('p');
+    p.className='empty';
+    p.textContent='Chưa có quỹ khẩn cấp';
+    const a=document.createElement('a');
+    a.id='ctaOnboarding';
+    a.href='/app/onboarding';
+    a.textContent='Đi Bắt đầu để tạo quỹ 3 tháng';
+    box.appendChild(p);
+    box.appendChild(a);
+  }
+  if(!lastId || !items.some(g=>g.goal_id===lastId)) lastId=items[0].goal_id||'';
   items.forEach(g=>{
+    if(g.goal_id) goalsById[g.goal_id]=g;
     const el=document.createElement('div');
-    el.className='card';
+    el.className='card'+(g.goal_id===lastId?' sel':'');
+    el.setAttribute('data-gid', g.goal_id||'');
     const tgt=g.target||{};
     const cur=g.current||{};
-    el.appendChild(line('Tên quỹ', g.title||'Quỹ khẩn cấp'));
-    el.appendChild(line('Loại quỹ', g.type||''));
-    el.appendChild(line('Tháng chi mục tiêu', tgt.months_of_expense));
-    el.appendChild(line('Số dư hiện tại', cur.amount));
-    el.appendChild(line('Phần trăm', cur.percent));
-    el.appendChild(line('Tháng chi hiện tại', cur.months_covered));
+    const isDebt=g.type==='debt_payoff';
+    el.appendChild(line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title||(isDebt?'Trả nợ nguy hiểm':'Quỹ khẩn cấp')));
+    el.appendChild(line('Loại', typeLabel(g.type)));
+    if(isDebt){
+      el.appendChild(line('Mục tiêu (VND)', tgt.amount));
+      el.appendChild(line('Đã trả (VND)', cur.amount));
+      el.appendChild(line('Phần trăm', cur.percent));
+    }else{
+      el.appendChild(line('Tháng chi mục tiêu', tgt.months_of_expense));
+      el.appendChild(line('Số dư hiện tại', cur.amount));
+      el.appendChild(line('Phần trăm', cur.percent));
+      el.appendChild(line('Tháng chi hiện tại', cur.months_covered));
+    }
+    el.addEventListener('click',()=>{
+      lastId=g.goal_id||lastId;
+      document.getElementById('goalPick').value=lastId;
+      box.querySelectorAll('.card').forEach(c=>c.classList.remove('sel'));
+      el.classList.add('sel');
+    });
     box.appendChild(el);
   });
+  fillPick(items);
 }
 async function loadList(){
   const lr=await fetch('/goals?user_id='+encodeURIComponent(uid));
   const data=await lr.json();
   renderItems(data.items||[]);
 }
+document.getElementById('goalPick').addEventListener('change',()=>{
+  lastId=document.getElementById('goalPick').value||lastId;
+});
+document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
+  const err=document.getElementById('debtErr');
+  err.textContent='';
+  const target=Number(document.getElementById('debtTarget').value);
+  if(!(target>0)){err.textContent='Nhập số tiền cần trả > 0';return;}
+  const payload={user_id:uid,type:'debt_payoff',target_amount:target};
+  const title=document.getElementById('debtTitle').value.trim();
+  const subtype=document.getElementById('debtSubtype').value.trim();
+  if(title) payload.title=title;
+  if(subtype) payload.subtype=subtype;
+  const r=await fetch('/goals',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  if(!r.ok){err.textContent='Không tạo được mục tiêu trả nợ';return;}
+  document.getElementById('debtTarget').value='';
+  await loadList();
+});
 document.getElementById('addBtn').addEventListener('click', async()=>{
   const err=document.getElementById('addErr');
   err.textContent='';
   const n=Number(document.getElementById('addAmount').value);
-  if(!(n>0)||!lastId){err.textContent='Nhập số tiền > 0 khi đã có quỹ';return;}
-  const r=await fetch('/goals/'+encodeURIComponent(lastId)+'/progress',{
+  const gid=document.getElementById('goalPick').value||lastId;
+  if(!(n>0)||!gid){err.textContent='Chọn mục tiêu và nhập số > 0';return;}
+  const r=await fetch('/goals/'+encodeURIComponent(gid)+'/progress',{
     method:'PATCH',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({add_amount:n})
   });
   if(!r.ok){err.textContent='Không cộng được tiền';return;}
   document.getElementById('addAmount').value='';
+  lastId=gid;
   await loadList();
 });
 (async()=>{

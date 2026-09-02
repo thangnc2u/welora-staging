@@ -16,11 +16,12 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "pars
 class TestP2ParserTitleVi(unittest.TestCase):
     def test_title(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("<title>Welora · Parser CSV ngân hàng</title>", html)
-        self.assertIn("<h1>Parser CSV ngân hàng</h1>", html)
+        self.assertIn("<title>Welora · Sao kê CSV ngân hàng</title>", html)
+        self.assertIn("<h1>Sao kê CSV ngân hàng</h1>", html)
         self.assertIn("ng\u00e2n", html)
         self.assertIn("h\u00e0ng", html)
         self.assertNotIn("Welora — Parser CSV", html)
+        self.assertNotIn("<h1>Parser CSV ngân hàng</h1>", html)
         self.assertIn("/parser/csv", html)
         self.assertIn("welora_device_id", html)
         self.assertIn("createGoalBtn", html)

@@ -23,7 +23,7 @@ class TestP2OsSafetyGateReasonsVi(unittest.TestCase):
         self.assertIn("emergency_fund_below_3_months:'Quỹ khẩn cấp dưới 3 tháng'", HTML)
         self.assertIn("dangerous_debt_unhandled:'Nợ nguy hiểm chưa xử lý'", HTML)
         self.assertIn("mastery_missing:'Chưa đạt làm chủ (cần Áp dụng)'", HTML)
-        self.assertIn("recent_hard_rule_violation:'Vi phạm Hard Rule gần đây'", HTML)
+        self.assertIn("recent_hard_rule_violation:'Vi phạm Luật cứng gần đây'", HTML)
         self.assertIn("GATE_REASON_VI[c]||c", HTML)
         self.assertIn("join(' · ')", HTML)
 

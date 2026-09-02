@@ -81,7 +81,6 @@ document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return; document.getElementById('q').value=''; add(q,'user');
   const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
   const d=await r.json();
-  const ruleHit=d.rule_hit;
   const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
   let bubble=d.reply||'Không có phản hồi';
   if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';

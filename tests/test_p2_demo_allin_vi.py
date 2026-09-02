@@ -16,12 +16,14 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "demo
 class TestP2DemoAllinVi(unittest.TestCase):
     def test_step5(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
+        self.assertIn("<h2>5 · Từ chối (tất tay ETF)</h2>", html)
         self.assertIn("\u1ea5", html)
         self.assertIn("\u00b7", html)
         self.assertNotIn("<h2>5 · Deny (all-in ETF)</h2>", html)
+        self.assertNotIn("<h2>5 · Deny (tất tay ETF)</h2>", html)
         self.assertIn("Tôi muốn all-in ETF ngay", html)
-        self.assertIn("<h2>8 · R01 vẫn deny</h2>", html)
+        self.assertIn("<h2>8 · R01 vẫn từ chối</h2>", html)
+        self.assertNotIn("<h2>8 · R01 vẫn deny</h2>", html)
         self.assertIn("<title>Welora · Demo 8 bước</title>", html)
         self.assertIn("<h1>Welora · Demo 8 bước</h1>", html)
         self.assertIn("function setStep", html)

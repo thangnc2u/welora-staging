@@ -16,12 +16,12 @@ button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;paddi
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Welora · Demo 8 bước</h1>
-<p class="muted">Đăng nhập → Bắt đầu → Goal quỹ → Deny → Nạp quỹ 3 tháng → Cổng → R01 vẫn deny</p>
+<p class="muted">Đăng nhập → Bắt đầu → Quỹ khẩn cấp → Deny → Nạp quỹ 3 tháng → Cổng → R01 vẫn deny</p>
 <div class="card"><button type="button" id="run">Chạy demo 8 bước</button><p class="muted">Chạy đủ demo 8 bước</p></div>
 <div class="card" id="step1"><h2>1 · Đăng nhập</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step2"><h2>2 · Phiên Bắt đầu</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step3"><h2>3 · Hoàn tất DNA</h2><p class="result muted">Chưa chạy</p></div>
-<div class="card" id="step4"><h2>4 · Goal quỹ</h2><p class="result muted">Chưa chạy</p></div>
+<div class="card" id="step4"><h2>4 · Quỹ khẩn cấp</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step5"><h2>5 · Deny (tất tay ETF)</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step6"><h2>6 · Nạp quỹ 3 tháng</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step7"><h2>7 · Cổng</h2><p class="result muted">Chưa chạy</p></div>
@@ -62,7 +62,7 @@ document.getElementById('run').onclick=async()=>{
 
   r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'emergency_fund',essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
   const gid=r.d.goal_id;
-  setStep(4,'HTTP '+r.status+' · Goal quỹ 3 tháng đã tạo','ok');
+  setStep(4,'HTTP '+r.status+' · Quỹ khẩn cấp 3 tháng đã tạo','ok');
 
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Tôi muốn all-in ETF ngay'})});
   setStep(5,'guardrail_result: '+(r.d.guardrail_result||'')+' · rule_hit: '+(r.d.rule_hit||''), r.d.guardrail_result==='deny'?'deny':'ok');

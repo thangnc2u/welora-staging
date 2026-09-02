@@ -93,6 +93,46 @@ NODES: list[dict[str, Any]] = [
 
 _NODE_BY_ID = {n["node_id"]: n for n in NODES}
 
+FUND_NODES = ("N02-01", "N02-02", "N02-03")
+DEBT_NODES = ("N02-04", "N02-05", "N02-06", "N02-07")
+
+
+def nodes_for_principle(key: str) -> list[str]:
+    """Map principle_key / CORE code → node_id trên cây M02."""
+    needle = (key or "").strip().upper()
+    if not needle:
+        return []
+    out: list[str] = []
+    for n in NODES:
+        keys = [str(n.get("principle_key") or "")] + [str(c) for c in (n.get("core_map") or [])]
+        if needle in keys:
+            out.append(n["node_id"])
+    return out
+
+
+def os_nudge_for(node_id: str, *, first_pass: bool = True) -> dict[str, Any] | None:
+    """Nudge WeloraOS Goal chỉ khi KUAT ĐẠT lần đầu. Không auto-create."""
+    if not first_pass or node_id not in _NODE_BY_ID:
+        return None
+    n = _NODE_BY_ID[node_id]
+    if node_id in FUND_NODES:
+        goal_type = "emergency_fund"
+        reason = "Đã thành thạo node quỹ — tạo Goal quỹ khẩn cấp trên WeloraOS."
+    elif node_id in DEBT_NODES:
+        goal_type = "debt_payoff"
+        reason = "Đã thành thạo node nợ — tạo Goal trả nợ trên WeloraOS."
+    else:
+        return None
+    return {
+        "kind": "create_goal",
+        "goal_type": goal_type,
+        "href": "/app/goals",
+        "reason": reason,
+        "principle_key": n["principle_key"],
+        "node_id": node_id,
+    }
+
+
 QUESTIONS: dict[str, list[dict[str, Any]]] = {
     "N02-01": [
         {"id": "q01a", "prompt": "Quỹ khẩn cấp dùng để làm gì?", "choices": ["Chi tiêu thường ngày", "Đệm khi mất thu nhập / sốc", "All-in cổ phiếu"], "answer": 1, "hard": False},
@@ -321,7 +361,7 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
         st["mastery_level"] = "familiar"
         st["last_kuat"] = attempt
         _refresh_locks(p)
-    return {
+    payload: dict[str, Any] = {
         "kuat_result": {
             "passed": passed,
             "score": score,
@@ -334,7 +374,9 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
         "badges": list(p["badges"]),
         "status": st["status"],
         "tree": get_tree(user_id),
+        "os_nudge": os_nudge_for(node_id, first_pass=bool(awarded)),
     }
+    return payload
 
 
 def service_get_tree(user_id: str) -> tuple[int, dict]:

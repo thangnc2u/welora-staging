@@ -19,6 +19,7 @@ WA_PACK = (
     "WA-02-03-lua-chon-noi-giu-quy-khan-cap.md",
     "WA-02-04-chon-phuong-phap-tra-no.md",
     "WA-02-05-nhan-dien-no-tot-no-xau.md",
+    "WA-02-06-lap-ke-hoach-tra-no.md",
     "WA-02-07-sap-xep-uu-tien-tra-no-va-dau-tu.md",
     "WA-01-01-xay-dung-tu-duy-ve-tien.md",
     "WA-01-06-dat-muc-tieu-tai-chinh.md",
@@ -45,11 +46,20 @@ class TestP2ContentWa(unittest.TestCase):
             self.assertGreater(len(text.strip()), 200)
             low = text.lower()
             self.assertNotIn("chắc lời", low)
+            self.assertNotIn("welora academy", low)
 
         mapped = {v.get("path_wa") for v in CONTENT_BY_KEY.values() if v.get("path_wa")}
         for rel in mapped:
             if rel in WA_PACK or (ROOT / "content" / rel).is_file():
                 self.assertTrue((ROOT / "content" / rel).is_file(), rel)
+
+    def test_wa_02_06_debt02_header(self):
+        p = ROOT / "content" / "WA-02-06-lap-ke-hoach-tra-no.md"
+        self.assertTrue(p.is_file())
+        text = p.read_text(encoding="utf-8")
+        self.assertGreater(len(text.strip()), 200)
+        self.assertIn("**principle_key:** DEBT-02", text)
+        self.assertIn("WA-02-06", CONTENT_BY_KEY["DEBT-02"].get("wa") or [])
 
     def test_safe01_still_wp_not_fallback(self):
         r = self.client.get("/content/SAFE-01")

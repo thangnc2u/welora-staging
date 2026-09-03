@@ -17,6 +17,10 @@ CSV_XSS = (
     '2026-01-01,"<script>alert(1)</script>Winmart",-150000\n'
     '2026-01-02,"<b>Lương</b>",8000000\n'
 )
+CSV_ENTITY = (
+    "date,description,amount\n"
+    '2026-01-01,"<script>alert(1)</script>Winmart",-150000\n'
+)
 
 
 class TestP2SecCsvSanitize(unittest.TestCase):
@@ -28,6 +32,15 @@ class TestP2SecCsvSanitize(unittest.TestCase):
         out = sanitize_csv_text(raw)
         self.assertNotIn("<script>", out)
         self.assertNotIn("</script>", out)
+        self.assertIn("Winmart", out)
+
+    def test_sanitize_helper_strips_entity_encoded_script(self):
+        raw = "<script>alert(1)</script>Winmart"
+        out = sanitize_csv_text(raw)
+        self.assertNotIn("<script>", out)
+        self.assertNotIn("</script>", out)
+        self.assertNotIn("<", out)
+        self.assertNotIn(">", out)
         self.assertIn("Winmart", out)
 
     def test_parser_csv_does_not_echo_script(self):
@@ -45,7 +58,6 @@ class TestP2SecCsvSanitize(unittest.TestCase):
         self.assertTrue(txs)
         for t in txs:
             desc = str(t.get("description") or "")
-            raw = str(t.get("raw") or "")
             self.assertNotIn("<", desc)
             self.assertNotIn(">", desc)
             self.assertIsInstance(t.get("amount"), (int, float))
@@ -57,6 +69,17 @@ class TestP2SecCsvSanitize(unittest.TestCase):
         self.assertEqual(draft.get("target_months"), 3)
         self.assertEqual(draft.get("auto_overwrite"), False)
         self.assertFalse(body.get("auto_overwrite"))
+
+    def test_parser_csv_entity_encoded_not_echoed(self):
+        r = self.client.post(
+            "/parser/csv",
+            json={"text": CSV_ENTITY, "filename": "ent.csv"},
+        )
+        self.assertEqual(r.status_code, 200)
+        blob = json.dumps(r.json(), ensure_ascii=False)
+        self.assertNotIn("<script>", blob)
+        self.assertNotIn("</script>", blob)
+        self.assertIn("Winmart", blob)
 
     def test_normal_csv_still_parses(self):
         r = self.client.post("/parser/csv", json={"text": CSV_SAFE, "filename": "ok.csv"})

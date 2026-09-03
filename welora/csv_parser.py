@@ -18,15 +18,19 @@ _TAG_RE = re.compile(r"<[^>]*>")
 
 
 def sanitize_csv_text(value: Any) -> str:
-    """Strip dangerous HTML from CSV text. Amounts stay numeric elsewhere."""
+    """Strip dangerous HTML from CSV text. Amounts stay numeric elsewhere.
+
+    Unescape entities first so ``<script>`` is treated as a real tag,
+    then strip. Do not unescape again after strip.
+    """
     if value is None:
         return ""
-    t = str(value)
+    t = html.unescape(str(value))
     t = _SCRIPT_RE.sub("", t)
     t = _STYLE_RE.sub("", t)
     t = _TAG_RE.sub("", t)
     t = t.replace("<", "").replace(">", "")
-    return html.unescape(t).strip()
+    return t.strip()
 
 
 def _sanitize_tx(tx: dict[str, Any]) -> dict[str, Any]:

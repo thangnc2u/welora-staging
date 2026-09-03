@@ -11,10 +11,15 @@ h1{font-size:1.25rem;margin:4px 0 12px}
 .muted{color:#8b9bb4;font-size:13px}
 .card{background:#141b24;border:1px solid #243041;border-radius:14px;padding:16px;margin:10px 0}
 .ring-wrap{display:flex;align-items:center;gap:16px}
-.ring{width:112px;height:112px}
-.score-num{font-size:1.6rem;font-weight:700}
-.bar{height:8px;background:#0b0f14;border-radius:999px;overflow:hidden;margin-top:8px;border:1px solid #243041}
+.donut{position:relative;width:132px;height:132px;flex-shrink:0}
+.donut svg{width:132px;height:132px;display:block}
+.donut .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.score-num{font-size:1.35rem;font-weight:700;line-height:1.1}
+.score-max{font-size:11px;color:#8b9bb4}
+.bar-wrap{margin-top:10px}
+.bar{height:14px;background:#0b0f14;border-radius:999px;overflow:hidden;border:1px solid #243041;position:relative}
 .bar>span{display:block;height:100%;width:0;background:#3b82f6}
+.bar-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
 .badge{display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041}
 .badge.passed{color:#3dd68c;border-color:#3dd68c}
 .badge.not_passed{color:#ffb020;border-color:#ffb020}
@@ -32,14 +37,20 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 <div class="card" id="hsCard">
   <div class="muted">Điểm sức khỏe 0–1000</div>
   <div class="ring-wrap">
-    <svg class="ring" viewBox="0 0 120 120" aria-label="Vòng điểm sức khỏe">
-      <circle cx="60" cy="60" r="50" fill="none" stroke="#243041" stroke-width="10"/>
-      <circle id="hsArc" cx="60" cy="60" r="50" fill="none" stroke="#3b82f6" stroke-width="10"
-        stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
-    </svg>
+    <div class="donut" id="hsDonut" aria-label="Donut điểm sức khỏe 0 đến 1000">
+      <svg viewBox="0 0 120 120" role="img" aria-labelledby="hsScore">
+        <circle cx="60" cy="60" r="46" fill="none" stroke="#243041" stroke-width="14"/>
+        <circle id="hsArc" cx="60" cy="60" r="46" fill="none" stroke="#3b82f6" stroke-width="14"
+          stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="289.03" stroke-dashoffset="289.03"/>
+      </svg>
+      <div class="center">
+        <div class="score-num" id="hsScore">—</div>
+        <div class="score-max">/ 1000</div>
+      </div>
+    </div>
     <div>
-      <div class="score-num" id="hsScore">—</div>
       <div class="muted" id="hsLevel">Đang tải…</div>
+      <p class="muted" id="hsPctLabel">0%</p>
     </div>
   </div>
   <p class="muted" id="hsBypassNote">Điểm không bỏ qua Cổng An Toàn</p>
@@ -54,7 +65,12 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 
 <div class="card" id="efCard">
   <div class="muted">Tiến độ Quỹ khẩn cấp</div>
-  <div class="bar" aria-label="Thanh tiến độ quỹ"><span id="efBar"></span></div>
+  <div class="bar-wrap">
+    <div class="bar" aria-label="Thanh tiến độ quỹ">
+      <span id="efBar"></span>
+      <div class="bar-pct" id="efPct">0%</div>
+    </div>
+  </div>
   <p class="muted" id="efLabel">—</p>
   <a class="more" id="navGoalsDash" href="/app/goals">Mở Mục tiêu</a>
 </div>
@@ -82,18 +98,22 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 <script>
 const KEY='welora_device_id';
 const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
+const COLORS={critical:'#ef4444',low:'#f59e0b',moderate:'#3b82f6',good:'#22c55e',strong:'#34d399'};
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
   return d;
 }
-function setRing(score){
-  const circ=2*Math.PI*50;
+function setDonut(score, level){
+  const r=46;
+  const circ=2*Math.PI*r;
   const s=Math.max(0,Math.min(1000,Number(score)||0));
   const off=circ*(1-s/1000);
   const arc=document.getElementById('hsArc');
   arc.setAttribute('stroke-dasharray', String(circ));
   arc.setAttribute('stroke-dashoffset', String(off));
+  arc.setAttribute('stroke', COLORS[level]||'#3b82f6');
+  document.getElementById('hsPctLabel').textContent=Math.round(s/10)+'% thang 1000';
 }
 (function(){
   var q=new URLSearchParams(location.search);
@@ -119,9 +139,9 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     const hs=await hsR.json();
     const gate=await gR.json();
     const score=hs.score;
-    document.getElementById('hsScore').textContent=(score==null?'—':String(score)+' / 1000');
+    document.getElementById('hsScore').textContent=(score==null?'—':String(score));
     document.getElementById('hsLevel').textContent=LEVELS[hs.level]||hs.level||'—';
-    setRing(score||0);
+    setDonut(score||0, hs.level);
     if(hs.can_bypass_gate_with_score===false || hs.can_bypass_gate_with_score==null){
       document.getElementById('hsBypassNote').textContent='Điểm không bỏ qua Cổng An Toàn';
     }
@@ -134,9 +154,9 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     const det=ef.details||{};
     const months=det.months_covered;
     const pct=det.percent_to_target;
-    const bar=document.getElementById('efBar');
     const w=Math.max(0,Math.min(100,Number(pct)||0));
-    bar.style.width=w+'%';
+    document.getElementById('efBar').style.width=w+'%';
+    document.getElementById('efPct').textContent=Math.round(w)+'%';
     const cur=det.current_amount;
     const tgt=det.target_amount;
     var extra='';
@@ -145,7 +165,7 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     }
     document.getElementById('efLabel').textContent=
       (months==null?'Chưa có quỹ':(String(months)+' / 3 tháng'))+
-      (pct==null?'':' · '+String(pct)+'%')+extra;
+      ' · '+Math.round(w)+'%'+extra;
   }catch(e){
     document.getElementById('hsLevel').textContent='Chưa đọc được điểm';
   }

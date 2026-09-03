@@ -2,7 +2,7 @@
 (function () {
   var tabs = [
     { id: "tabHome", href: "/app", label: "Trang chủ", ico: "○", key: "home" },
-    { id: "tabGoals", href: "/app/goals", label: "Mục tiêu", ico: "▣", key: "goals" },
+    { id: "tabPedia", href: "/app/content", label: "Từ điển", ico: "□", key: "pedia" },
     { id: "tabChat", href: "/app/chat", label: "Trợ lý AI", ico: "✉", key: "chat" },
     { id: "tabAcademy", href: "/app/academy", label: "Học viện", ico: "◈", key: "academy" }
   ];
@@ -10,9 +10,9 @@
   var active = "home";
   var forced = document.currentScript && document.currentScript.getAttribute("data-shell-tab");
   if (forced) active = forced;
-  else if (path.indexOf("/app/goals") === 0 || path.indexOf("/app/safety") === 0) active = "goals";
+  else if (path.indexOf("/app/content") === 0) active = "pedia";
   else if (path.indexOf("/app/chat") === 0) active = "chat";
-  else if (path.indexOf("/app/academy") === 0 || path.indexOf("/app/learn") === 0 || path.indexOf("/app/content") === 0) active = "academy";
+  else if (path.indexOf("/app/academy") === 0 || path.indexOf("/app/learn") === 0) active = "academy";
   else if (path === "/app" || path === "/app/home" || path.indexOf("/app/health-score") === 0) active = "home";
 
   document.body.classList.add("welora-shell");

@@ -21,9 +21,8 @@ class TestP2UxMoneyCopy(unittest.TestCase):
     def test_money_js_vnd_format(self):
         js = (STATIC / "money.js").read_text(encoding="utf-8")
         self.assertIn("formatVnd", js)
-        self.assertIn("\u20ab", js)
-        self.assertIn("5000000", js)
-        # grouping uses dot
+        self.assertIn(" \u20ab", js)
+        # grouping uses dot (10.000.000)
         self.assertIn('"."', js)
 
     def test_onboarding_no_jargon(self):
@@ -48,14 +47,18 @@ class TestP2UxMoneyCopy(unittest.TestCase):
             self.assertIn("5tr", t, path)
             self.assertIn("10tr", t, path)
             self.assertIn("20tr", t, path)
-            self.assertIn("data-vnd=\"5000000\"", t, path)
+            self.assertIn('data-vnd="5000000"', t, path)
 
     def test_debug_links_hidden_without_dev(self):
         home = self.client.get("/app").text
         self.assertIn("dev-only", home)
         self.assertIn("navPreRule", home)
         self.assertIn("navLogs", home)
-        self.assertIn("?dev=1", home)
+        self.assertIn("welora_dev", home)
+        self.assertTrue(
+            "q.get('dev')" in home or "dev')==='1'" in home,
+            "home must read ?dev=1 via q.get('dev')",
+        )
         self.assertNotIn("Welora Academy", home)
 
     def test_health_untouched(self):

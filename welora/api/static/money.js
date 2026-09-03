@@ -1,4 +1,4 @@
-/* Welora money — user-facing VND. No innerHTML. */
+/* Welora money — user-facing VND + %. No innerHTML. */
 (function (w) {
   function formatVnd(n) {
     var x = Math.round(Number(n) || 0);
@@ -15,6 +15,13 @@
     var t = String(s == null ? "" : s).replace(/[^0-9-]/g, "");
     if (!t || t === "-") return 0;
     return Number(t) || 0;
+  }
+  function formatPct(n) {
+    var x = Number(n);
+    if (!isFinite(x)) return "0%";
+    var r = Math.round(x * 10) / 10;
+    if (Math.abs(r - Math.round(r)) < 1e-9) return String(Math.round(r)) + "%";
+    return String(r).replace(".", ",") + "%";
   }
   function bindMoneyInput(el) {
     if (!el) return;
@@ -42,5 +49,11 @@
       input.setAttribute("data-vnd", v);
     });
   }
-  w.WeloraMoney = { formatVnd: formatVnd, parseVnd: parseVnd, bindMoneyInput: bindMoneyInput, bindChips: bindChips };
+  w.WeloraMoney = {
+    formatVnd: formatVnd,
+    parseVnd: parseVnd,
+    formatPct: formatPct,
+    bindMoneyInput: bindMoneyInput,
+    bindChips: bindChips
+  };
 })(window);

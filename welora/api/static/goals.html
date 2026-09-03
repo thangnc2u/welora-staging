@@ -65,6 +65,7 @@ function deviceId(){
   return d;
 }
 function money(n){ return (window.WeloraMoney?WeloraMoney.formatVnd(n):String(n)); }
+function pct(n){ return (window.WeloraMoney?WeloraMoney.formatPct(n):String(n)); }
 function pediaKeys(t){
   if(t==='debt_payoff') return ['DEBT-01','DEBT-02','DEBT-03'];
   if(t==='emergency_fund') return ['SAFE-01'];
@@ -192,11 +193,11 @@ function renderItems(items){
     if(isDebt){
       el.appendChild(line('Số cần trả', tgt.amount, true));
       el.appendChild(line('Đã trả', cur.amount, true));
-      el.appendChild(line('Phần trăm', cur.percent));
+      el.appendChild(line('Phần trăm', pct(cur.percent)));
     }else{
       el.appendChild(line('Tháng chi mục tiêu', tgt.months_of_expense));
       el.appendChild(line('Số dư hiện tại', cur.amount, true));
-      el.appendChild(line('Phần trăm', cur.percent));
+      el.appendChild(line('Phần trăm', pct(cur.percent)));
       el.appendChild(line('Tháng chi hiện tại', cur.months_covered));
     }
     const ped=document.createElement('div');

@@ -99,6 +99,7 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 const KEY='welora_device_id';
 const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
 const COLORS={critical:'#ef4444',low:'#f59e0b',moderate:'#3b82f6',good:'#22c55e',strong:'#34d399'};
+function pct(n){ return window.WeloraMoney?WeloraMoney.formatPct(n):String(n)+'%'; }
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
@@ -113,7 +114,7 @@ function setDonut(score, level){
   arc.setAttribute('stroke-dasharray', String(circ));
   arc.setAttribute('stroke-dashoffset', String(off));
   arc.setAttribute('stroke', COLORS[level]||'#3b82f6');
-  document.getElementById('hsPctLabel').textContent=Math.round(s/10)+'% thang 1000';
+  document.getElementById('hsPctLabel').textContent=pct(s/10)+' thang 1000';
 }
 (function(){
   var q=new URLSearchParams(location.search);
@@ -153,10 +154,10 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     const ef=(hs.components&&hs.components.emergency_fund)||{};
     const det=ef.details||{};
     const months=det.months_covered;
-    const pct=det.percent_to_target;
-    const w=Math.max(0,Math.min(100,Number(pct)||0));
+    const rawPct=det.percent_to_target;
+    const w=Math.max(0,Math.min(100,Number(rawPct)||0));
     document.getElementById('efBar').style.width=w+'%';
-    document.getElementById('efPct').textContent=Math.round(w)+'%';
+    document.getElementById('efPct').textContent=pct(w);
     const cur=det.current_amount;
     const tgt=det.target_amount;
     var extra='';
@@ -165,7 +166,7 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     }
     document.getElementById('efLabel').textContent=
       (months==null?'Chưa có quỹ':(String(months)+' / 3 tháng'))+
-      ' · '+Math.round(w)+'%'+extra;
+      ' · '+pct(w)+extra;
   }catch(e){
     document.getElementById('hsLevel').textContent='Chưa đọc được điểm';
   }

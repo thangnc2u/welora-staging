@@ -140,7 +140,7 @@ function render(){
     document.getElementById("barFill").style.width=pct+"%";
     const cur=state.goal.current&&state.goal.current.amount||0;
     const tgt=state.goal.target&&state.goal.target.amount||0;
-    document.getElementById("goalMeta").textContent=WeloraMoney.formatVnd(cur)+" / "+WeloraMoney.formatVnd(tgt);
+    document.getElementById("goalMeta").textContent=WeloraMoney.formatVnd(cur)+" / "+WeloraMoney.formatVnd(tgt)+" · "+WeloraMoney.formatPct(pct);
     document.getElementById("amount").value=WeloraMoney.formatVnd(cur);
     document.getElementById("amount").setAttribute("data-vnd", String(cur));
   }
@@ -153,7 +153,7 @@ function render(){
     const paid=state.debt.current&&state.debt.current.amount||0;
     const tgt=state.debt.target&&state.debt.target.amount||0;
     const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
-    dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+pct+"%";
+    dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+WeloraMoney.formatPct(pct);
     db.style.width=pct+"%";
     link.textContent="Mở Mục tiêu";
   }else{

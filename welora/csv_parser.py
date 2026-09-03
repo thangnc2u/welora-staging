@@ -1,14 +1,40 @@
 """
 Welora P1-E7 — CSV bank export parser
 Suggests essential_expense_monthly without auto-overwrite.
+Text fields (description / raw / filename) are HTML-stripped before JSON.
 """
 
 from __future__ import annotations
 
 import csv
+import html
 import io
 import re
 from typing import Any, Optional
+
+_SCRIPT_RE = re.compile(r"(?is)<script[^>]*>.*?</script>")
+_STYLE_RE = re.compile(r"(?is)<style[^>]*>.*?</style>")
+_TAG_RE = re.compile(r"<[^>]*>")
+
+
+def sanitize_csv_text(value: Any) -> str:
+    """Strip dangerous HTML from CSV text. Amounts stay numeric elsewhere."""
+    if value is None:
+        return ""
+    t = str(value)
+    t = _SCRIPT_RE.sub("", t)
+    t = _STYLE_RE.sub("", t)
+    t = _TAG_RE.sub("", t)
+    t = t.replace("<", "").replace(">", "")
+    return html.unescape(t).strip()
+
+
+def _sanitize_tx(tx: dict[str, Any]) -> dict[str, Any]:
+    out = dict(tx)
+    for key in ("description", "raw", "memo", "detail", "category"):
+        if key in out and out[key] is not None:
+            out[key] = sanitize_csv_text(out[key])
+    return out
 
 
 def _parse_amount(raw: str) -> Optional[float]:
@@ -62,6 +88,7 @@ def attach_goal_draft(out: dict) -> dict:
 
 def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
     text = text or ""
+    filename = sanitize_csv_text(filename)
     if not text.strip():
         return {"ok": False, "error": "empty csv", "transactions": [], "suggestion": None}
 
@@ -77,7 +104,8 @@ def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
                 if amt is not None:
                     break
             if amt is not None:
-                txs.append({"amount": amt, "description": ln[:120], "raw": ln[:120]})
+                safe = sanitize_csv_text(ln[:120])
+                txs.append({"amount": amt, "description": safe, "raw": safe})
         return _summarize(txs, filename)
 
     fields = [f.strip().lower() for f in reader.fieldnames]
@@ -97,7 +125,7 @@ def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
         desc = ""
         for dk in desc_keys:
             if raw_map.get(dk):
-                desc = str(raw_map[dk])[:120]
+                desc = sanitize_csv_text(str(raw_map[dk])[:240])[:120]
                 break
         txs.append({"amount": amt, "description": desc})
 
@@ -105,6 +133,7 @@ def parse_csv_text(text: str, filename: str = "") -> dict[str, Any]:
 
 
 def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
+    txs = [_sanitize_tx(t) for t in txs]
     debits = [abs(t["amount"]) for t in txs if t.get("amount") is not None and t["amount"] < 0]
     if not debits:
         debits = [abs(t["amount"]) for t in txs if t.get("amount")]
@@ -125,7 +154,7 @@ def _summarize(txs: list[dict], filename: str) -> dict[str, Any]:
         counts[lab] = counts.get(lab, 0) + 1
     out = {
         "ok": True,
-        "filename": filename,
+        "filename": sanitize_csv_text(filename),
         "transaction_count": len(txs),
         "transactions": txs[:100],
         "suggestion": suggestion,

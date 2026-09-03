@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Welora · Nội dung</title>
+<title>Welora · Welorapedia</title>
+<link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:16px;max-width:640px;margin-inline:auto;background:#0b1220;color:#e8eefc}
+body{font-family:system-ui,sans-serif;margin:0;padding:16px 16px 88px;max-width:640px;margin-inline:auto;background:#0b1220;color:#e8eefc}
 a{color:#7dd3fc}
 .key{display:inline-block;background:#132337;color:#7dd3fc;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
 article{background:#141c2e;border-radius:12px;padding:16px;margin-top:12px}
@@ -77,5 +78,6 @@ const elGov=document.getElementById('govMeta');
   }
 })().catch(e=>{elTitle.textContent='Lỗi';elBody.textContent=String(e);});
 </script>
+<script src="/static/shell.js" data-shell-tab="pedia"></script>
 </body>
 </html>

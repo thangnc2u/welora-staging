@@ -4,8 +4,9 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · Welorademy</title>
+<link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
 a{color:#7dd3fc;text-decoration:none}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
 .muted{color:#8b9bb4;font-size:13px}
@@ -20,7 +21,7 @@ label{display:block;margin:4px 0}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Welorademy</h1>
-<p class="muted">An Toàn Tài Chính · KUAT ≥ 70%</p>
+<p class="muted">An Toàn Tài Chính · KUAT ≥ 70% · Học viện</p>
 <p class="muted" id="xpLine">XP —</p>
 <p class="muted" id="focusLine"></p>
 <a id="osNudge" class="nudge" href="/app/goals" hidden>Tạo Goal trên WeloraOS</a>
@@ -150,5 +151,6 @@ document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();
   await loadTree();
 })();
 </script>
+<script src="/static/shell.js" data-shell-tab="academy"></script>
 </body>
 </html>

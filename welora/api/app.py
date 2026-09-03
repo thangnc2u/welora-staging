@@ -22,6 +22,7 @@ from welora import budget as budget_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
+from welora.api.security_headers import SecurityHeadersMiddleware
 
 
 class DeviceLoginBody(BaseModel):
@@ -98,6 +99,7 @@ def _respond(code: int, body: dict) -> dict:
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(SecurityHeadersMiddleware)
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

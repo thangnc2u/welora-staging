@@ -28,20 +28,24 @@ class TestP2UxAppShell(unittest.TestCase):
         self.assertIn("Quỹ khẩn cấp", body)
         self.assertIn("hsArc", body)
         self.assertIn("efBar", body)
+        self.assertIn("Mở Mục tiêu", body)
+        self.assertIn("/app/goals", body)
         self.assertNotIn("Welora Academy", body)
 
     def test_shell_assets_and_four_tabs(self):
         self.assertTrue((STATIC / "shell.css").is_file())
         js = (STATIC / "shell.js").read_text(encoding="utf-8")
-        for label in ("Trang chủ", "Mục tiêu", "Trợ lý AI", "Học viện"):
+        for label in ("Trang chủ", "Từ điển", "Trợ lý AI", "Học viện"):
             self.assertIn(label, js)
-        self.assertIn("/app/goals", js)
+        self.assertNotIn('label: "Mục tiêu"', js)
+        self.assertNotIn("/app/goals", js)
+        self.assertIn("/app/content", js)
         self.assertIn("/app/chat", js)
         self.assertIn("/app/academy", js)
         self.assertNotIn("Welora Academy", js)
 
     def test_tab_pages_load_shell(self):
-        for path, tab in (("/app/goals", "goals"), ("/app/chat", "chat"), ("/app/academy", "academy")):
+        for path, tab in (("/app/content", "pedia"), ("/app/chat", "chat"), ("/app/academy", "academy")):
             r = self.client.get(path)
             self.assertEqual(r.status_code, 200, path)
             self.assertIn("/static/shell.js", r.text)
@@ -56,16 +60,15 @@ class TestP2UxAppShell(unittest.TestCase):
             "/app/onboarding",
             "/app/learn",
             "/app/goal",
+            "/app/goals",
         ):
             r = self.client.get(path, follow_redirects=False)
             self.assertIn(r.status_code, (200, 307, 302), path)
 
-        # /app/goal maps to Cổng
         r = self.client.get("/app/goal", follow_redirects=False)
         self.assertIn(r.status_code, (302, 307))
         self.assertIn("/app/safety", r.headers.get("location", ""))
 
-        # home keeps legacy ids for sitemap tools
         home = self.client.get("/app").text
         for nid in ("navSafety", "navGoals", "navAcademy", "navChat", "navHealth", "navOnboarding"):
             self.assertIn(nid, home)

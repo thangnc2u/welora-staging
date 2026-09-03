@@ -1,0 +1,45 @@
+/* Welora App shell — mobile-first bottom nav */
+html{height:100%}
+body.welora-shell{
+  font-family:system-ui,-apple-system,sans-serif;
+  background:#0b0f14;
+  color:#e8eef7;
+  margin:0;
+  padding:16px 16px 88px;
+  max-width:480px;
+  margin-inline:auto;
+  box-sizing:border-box;
+}
+#weloraBottomNav{
+  position:fixed;
+  left:0;right:0;bottom:0;
+  z-index:40;
+  display:flex;
+  justify-content:space-around;
+  align-items:stretch;
+  background:#0e141c;
+  border-top:1px solid #243041;
+  padding:6px 4px calc(8px + env(safe-area-inset-bottom));
+  max-width:480px;
+  margin-inline:auto;
+}
+#weloraBottomNav a{
+  flex:1;
+  text-align:center;
+  color:#8b9bb4;
+  text-decoration:none;
+  font-size:11px;
+  font-weight:600;
+  padding:8px 4px 6px;
+  border-radius:10px;
+}
+#weloraBottomNav a.on{
+  color:#e8eef7;
+  background:#141b24;
+}
+#weloraBottomNav .tab-ico{
+  display:block;
+  font-size:16px;
+  line-height:1.2;
+  margin-bottom:2px;
+}

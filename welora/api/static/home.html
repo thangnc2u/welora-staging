@@ -3,22 +3,64 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Welora</title>
+<title>Welora · Trang chủ</title>
+<link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
-h1{font-size:1.3rem}
+body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 12px}
 .muted{color:#8b9bb4;font-size:13px}
-nav{display:flex;flex-direction:column;gap:10px;margin-top:16px}
-a.nav{display:block;background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px 16px;color:#e8eef7;text-decoration:none;font-weight:600}
-a.nav:active{background:#1c2633}
+.card{background:#141b24;border:1px solid #243041;border-radius:14px;padding:16px;margin:10px 0}
+.ring-wrap{display:flex;align-items:center;gap:16px}
+.ring{width:112px;height:112px}
+.score-num{font-size:1.6rem;font-weight:700}
+.bar{height:8px;background:#0b0f14;border-radius:999px;overflow:hidden;margin-top:8px;border:1px solid #243041}
+.bar>span{display:block;height:100%;width:0;background:#3b82f6}
+.badge{display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041}
+.badge.passed{color:#3dd68c;border-color:#3dd68c}
+.badge.not_passed{color:#ffb020;border-color:#ffb020}
+a.more{color:#7dd3fc;text-decoration:none;display:block;margin-top:8px;font-weight:600}
+.tools{display:none;flex-direction:column;gap:8px;margin-top:8px}
+.tools.open{display:flex}
+a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10px;padding:10px 12px;color:#e8eef7;text-decoration:none;font-weight:600;font-size:14px}
 </style>
 </head>
-<body>
-<h1>Welora</h1>
-<p class="muted">An Toàn trước · giao diện gốc</p>
-<nav>
+<body class="welora-shell">
+<h1>Trang chủ</h1>
+<p class="muted">An Toàn trước · điểm không bỏ qua Cổng</p>
+
+<div class="card" id="hsCard">
+  <div class="muted">Điểm sức khỏe 0–1000</div>
+  <div class="ring-wrap">
+    <svg class="ring" viewBox="0 0 120 120" aria-label="Vòng điểm sức khỏe">
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#243041" stroke-width="10"/>
+      <circle id="hsArc" cx="60" cy="60" r="50" fill="none" stroke="#3b82f6" stroke-width="10"
+        stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+    </svg>
+    <div>
+      <div class="score-num" id="hsScore">—</div>
+      <div class="muted" id="hsLevel">Đang tải…</div>
+    </div>
+  </div>
+  <p class="muted" id="hsBypassNote">Điểm không bỏ qua Cổng An Toàn</p>
+</div>
+
+<div class="card" id="gateCard">
+  <div class="muted">Cổng An Toàn</div>
+  <div class="badge not_passed" id="gateBadge">Cổng: …</div>
+  <p class="muted" id="gateNote">Mục tiêu quỹ 3 tháng chi tiêu thiết yếu.</p>
+  <a class="more" id="navSafety" href="/app/safety">Xem checklist Cổng</a>
+</div>
+
+<div class="card" id="efCard">
+  <div class="muted">Tiến độ Quỹ khẩn cấp</div>
+  <div class="bar" aria-label="Thanh tiến độ quỹ"><span id="efBar"></span></div>
+  <p class="muted" id="efLabel">—</p>
+  <a class="more" id="navGoalsDash" href="/app/goals">Mở Mục tiêu</a>
+</div>
+
+<p><a class="more" id="toggleTools" href="#tools">Công cụ khác</a></p>
+<nav class="tools" id="tools">
   <a class="nav" id="navOnboarding" href="/app/onboarding">Bắt đầu · Hiến pháp</a>
-  <a class="nav" id="navSafety" href="/app/safety">Cổng An Toàn</a>
   <a class="nav" id="navChat" href="/app/chat">Chat với Agent</a>
   <a class="nav" id="navContent" href="/app/content">Welorapedia</a>
   <a class="nav" id="navAcademy" href="/app/academy">Welorademy</a>
@@ -34,5 +76,65 @@ a.nav:active{background:#1c2633}
   <a class="nav" id="navPreRule" href="/app/pre-rule">Pre-Rule · gỡ lỗi</a>
   <a class="nav" id="navHealth" href="/app/health-score">Điểm sức khỏe</a>
 </nav>
+
+<script>
+const KEY='welora_device_id';
+const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function setRing(score){
+  const circ=2*Math.PI*50;
+  const s=Math.max(0,Math.min(1000,Number(score)||0));
+  const off=circ*(1-s/1000);
+  const arc=document.getElementById('hsArc');
+  arc.setAttribute('stroke-dasharray', String(circ));
+  arc.setAttribute('stroke-dashoffset', String(off));
+}
+document.getElementById('toggleTools').addEventListener('click',function(e){
+  e.preventDefault();
+  document.getElementById('tools').classList.toggle('open');
+});
+(async()=>{
+  try{
+    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+    const a=await auth.json();
+    const uid=a.user_id||'';
+    const [hsR,gR]=await Promise.all([
+      fetch('/users/'+encodeURIComponent(uid)+'/health-score'),
+      fetch('/users/'+encodeURIComponent(uid)+'/safety-gate')
+    ]);
+    const hs=await hsR.json();
+    const gate=await gR.json();
+    const score=hs.score;
+    document.getElementById('hsScore').textContent=(score==null?'—':String(score)+' / 1000');
+    document.getElementById('hsLevel').textContent=LEVELS[hs.level]||hs.level||'—';
+    setRing(score||0);
+    if(hs.can_bypass_gate_with_score===false || hs.can_bypass_gate_with_score==null){
+      document.getElementById('hsBypassNote').textContent='Điểm không bỏ qua Cổng An Toàn';
+    }
+    const st=(gate.status||gate.safety_gate_status||'not_passed');
+    const passed=st==='passed';
+    const badge=document.getElementById('gateBadge');
+    badge.textContent=passed?'Cổng: ĐẠT':'Cổng: CHƯA ĐẠT';
+    badge.className='badge '+(passed?'passed':'not_passed');
+    const ef=(hs.components&&hs.components.emergency_fund)||{};
+    const det=ef.details||{};
+    const months=det.months_covered;
+    const pct=det.percent_to_target;
+    const bar=document.getElementById('efBar');
+    const w=Math.max(0,Math.min(100,Number(pct)||0));
+    bar.style.width=w+'%';
+    document.getElementById('efLabel').textContent=
+      (months==null?'Chưa có quỹ':(String(months)+' / 3 tháng'))+
+      (pct==null?'':' · '+String(pct)+'%');
+  }catch(e){
+    document.getElementById('hsLevel').textContent='Chưa đọc được điểm';
+  }
+})();
+</script>
+<script src="/static/shell.js" data-shell-tab="home"></script>
 </body>
 </html>

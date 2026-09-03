@@ -9,12 +9,19 @@ body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16p
 .deny{border-left:3px solid #ff6b6b}.pass{border-left:3px solid #3dd68c}
 form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;border-radius:10px;border:1px solid #243041;background:#0b0f14;color:#e8eef7}
 button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
+button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:12px}
 #gateBadge{display:inline-block;margin:8px 0 12px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041;background:#141b24}
 #gateBadge.passed{color:#3dd68c;border-color:#3dd68c}
 #gateBadge.not_passed{color:#ffb020;border-color:#ffb020}
 #denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
+#typing{display:none;align-items:center;gap:8px;margin:8px 0;color:#8b9bb4;font-size:13px}
+#typing.show{display:flex}
+#typing .dots span{display:inline-block;width:6px;height:6px;margin-right:3px;border-radius:99px;background:#8b9bb4;animation:blink 1s infinite}
+#typing .dots span:nth-child(2){animation-delay:.15s}
+#typing .dots span:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 </style></head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
@@ -23,13 +30,24 @@ button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#f
 <div id="gateBadge">Cổng: …</div>
 <a id="denyCta" href="/app/content?key=SAFE-02">Đọc nguyên tắc An Toàn (SAFE-02)</a>
 <div id="log"></div>
-<form id="f"><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button>Gửi</button></form>
+<div id="typing" aria-live="polite" aria-busy="false">
+  <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+  <span id="typingText">Đang soạn…</span>
+</div>
+<form id="f"><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script>
 const log=document.getElementById('log');
 const gateBadge=document.getElementById('gateBadge');
 const denyCta=document.getElementById('denyCta');
+const typing=document.getElementById('typing');
+const sendBtn=document.getElementById('sendBtn');
 let uid=null;
-const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;log.appendChild(d);log.scrollTop=log.scrollHeight};
+const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;log.appendChild(d);log.scrollTop=log.scrollHeight;};
+function setLoading(on){
+  typing.classList.toggle('show', !!on);
+  typing.setAttribute('aria-busy', on?'true':'false');
+  sendBtn.disabled=!!on;
+}
 function setGate(status){
   const s=(status==='passed')?'passed':'not_passed';
   gateBadge.textContent=s==='passed'?'Cổng: ĐẠT':'Cổng: CHƯA ĐẠT';
@@ -79,15 +97,23 @@ function weloraDeviceId(){
   await loadGate();
 })();
 document.getElementById('f').onsubmit=async(e)=>{
-  e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return; document.getElementById('q').value=''; add(q,'user');
-  const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
-  const d=await r.json();
-  const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
-  let bubble=d.reply||'Không có phản hồi';
-  if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';
-  add(bubble, cls);
-  setGate(d.safety_gate_status||'not_passed');
-  if(d.guardrail_result==='deny') showDenyCta(d); else hideDenyCta();
+  e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return;
+  document.getElementById('q').value=''; add(q,'user');
+  setLoading(true);
+  try{
+    const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
+    const d=await r.json();
+    const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
+    let bubble=d.reply||'Không có phản hồi';
+    if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';
+    add(bubble, cls);
+    setGate(d.safety_gate_status||'not_passed');
+    if(d.guardrail_result==='deny') showDenyCta(d); else hideDenyCta();
+  }catch(err){
+    add('Không gửi được. Thử lại.','bot deny');
+  }finally{
+    setLoading(false);
+  }
 };
 </script>
 <script src="/static/shell.js" data-shell-tab="chat"></script>

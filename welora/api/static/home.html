@@ -22,6 +22,7 @@ a.more{color:#7dd3fc;text-decoration:none;display:block;margin-top:8px;font-weig
 .tools{display:none;flex-direction:column;gap:8px;margin-top:8px}
 .tools.open{display:flex}
 a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10px;padding:10px 12px;color:#e8eef7;text-decoration:none;font-weight:600;font-size:14px}
+.tools:not(.dev) .dev-only{display:none}
 </style>
 </head>
 <body class="welora-shell">
@@ -67,16 +68,17 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
   <a class="nav" id="navDemo" href="/app/demo">Demo 8 bước</a>
   <a class="nav" id="navParser" href="/app/parser">Sao kê CSV</a>
   <a class="nav" id="navMetrics" href="/app/metrics">Chỉ số</a>
-  <a class="nav" id="navLogs" href="/app/logs">Nhật ký quyết định</a>
+  <a class="nav dev-only" id="navLogs" href="/app/logs">Nhật ký quyết định</a>
   <a class="nav" id="navCoreConstitution" href="/app/core-constitution">Hiến pháp Cốt lõi</a>
   <a class="nav" id="navConstitution" href="/app/constitution">Hiến pháp cá nhân</a>
   <a class="nav" id="navDna" href="/app/dna">DNA tài chính</a>
   <a class="nav" id="navGoals" href="/app/goals">Mục tiêu</a>
   <a class="nav" id="navOtp" href="/app/otp">OTP điện thoại</a>
-  <a class="nav" id="navPreRule" href="/app/pre-rule">Pre-Rule · gỡ lỗi</a>
+  <a class="nav dev-only" id="navPreRule" href="/app/pre-rule">Pre-Rule · gỡ lỗi</a>
   <a class="nav" id="navHealth" href="/app/health-score">Điểm sức khỏe</a>
 </nav>
 
+<script src="/static/money.js"></script>
 <script>
 const KEY='welora_device_id';
 const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
@@ -93,6 +95,14 @@ function setRing(score){
   arc.setAttribute('stroke-dasharray', String(circ));
   arc.setAttribute('stroke-dashoffset', String(off));
 }
+(function(){
+  var q=new URLSearchParams(location.search);
+  if(q.get('dev')==='1') localStorage.setItem('welora_dev','1');
+  if(q.get('dev')==='0') localStorage.removeItem('welora_dev');
+  if(q.get('dev')==='1' || localStorage.getItem('welora_dev')==='1'){
+    document.getElementById('tools').classList.add('dev');
+  }
+})();
 document.getElementById('toggleTools').addEventListener('click',function(e){
   e.preventDefault();
   document.getElementById('tools').classList.toggle('open');
@@ -127,9 +137,15 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     const bar=document.getElementById('efBar');
     const w=Math.max(0,Math.min(100,Number(pct)||0));
     bar.style.width=w+'%';
+    const cur=det.current_amount;
+    const tgt=det.target_amount;
+    var extra='';
+    if(cur!=null && tgt!=null && window.WeloraMoney){
+      extra=' · '+WeloraMoney.formatVnd(cur)+' / '+WeloraMoney.formatVnd(tgt);
+    }
     document.getElementById('efLabel').textContent=
       (months==null?'Chưa có quỹ':(String(months)+' / 3 tháng'))+
-      (pct==null?'':' · '+String(pct)+'%');
+      (pct==null?'':' · '+String(pct)+'%')+extra;
   }catch(e){
     document.getElementById('hsLevel').textContent='Chưa đọc được điểm';
   }

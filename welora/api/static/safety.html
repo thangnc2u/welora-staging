@@ -12,6 +12,8 @@ body{font-family:system-ui;margin:0;background:#f6f7f9;color:#1a1d21}
 .bar>i{display:block;height:100%;background:#0f766e}
 input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid #e5e7eb;box-sizing:border-box}
 button{background:#0f766e;color:#fff;border:0;font-weight:600}
+.chips{display:flex;gap:8px;margin-top:8px}
+.chips button{margin:0;padding:8px 10px;width:auto;background:#134e4a}
 a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
 .hs-note{font-size:11px;color:#c2410c;background:#fff7ed;border-radius:8px;padding:8px;margin-top:8px}
 .hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:#374151}
@@ -22,13 +24,13 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
   <div class="section-title">Danh sách</div>
   <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHƯA ĐẠT</div><div class="meta" id="gateMeta"></div></div>
   <div class="badge-card fail" id="masteryBadge">
-    <div class="status" id="masteryStatus">Làm chủ · —</div>
-    <div class="meta" id="masteryMeta">Đạt cổng: chưa</div>
+    <div class="status" id="masteryStatus">Hiểu nguyên tắc · —</div>
+    <div class="meta" id="masteryMeta">Cổng kiến thức: chưa</div>
     <select id="masteryState">
       <option value="not_started">Chưa bắt đầu</option><option value="learning">Đang học</option>
       <option value="familiar">Quen thuộc</option><option value="apply">Áp dụng</option><option value="mastered">Thành thạo</option>
     </select>
-    <p><a href="/app/content?key=SAFE-02">Học SAFE-02</a></p>
+    <p><a href="/app/content?key=SAFE-02">Học: Khi nào được dùng quỹ</a></p>
   </div>
   <div class="section-title">Điểm sức khỏe</div>
   <div class="hs-card" id="hsCard"><div id="hsScore">— / 1000</div><div id="hsBars"></div>
@@ -38,10 +40,20 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
     <div class="bar"><i id="barFill" style="width:0%"></i></div>
     <div class="meta" id="goalMeta">Chưa có quỹ khẩn cấp</div>
     <label>Chi tiêu thiết yếu / tháng</label>
-    <input id="essential" type="number" value="10000000"/>
+    <input id="essential" type="text" inputmode="numeric" value="10.000.000 ₫" data-vnd="10000000"/>
+    <div class="chips" id="essChips">
+      <button type="button" data-vnd="5000000">5tr</button>
+      <button type="button" data-vnd="10000000">10tr</button>
+      <button type="button" data-vnd="20000000">20tr</button>
+    </div>
     <button id="btnCreate">Tạo quỹ khẩn cấp 3 tháng</button>
-    <label>Số dư quỹ (VND)</label>
-    <input id="amount" type="number" value="0"/>
+    <label>Số dư quỹ</label>
+    <input id="amount" type="text" inputmode="numeric" value="0 ₫" data-vnd="0"/>
+    <div class="chips" id="amtChips">
+      <button type="button" data-vnd="5000000">5tr</button>
+      <button type="button" data-vnd="10000000">10tr</button>
+      <button type="button" data-vnd="20000000">20tr</button>
+    </div>
     <button id="btnSave">Lưu số dư</button>
   </div>
   <div class="goal-card" id="debtCard">
@@ -51,6 +63,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
     <p><a id="ctaGoalsDebt" href="/app/goals">Mở Mục tiêu</a></p>
   </div>
 </div>
+<script src="/static/money.js"></script>
 <script>
 const HS_LABELS={
   cashflow:'Dòng tiền',
@@ -73,6 +86,10 @@ function formatGateReasons(reasons, passed){
 }
 const state={userId:null,goal:null,debt:null,gate:null,health:null,mastery:null};
 async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});return r.json();}
+WeloraMoney.bindMoneyInput(document.getElementById('essential'));
+WeloraMoney.bindMoneyInput(document.getElementById('amount'));
+WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementById('essential'));
+WeloraMoney.bindChips(document.getElementById('amtChips'), document.getElementById('amount'));
 async function load(){
   const id=localStorage.getItem("welora_device_id")||("web-"+Math.random().toString(36).slice(2,10));
   localStorage.setItem("welora_device_id",id);
@@ -111,8 +128,8 @@ function render(){
   const st=(state.mastery&&state.mastery.state)||"not_started";
   const ok=!!(state.mastery&&state.mastery.meets_gate);
   document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");
-  document.getElementById("masteryStatus").textContent="Làm chủ · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st==="mastered"?"Thành thạo":st);
-  document.getElementById("masteryMeta").textContent="Đạt cổng: "+(ok?"đạt":"chưa");
+  document.getElementById("masteryStatus").textContent="Hiểu nguyên tắc · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st==="mastered"?"Thành thạo":st);
+  document.getElementById("masteryMeta").textContent="Cổng kiến thức: "+(ok?"đạt":"chưa");
   document.getElementById("masteryState").value=st;
   if(state.health){
     document.getElementById("hsScore").textContent=(state.health.score||0)+" / 1000";
@@ -121,8 +138,11 @@ function render(){
   if(state.goal){
     const pct=Math.min(100,Number(state.goal.current&&state.goal.current.percent||0));
     document.getElementById("barFill").style.width=pct+"%";
-    document.getElementById("goalMeta").textContent=(state.goal.current&&state.goal.current.amount||0)+" / "+(state.goal.target&&state.goal.target.amount||0);
-    document.getElementById("amount").value=state.goal.current&&state.goal.current.amount||0;
+    const cur=state.goal.current&&state.goal.current.amount||0;
+    const tgt=state.goal.target&&state.goal.target.amount||0;
+    document.getElementById("goalMeta").textContent=WeloraMoney.formatVnd(cur)+" / "+WeloraMoney.formatVnd(tgt);
+    document.getElementById("amount").value=WeloraMoney.formatVnd(cur);
+    document.getElementById("amount").setAttribute("data-vnd", String(cur));
   }
   const dt=document.getElementById("debtTitle");
   const dm=document.getElementById("debtMeta");
@@ -133,7 +153,7 @@ function render(){
     const paid=state.debt.current&&state.debt.current.amount||0;
     const tgt=state.debt.target&&state.debt.target.amount||0;
     const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
-    dm.textContent=paid+" / "+tgt+" · "+pct+"%";
+    dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+pct+"%";
     db.style.width=pct+"%";
     link.textContent="Mở Mục tiêu";
   }else{
@@ -148,13 +168,13 @@ document.getElementById("masteryState").onchange=async e=>{
   state.gate=await api("/users/"+state.userId+"/safety-gate"); render();
 };
 document.getElementById("btnCreate").onclick=async()=>{
-  const ess=+document.getElementById("essential").value;
+  const ess=WeloraMoney.parseVnd(document.getElementById("essential").value);
   await api("/goals",{method:"POST",body:JSON.stringify({user_id:state.userId,type:"emergency_fund",essential_expense_monthly:ess,current_amount:0})});
   await load();
 };
 document.getElementById("btnSave").onclick=async()=>{
   if(!state.goal) return;
-  const val=+document.getElementById("amount").value;
+  const val=WeloraMoney.parseVnd(document.getElementById("amount").value);
   await api("/goals/"+state.goal.goal_id+"/progress",{method:"PATCH",body:JSON.stringify({set_amount:val})});
   await load();
 };

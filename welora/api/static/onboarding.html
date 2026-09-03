@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Welora · Hiến pháp Cá nhân</title>
+<title>Welora · Bắt đầu</title>
 <style>
 body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
@@ -14,22 +14,28 @@ button.secondary{background:#243041}
 .muted{color:#8b9bb4;font-size:13px}
 .hidden{display:none}
 .err{color:#ff6b6b;font-size:13px;margin-top:8px}
+.chips{display:flex;gap:8px;margin-top:8px}
+.chips button{margin:0;padding:8px 10px;background:#243041}
+.dots{display:flex;gap:6px;margin:8px 0 4px}
+.dots i{width:8px;height:8px;border-radius:99px;background:#243041;display:block}
+.dots i.on{background:#3b82f6}
 </style>
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
-<h1>Hiến pháp Cá nhân</h1>
-<p class="muted">B0–B5 · DNA · Quỹ khẩn cấp 3 tháng</p>
+<h1>Bắt đầu</h1>
+<p class="muted">Vài câu hỏi ngắn để dựng lớp An Toàn · quỹ 3 tháng</p>
+<div class="dots" id="dots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
 
 <div class="card" id="step0">
-  <h2>B0 · Chào</h2>
-  <p>An Toàn trước. Cổng quỹ khẩn cấp tối thiểu 3 tháng. Agent không quyết định thay bạn.</p>
+  <h2>Chào bạn</h2>
+  <p>An Toàn đi trước. Quỹ khẩn cấp đủ 3 tháng chi tiêu thiết yếu trước khi nói đến đầu tư. Agent không quyết định thay bạn.</p>
   <button type="button" id="auth">Bắt đầu</button>
   <p class="err" id="err0"></p>
 </div>
 
 <div class="card hidden" id="step1">
-  <h2>B1 · Danh tính</h2>
+  <h2>Bạn đang ở đâu trong đời?</h2>
   <label for="life_stage">Giai đoạn sống</label>
   <select id="life_stage">
     <option value="young_single">Độc thân trẻ</option>
@@ -49,9 +55,14 @@ button.secondary{background:#243041}
 </div>
 
 <div class="card hidden" id="step2">
-  <h2>B2 · Hiện trạng</h2>
-  <label for="essential">Chi tiêu thiết yếu / tháng (VND)</label>
-  <input id="essential" type="number" min="0" step="1000" value="10000000"/>
+  <h2>Chi tiêu mỗi tháng</h2>
+  <label for="essential">Chi tiêu thiết yếu / tháng</label>
+  <input id="essential" type="text" inputmode="numeric" value="10.000.000 ₫" data-vnd="10000000"/>
+  <div class="chips" id="essChips">
+    <button type="button" data-vnd="5000000">5tr</button>
+    <button type="button" data-vnd="10000000">10tr</button>
+    <button type="button" data-vnd="20000000">20tr</button>
+  </div>
   <label for="debt">Đã có nợ nguy hiểm?</label>
   <select id="debt">
     <option value="false">Không</option>
@@ -66,40 +77,41 @@ button.secondary{background:#243041}
 </div>
 
 <div class="card hidden" id="step3">
-  <h2>B3 · Hành vi</h2>
-  <label for="surplus_habit">Thói quen tiền dư</label>
+  <h2>Cách bạn giữ tiền</h2>
+  <label for="surplus_habit">Khi có tiền dư</label>
   <select id="surplus_habit">
     <option value="hold">Giữ</option>
     <option value="spend">Tiêu</option>
   </select>
-  <label for="risk_tolerance">Mức chấp nhận biến động (1–5)</label>
+  <label for="risk_tolerance">Mức chấp nhận biến động</label>
   <select id="risk_tolerance">
-    <option value="3">3</option>
-    <option value="1">1</option>
-    <option value="2">2</option>
-    <option value="4">4</option>
-    <option value="5">5</option>
+    <option value="3">Vừa</option>
+    <option value="1">Rất thấp</option>
+    <option value="2">Thấp</option>
+    <option value="4">Cao</option>
+    <option value="5">Rất cao</option>
   </select>
-  <label for="agent_role">Vai trò Agent</label>
+  <label for="agent_role">Bạn muốn Agent làm gì</label>
   <select id="agent_role">
-    <option value="advisor_only">Chỉ tư vấn</option>
+    <option value="advisor_only">Chỉ tư vấn, không quyết thay</option>
   </select>
   <button type="button" id="next3">Tiếp</button>
 </div>
 
 <div class="card hidden" id="step4">
-  <h2>B4 · Hiến pháp</h2>
-  <p class="muted">Xác nhận nguyên tắc: quỹ ≥ 3 tháng trước đầu tư. Không phá quỹ. Không cam kết lợi suất.</p>
-  <button type="button" id="next4">Xác nhận Hiến pháp</button>
+  <h2>Nguyên tắc của bạn</h2>
+  <p class="muted">Quỹ đủ 3 tháng trước đầu tư. Không phá quỹ. Không cam kết lợi suất. Đây là Hiến pháp cá nhân — bạn chịu trách nhiệm quyết định.</p>
+  <button type="button" id="next4">Tôi đồng ý</button>
 </div>
 
 <div class="card hidden" id="step5">
-  <h2>B5 · Tóm tắt + Quỹ khẩn cấp 3 tháng</h2>
+  <h2>Tạo quỹ khẩn cấp</h2>
   <p class="muted" id="summary"></p>
-  <button type="button" id="ctaGoal">Tạo quỹ khẩn cấp 3 tháng</button>
+  <button type="button" id="ctaGoal">Tạo quỹ 3 tháng</button>
   <p class="err" id="err5"></p>
 </div>
 
+<script src="/static/money.js"></script>
 <script>
 let uid=null, sid=null;
 function show(n){
@@ -107,6 +119,7 @@ function show(n){
     const el=document.getElementById('step'+i);
     if(el) el.classList.toggle('hidden', i!==n);
   }
+  document.querySelectorAll('#dots i').forEach((d,i)=>d.classList.toggle('on', i===n));
 }
 function weloraDeviceId(){
   let id=localStorage.getItem('welora_device_id');
@@ -116,6 +129,11 @@ function weloraDeviceId(){
   }
   return id;
 }
+function essVal(){
+  return window.WeloraMoney.parseVnd(document.getElementById('essential').value);
+}
+WeloraMoney.bindMoneyInput(document.getElementById('essential'));
+WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementById('essential'));
 document.getElementById('auth').onclick=async()=>{
   document.getElementById('err0').textContent='';
   try{
@@ -126,7 +144,7 @@ document.getElementById('auth').onclick=async()=>{
     const sd=await s.json();
     sid=sd.session_id;
     show(1);
-  }catch(e){ document.getElementById('err0').textContent=String(e); }
+  }catch(e){ document.getElementById('err0').textContent='Không bắt đầu được. Thử lại.'; }
 };
 document.getElementById('next1').onclick=async()=>{
   await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -137,7 +155,7 @@ document.getElementById('next1').onclick=async()=>{
   show(2);
 };
 document.getElementById('next2').onclick=async()=>{
-  const essential=+document.getElementById('essential').value;
+  const essential=essVal();
   await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     essential_expense_monthly:essential,
     emergency_fund_months_self:'0',
@@ -156,20 +174,18 @@ document.getElementById('next3').onclick=async()=>{
 };
 document.getElementById('next4').onclick=async()=>{
   await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-  const essential=+document.getElementById('essential').value;
+  const essential=essVal();
   const ls=document.getElementById('life_stage');
   const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
   document.getElementById('summary').textContent=
-    lsText+
-    ' · Chi tiêu thiết yếu: '+essential+
-    ' VND/tháng · Mục tiêu quỹ: 3 tháng (cố định).';
+    lsText+' · Chi tiêu thiết yếu: '+WeloraMoney.formatVnd(essential)+'/tháng · Mục tiêu quỹ: 3 tháng.';
   show(5);
 };
 document.getElementById('ctaGoal').onclick=async()=>{
   document.getElementById('err5').textContent='';
   try{
     await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
-    const essential=+document.getElementById('essential').value;
+    const essential=essVal();
     const r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       user_id:uid,
       type:'emergency_fund',
@@ -179,7 +195,7 @@ document.getElementById('ctaGoal').onclick=async()=>{
     })});
     if(!r.ok){ document.getElementById('err5').textContent='Không tạo được quỹ khẩn cấp'; return; }
     location.href='/app/safety?user_id='+encodeURIComponent(uid);
-  }catch(e){ document.getElementById('err5').textContent=String(e); }
+  }catch(e){ document.getElementById('err5').textContent='Không tạo được quỹ. Thử lại.'; }
 };
 </script>
 </body>

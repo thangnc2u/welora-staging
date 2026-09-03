@@ -19,6 +19,8 @@ a{color:#7dd3fc;text-decoration:none}
 input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
 .err{color:#ff6b6b}
+.chips{display:flex;gap:8px;margin-top:8px}
+.chips button{margin:0;padding:8px 10px;background:#243041}
 </style>
 </head>
 <body>
@@ -29,18 +31,29 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 <div class="card" id="debtBox">
   <div class="label">Tạo mục tiêu trả nợ</div>
   <input id="debtTitle" type="text" placeholder="Tên (tùy chọn)"/>
-  <input id="debtSubtype" type="text" placeholder="Loại nợ, vd credit_card (tùy chọn)"/>
-  <input id="debtTarget" type="number" min="1" step="1000" inputmode="numeric" placeholder="Số tiền cần trả (VND)"/>
+  <input id="debtSubtype" type="text" placeholder="Loại nợ (tùy chọn)"/>
+  <input id="debtTarget" type="text" inputmode="numeric" placeholder="Số tiền cần trả"/>
+  <div class="chips" id="debtChips">
+    <button type="button" data-vnd="5000000">5tr</button>
+    <button type="button" data-vnd="10000000">10tr</button>
+    <button type="button" data-vnd="20000000">20tr</button>
+  </div>
   <button type="button" id="debtCreateBtn">Tạo trả nợ</button>
   <p class="err" id="debtErr"></p>
 </div>
 <div class="card" id="addBox">
-  <div class="label">Cộng tiến độ (VND)</div>
+  <div class="label">Cộng tiến độ</div>
   <select id="goalPick"></select>
-  <input id="addAmount" type="number" min="1" step="1000" inputmode="numeric"/>
+  <input id="addAmount" type="text" inputmode="numeric" placeholder="Số tiền cộng"/>
+  <div class="chips" id="addChips">
+    <button type="button" data-vnd="5000000">5tr</button>
+    <button type="button" data-vnd="10000000">10tr</button>
+    <button type="button" data-vnd="20000000">20tr</button>
+  </div>
   <button type="button" id="addBtn">Cộng tiền</button>
   <p class="err" id="addErr"></p>
 </div>
+<script src="/static/money.js"></script>
 <script>
 const KEY='welora_device_id';
 let lastId='';
@@ -51,6 +64,7 @@ function deviceId(){
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
   return d;
 }
+function money(n){ return (window.WeloraMoney?WeloraMoney.formatVnd(n):String(n)); }
 function pediaKeys(t){
   if(t==='debt_payoff') return ['DEBT-01','DEBT-02','DEBT-03'];
   if(t==='emergency_fund') return ['SAFE-01'];
@@ -71,7 +85,7 @@ function showEmpty(){
   lastId='';
   fillPick([]);
 }
-function line(label,value){
+function line(label,value,asMoney){
   const wrap=document.createElement('div');
   wrap.style.marginTop='8px';
   const l=document.createElement('div');
@@ -79,7 +93,8 @@ function line(label,value){
   l.textContent=label;
   const v=document.createElement('div');
   v.className='val';
-  v.textContent=value===null||value===undefined?'—':String(value);
+  if(value===null||value===undefined) v.textContent='—';
+  else v.textContent=asMoney?money(value):String(value);
   wrap.appendChild(l);
   wrap.appendChild(v);
   return wrap;
@@ -175,12 +190,12 @@ function renderItems(items){
     el.appendChild(line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title||(isDebt?'Trả nợ nguy hiểm':'Quỹ khẩn cấp')));
     el.appendChild(line('Loại', typeLabel(g.type)));
     if(isDebt){
-      el.appendChild(line('Mục tiêu (VND)', tgt.amount));
-      el.appendChild(line('Đã trả (VND)', cur.amount));
+      el.appendChild(line('Số cần trả', tgt.amount, true));
+      el.appendChild(line('Đã trả', cur.amount, true));
       el.appendChild(line('Phần trăm', cur.percent));
     }else{
       el.appendChild(line('Tháng chi mục tiêu', tgt.months_of_expense));
-      el.appendChild(line('Số dư hiện tại', cur.amount));
+      el.appendChild(line('Số dư hiện tại', cur.amount, true));
       el.appendChild(line('Phần trăm', cur.percent));
       el.appendChild(line('Tháng chi hiện tại', cur.months_covered));
     }
@@ -203,13 +218,17 @@ async function loadList(){
   const data=await lr.json();
   renderItems(data.items||[]);
 }
+WeloraMoney.bindMoneyInput(document.getElementById('debtTarget'));
+WeloraMoney.bindMoneyInput(document.getElementById('addAmount'));
+WeloraMoney.bindChips(document.getElementById('debtChips'), document.getElementById('debtTarget'));
+WeloraMoney.bindChips(document.getElementById('addChips'), document.getElementById('addAmount'));
 document.getElementById('goalPick').addEventListener('change',()=>{
   lastId=document.getElementById('goalPick').value||lastId;
 });
 document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
   const err=document.getElementById('debtErr');
   err.textContent='';
-  const target=Number(document.getElementById('debtTarget').value);
+  const target=WeloraMoney.parseVnd(document.getElementById('debtTarget').value);
   if(!(target>0)){err.textContent='Nhập số tiền cần trả > 0';return;}
   const payload={user_id:uid,type:'debt_payoff',target_amount:target};
   const title=document.getElementById('debtTitle').value.trim();
@@ -228,7 +247,7 @@ document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
 document.getElementById('addBtn').addEventListener('click', async()=>{
   const err=document.getElementById('addErr');
   err.textContent='';
-  const n=Number(document.getElementById('addAmount').value);
+  const n=WeloraMoney.parseVnd(document.getElementById('addAmount').value);
   const gid=document.getElementById('goalPick').value||lastId;
   if(!(n>0)||!gid){err.textContent='Chọn mục tiêu và nhập số > 0';return;}
   const r=await fetch('/goals/'+encodeURIComponent(gid)+'/progress',{

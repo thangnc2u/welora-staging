@@ -11,9 +11,6 @@ form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;border-radiu
 button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
 button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:12px}
-#gateBadge{display:inline-block;margin:8px 0 12px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041;background:#141b24}
-#gateBadge.passed{color:#3dd68c;border-color:#3dd68c}
-#gateBadge.not_passed{color:#ffb020;border-color:#ffb020}
 #denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
 #typing{display:none;align-items:center;gap:8px;margin:8px 0;color:#8b9bb4;font-size:13px}
@@ -27,7 +24,6 @@ button:disabled{opacity:.55}
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Trợ lý AI</h1>
 <p class="muted">Từ chối cứng trước LLM · An Toàn ≥ 3 tháng</p>
-<div id="gateBadge">Cổng: …</div>
 <a id="denyCta" href="/app/content?key=SAFE-02">Đọc nguyên tắc An Toàn (SAFE-02)</a>
 <div id="log"></div>
 <div id="typing" aria-live="polite" aria-busy="false">
@@ -37,7 +33,6 @@ button:disabled{opacity:.55}
 <form id="f"><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script>
 const log=document.getElementById('log');
-const gateBadge=document.getElementById('gateBadge');
 const denyCta=document.getElementById('denyCta');
 const typing=document.getElementById('typing');
 const sendBtn=document.getElementById('sendBtn');
@@ -48,11 +43,7 @@ function setLoading(on){
   typing.setAttribute('aria-busy', on?'true':'false');
   sendBtn.disabled=!!on;
 }
-function setGate(status){
-  const s=(status==='passed')?'passed':'not_passed';
-  gateBadge.textContent=s==='passed'?'Cổng: ĐẠT':'Cổng: CHƯA ĐẠT';
-  gateBadge.className=s;
-}
+function setGate(_status){ /* badge Cổng ẩn trên chat — Founder 04/09 */ }
 function pickHref(d){
   const links=d.content_links||[];
   for(const L of links){
@@ -74,14 +65,6 @@ function showDenyCta(d){
   denyCta.classList.add('show');
 }
 function hideDenyCta(){ denyCta.classList.remove('show'); }
-async function loadGate(){
-  if(!uid) return;
-  try{
-    const r=await fetch('/users/'+encodeURIComponent(uid)+'/safety-gate');
-    const d=await r.json();
-    setGate(d.status||d.safety_gate_status||'not_passed');
-  }catch(e){ setGate('not_passed'); }
-}
 function weloraDeviceId(){
   let id=localStorage.getItem('welora_device_id');
   if(!id){
@@ -94,7 +77,6 @@ function weloraDeviceId(){
   const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
   const d=await r.json(); uid=d.user_id;
   add('Sẵn sàng','bot muted');
-  await loadGate();
 })();
 document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return;

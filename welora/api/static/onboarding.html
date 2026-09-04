@@ -11,6 +11,7 @@ label{display:block;margin:8px 0 4px;color:#8b9bb4;font-size:13px}
 input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;box-sizing:border-box}
 button,a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
 button.secondary{background:#243041}
+button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:13px}
 .hidden{display:none}
 .err{color:#ff6b6b;font-size:13px;margin-top:8px}
@@ -114,6 +115,7 @@ button.secondary{background:#243041}
 <script src="/static/money.js"></script>
 <script>
 let uid=null, sid=null;
+let ctaBusy=false;
 function show(n){
   for(let i=0;i<=5;i++){
     const el=document.getElementById('step'+i);
@@ -182,7 +184,12 @@ document.getElementById('next4').onclick=async()=>{
   show(5);
 };
 document.getElementById('ctaGoal').onclick=async()=>{
-  document.getElementById('err5').textContent='';
+  const btn=document.getElementById('ctaGoal');
+  const err=document.getElementById('err5');
+  err.textContent='';
+  if(ctaBusy) return;
+  ctaBusy=true;
+  btn.disabled=true;
   try{
     await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
     const essential=essVal();
@@ -193,9 +200,21 @@ document.getElementById('ctaGoal').onclick=async()=>{
       current_amount:0,
       linked_from_onboarding:true
     })});
-    if(!r.ok){ document.getElementById('err5').textContent='Không tạo được quỹ khẩn cấp'; return; }
-    location.href='/app/safety?user_id='+encodeURIComponent(uid);
-  }catch(e){ document.getElementById('err5').textContent='Không tạo được quỹ. Thử lại.'; }
+    if(r.ok || r.status===409){
+      location.href='/app/safety?user_id='+encodeURIComponent(uid);
+      return;
+    }
+    let msg='Không tạo được quỹ khẩn cấp';
+    try{
+      const body=await r.json();
+      msg=body.detail||body.error||body.message||msg;
+    }catch(_e){}
+    err.textContent=msg;
+  }catch(e){ err.textContent='Không tạo được quỹ. Thử lại.'; }
+  finally{
+    ctaBusy=false;
+    btn.disabled=false;
+  }
 };
 </script>
 </body>

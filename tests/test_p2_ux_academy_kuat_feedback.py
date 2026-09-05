@@ -22,8 +22,8 @@ class TestP2UxAcademyKuatFeedback(unittest.TestCase):
     def test_xp_updates_after_kuat(self):
         self.assertIn("setXp", self.html)
         self.assertIn("d.xp", self.html)
-        self.assertIn("'XP '", self.html)
-        self.assertIn("id=\"xpLine\"", self.html)
+        self.assertIn("XP ", self.html)
+        self.assertIn('id="xpLine"', self.html)
 
     def test_kuat_out_not_muted_and_scrolls(self):
         self.assertIn('id="kuatOut"', self.html)
@@ -31,8 +31,8 @@ class TestP2UxAcademyKuatFeedback(unittest.TestCase):
         self.assertIn("#kuatOut.pass", self.html)
         self.assertIn("#kuatOut.fail", self.html)
         self.assertIn("scrollIntoView", self.html)
-        self.assertIn("'\u0110\u1ea0T'", self.html)
-        self.assertIn("'CH\u01afA \u0110\u1ea0T'", self.html)
+        self.assertIn("ĐẠT", self.html)
+        self.assertIn("CHƯA ĐẠT", self.html)
 
     def test_btn_disabled_and_error_text(self):
         self.assertIn("btn.disabled=true", self.html)

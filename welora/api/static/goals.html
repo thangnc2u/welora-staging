@@ -31,16 +31,19 @@ button:disabled{opacity:.55}
 <div id="goalList"></div>
 <div class="card" id="debtBox">
   <div class="label">Tạo mục tiêu trả nợ</div>
-  <input id="debtTitle" type="text" placeholder="Tên (tùy chọn)"/>
-  <input id="debtSubtype" type="text" placeholder="Loại nợ (tùy chọn)"/>
-  <input id="debtTarget" type="text" inputmode="numeric" placeholder="Số tiền cần trả"/>
-  <div class="chips" id="debtChips">
-    <button type="button" data-vnd="5000000">5tr</button>
-    <button type="button" data-vnd="10000000">10tr</button>
-    <button type="button" data-vnd="20000000">20tr</button>
+  <p class="muted" id="debtAlready" hidden>Đã có mục tiêu trả nợ — dùng Cộng tiến độ bên dưới.</p>
+  <div id="debtForm">
+    <input id="debtTitle" type="text" placeholder="Tên (tùy chọn)"/>
+    <input id="debtSubtype" type="text" placeholder="Loại nợ (tùy chọn)"/>
+    <input id="debtTarget" type="text" inputmode="numeric" placeholder="Số tiền cần trả"/>
+    <div class="chips" id="debtChips">
+      <button type="button" data-vnd="5000000">5tr</button>
+      <button type="button" data-vnd="10000000">10tr</button>
+      <button type="button" data-vnd="20000000">20tr</button>
+    </div>
+    <button type="button" id="debtCreateBtn">Tạo trả nợ</button>
+    <p class="err" id="debtErr"></p>
   </div>
-  <button type="button" id="debtCreateBtn">Tạo trả nợ</button>
-  <p class="err" id="debtErr"></p>
 </div>
 <div class="card" id="addBox">
   <div class="label">Cộng tiến độ</div>
@@ -61,6 +64,7 @@ const KEY='welora_device_id';
 let lastId='';
 let uid='';
 const goalsById={};
+const DEBT_409='Bạn đã có mục tiêu trả nợ. Chọn mục tiêu ở phần Cộng tiến độ để ghi trả.';
 function deviceId(){
   let d=localStorage.getItem(KEY);
   if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
@@ -91,6 +95,17 @@ function emptyProgressHint(){
   var n=WeloraMoney.parseVnd(document.getElementById('debtTarget').value);
   if(n>0) return 'Bấm Tạo trả nợ phía trên trước.';
   return 'Tạo quỹ khẩn cấp hoặc mục tiêu trả nợ trước khi cộng tiến độ.';
+}
+function hasDebtGoal(items){
+  if(items&&items.some(function(g){ return g.type==='debt_payoff'; })) return true;
+  return Object.keys(goalsById).some(function(k){ return goalsById[k].type==='debt_payoff'; });
+}
+function syncDebtBox(items){
+  const form=document.getElementById('debtForm');
+  const note=document.getElementById('debtAlready');
+  const hide=hasDebtGoal(items);
+  form.hidden=hide;
+  note.hidden=!hide;
 }
 function syncAddUi(){
   const btn=document.getElementById('addBtn');
@@ -125,6 +140,7 @@ function showEmpty(){
   box.appendChild(a);
   lastId='';
   fillPick([]);
+  syncDebtBox([]);
 }
 function line(label,value,asMoney){
   const wrap=document.createElement('div');
@@ -255,6 +271,7 @@ function renderItems(items){
     box.appendChild(el);
   });
   fillPick(items);
+  syncDebtBox(items);
 }
 async function loadList(){
   const lr=await fetch('/goals?user_id='+encodeURIComponent(uid));
@@ -289,9 +306,16 @@ document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
     });
+    if(r.status===409){
+      err.textContent=DEBT_409;
+      await loadList();
+      return;
+    }
     if(!r.ok){ err.textContent=await readErr(r,'Không tạo được mục tiêu trả nợ'); return; }
     const body=await r.json();
     lastId=body.goal_id||(body.goal&&body.goal.goal_id)||lastId;
+    document.getElementById('debtTitle').value='';
+    document.getElementById('debtSubtype').value='';
     document.getElementById('debtTarget').value='';
     await loadList();
     const sel=document.getElementById('goalPick');

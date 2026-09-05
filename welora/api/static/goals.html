@@ -18,6 +18,7 @@ a{color:#7dd3fc;text-decoration:none}
 .pedia a{display:block;margin-top:6px;font-weight:600}
 input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;margin-top:8px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600}
+button:disabled{opacity:.55}
 .err{color:#ff6b6b}
 .chips{display:flex;gap:8px;margin-top:8px}
 .chips button{margin:0;padding:8px 10px;background:#243041}
@@ -43,6 +44,7 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 </div>
 <div class="card" id="addBox">
   <div class="label">Cộng tiến độ</div>
+  <p class="muted" id="addHint"></p>
   <select id="goalPick"></select>
   <input id="addAmount" type="text" inputmode="numeric" placeholder="Số tiền cộng"/>
   <div class="chips" id="addChips">
@@ -66,6 +68,28 @@ function deviceId(){
 }
 function money(n){ return (window.WeloraMoney?WeloraMoney.formatVnd(n):String(n)); }
 function pct(n){ return (window.WeloraMoney?WeloraMoney.formatPct(n):String(n)); }
+async function readErr(r, fallback){
+  try{
+    const b=await r.json();
+    return b.detail||b.error||b.message||fallback;
+  }catch(_e){ return fallback; }
+}
+function selectedGoal(){
+  const id=document.getElementById('goalPick').value||lastId;
+  return goalsById[id]||null;
+}
+function syncAddUi(){
+  const btn=document.getElementById('addBtn');
+  const hint=document.getElementById('addHint');
+  const g=selectedGoal();
+  if(!g){
+    btn.textContent='Cộng tiền';
+    hint.textContent='';
+    return;
+  }
+  btn.textContent=(g.type==='debt_payoff')?'Ghi trả nợ':'Cộng vào quỹ';
+  hint.textContent='Đang cập nhật: '+(g.title||typeLabel(g.type));
+}
 function pediaKeys(t){
   if(t==='debt_payoff') return ['DEBT-01','DEBT-02','DEBT-03'];
   if(t==='emergency_fund') return ['SAFE-01'];
@@ -161,6 +185,7 @@ function fillPick(items){
     sel.appendChild(o);
   });
   if(sel.value) lastId=sel.value;
+  syncAddUi();
 }
 function renderItems(items){
   const box=document.getElementById('goalList');
@@ -209,6 +234,7 @@ function renderItems(items){
       document.getElementById('goalPick').value=lastId;
       box.querySelectorAll('.card').forEach(c=>c.classList.remove('sel'));
       el.classList.add('sel');
+      syncAddUi();
     });
     box.appendChild(el);
   });
@@ -225,9 +251,11 @@ WeloraMoney.bindChips(document.getElementById('debtChips'), document.getElementB
 WeloraMoney.bindChips(document.getElementById('addChips'), document.getElementById('addAmount'));
 document.getElementById('goalPick').addEventListener('change',()=>{
   lastId=document.getElementById('goalPick').value||lastId;
+  syncAddUi();
 });
 document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
   const err=document.getElementById('debtErr');
+  const btn=document.getElementById('debtCreateBtn');
   err.textContent='';
   const target=WeloraMoney.parseVnd(document.getElementById('debtTarget').value);
   if(!(target>0)){err.textContent='Nhập số tiền cần trả > 0';return;}
@@ -236,30 +264,52 @@ document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
   const subtype=document.getElementById('debtSubtype').value.trim();
   if(title) payload.title=title;
   if(subtype) payload.subtype=subtype;
-  const r=await fetch('/goals',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  });
-  if(!r.ok){err.textContent='Không tạo được mục tiêu trả nợ';return;}
-  document.getElementById('debtTarget').value='';
-  await loadList();
+  if(btn.disabled) return;
+  btn.disabled=true;
+  try{
+    const r=await fetch('/goals',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    if(!r.ok){ err.textContent=await readErr(r,'Không tạo được mục tiêu trả nợ'); return; }
+    const body=await r.json();
+    lastId=body.goal_id||(body.goal&&body.goal.goal_id)||lastId;
+    document.getElementById('debtTarget').value='';
+    await loadList();
+    const sel=document.getElementById('goalPick');
+    if(lastId) sel.value=lastId;
+    syncAddUi();
+  }catch(_e){
+    err.textContent='Không tạo được mục tiêu trả nợ';
+  }finally{
+    btn.disabled=false;
+  }
 });
 document.getElementById('addBtn').addEventListener('click', async()=>{
   const err=document.getElementById('addErr');
+  const btn=document.getElementById('addBtn');
   err.textContent='';
   const n=WeloraMoney.parseVnd(document.getElementById('addAmount').value);
   const gid=document.getElementById('goalPick').value||lastId;
   if(!(n>0)||!gid){err.textContent='Chọn mục tiêu và nhập số > 0';return;}
-  const r=await fetch('/goals/'+encodeURIComponent(gid)+'/progress',{
-    method:'PATCH',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({add_amount:n})
-  });
-  if(!r.ok){err.textContent='Không cộng được tiền';return;}
-  document.getElementById('addAmount').value='';
-  lastId=gid;
-  await loadList();
+  if(btn.disabled) return;
+  btn.disabled=true;
+  try{
+    const r=await fetch('/goals/'+encodeURIComponent(gid)+'/progress',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({add_amount:n})
+    });
+    if(!r.ok){ err.textContent=await readErr(r,'Không cộng được tiền'); return; }
+    document.getElementById('addAmount').value='';
+    lastId=gid;
+    await loadList();
+  }catch(_e){
+    err.textContent='Không cộng được tiền';
+  }finally{
+    btn.disabled=false;
+  }
 });
 (async()=>{
   try{

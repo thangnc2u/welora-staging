@@ -78,15 +78,31 @@ function selectedGoal(){
   const id=document.getElementById('goalPick').value||lastId;
   return goalsById[id]||null;
 }
+function setProgressEnabled(on){
+  const btn=document.getElementById('addBtn');
+  const amt=document.getElementById('addAmount');
+  const sel=document.getElementById('goalPick');
+  btn.disabled=!on;
+  amt.disabled=!on;
+  sel.disabled=!on;
+  document.querySelectorAll('#addChips button').forEach(function(b){ b.disabled=!on; });
+}
+function emptyProgressHint(){
+  var n=WeloraMoney.parseVnd(document.getElementById('debtTarget').value);
+  if(n>0) return 'Bấm Tạo trả nợ phía trên trước.';
+  return 'Tạo quỹ khẩn cấp hoặc mục tiêu trả nợ trước khi cộng tiến độ.';
+}
 function syncAddUi(){
   const btn=document.getElementById('addBtn');
   const hint=document.getElementById('addHint');
   const g=selectedGoal();
   if(!g){
+    setProgressEnabled(false);
     btn.textContent='Cộng tiền';
-    hint.textContent='';
+    hint.textContent=emptyProgressHint();
     return;
   }
+  setProgressEnabled(true);
   btn.textContent=(g.type==='debt_payoff')?'Ghi trả nợ':'Cộng vào quỹ';
   hint.textContent='Đang cập nhật: '+(g.title||typeLabel(g.type));
 }
@@ -253,6 +269,7 @@ document.getElementById('goalPick').addEventListener('change',()=>{
   lastId=document.getElementById('goalPick').value||lastId;
   syncAddUi();
 });
+document.getElementById('debtTarget').addEventListener('input',()=>{ if(!selectedGoal()) syncAddUi(); });
 document.getElementById('debtCreateBtn').addEventListener('click', async()=>{
   const err=document.getElementById('debtErr');
   const btn=document.getElementById('debtCreateBtn');
@@ -290,10 +307,10 @@ document.getElementById('addBtn').addEventListener('click', async()=>{
   const err=document.getElementById('addErr');
   const btn=document.getElementById('addBtn');
   err.textContent='';
+  if(btn.disabled) return;
   const n=WeloraMoney.parseVnd(document.getElementById('addAmount').value);
   const gid=document.getElementById('goalPick').value||lastId;
   if(!(n>0)||!gid){err.textContent='Chọn mục tiêu và nhập số > 0';return;}
-  if(btn.disabled) return;
   btn.disabled=true;
   try{
     const r=await fetch('/goals/'+encodeURIComponent(gid)+'/progress',{
@@ -308,7 +325,7 @@ document.getElementById('addBtn').addEventListener('click', async()=>{
   }catch(_e){
     err.textContent='Không cộng được tiền';
   }finally{
-    btn.disabled=false;
+    if(selectedGoal()) btn.disabled=false;
   }
 });
 (async()=>{

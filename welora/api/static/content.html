@@ -11,7 +11,15 @@ a{color:#7dd3fc}
 .key{display:inline-block;background:#132337;color:#7dd3fc;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
 article{background:#141c2e;border-radius:12px;padding:16px;margin-top:12px}
 article h1{font-size:1.25rem;margin:8px 0 12px}
-#contentBody{white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.55;margin:0}
+#contentBody{font-size:15px;line-height:1.65;margin:0}
+#contentBody h2{font-size:1.12rem;margin:18px 0 8px;font-weight:700}
+#contentBody h3{font-size:1.02rem;margin:14px 0 6px;font-weight:700}
+#contentBody p{margin:0 0 10px}
+#contentBody ul,#contentBody ol{margin:0 0 12px;padding-left:1.3rem}
+#contentBody li{margin:4px 0}
+#contentBody hr{border:0;border-top:1px solid #243041;margin:16px 0}
+#contentBody a{color:#7dd3fc}
+#contentBody code{font-size:13px;background:#0b1220;padding:1px 4px;border-radius:4px}
 .muted{color:#8b9bb4;font-size:13px}
 .nav{margin-bottom:12px}
 .cta{display:block;margin-top:10px;background:#141c2e;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eefc;text-decoration:none;font-weight:600}
@@ -35,6 +43,118 @@ const elKey=document.getElementById('contentKey');
 const elTitle=document.getElementById('contentTitle');
 const elBody=document.getElementById('contentBody');
 const elGov=document.getElementById('govMeta');
+function stripFrontmatter(md){
+  var s=String(md||'').replace(/^\uFEFF/,'');
+  var idx=s.search(/\n---\s*\n/);
+  if(idx>=0){
+    var head=s.slice(0,idx);
+    if(/principle_key|Module:|M\u1ee9c r\u1ee7i ro|Version:|Status:|^#\s*WP-/m.test(head)){
+      s=s.slice(idx).replace(/^\n---\s*\n/,'');
+    }
+  }
+  var lines=s.split('\n');
+  while(lines.length){
+    var t=lines[0].trim();
+    if(!t){ lines.shift(); continue; }
+    if(/^#\s*WP-/.test(t)){ lines.shift(); continue; }
+    if(/^\*\*(Module|M\u1ee9c r\u1ee7i ro|Version|Status|principle_key|secondary_keys):/i.test(t)){ lines.shift(); continue; }
+    break;
+  }
+  return lines.join('\n').replace(/^\s+/,'');
+}
+function isSafeHref(h){
+  if(!h) return false;
+  if(h.charAt(0)==='/' || h.charAt(0)==='#') return true;
+  return /^https?:\/\//i.test(h);
+}
+function appendInline(parent, text){
+  var re=/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+  var last=0, m;
+  text=String(text||'');
+  while((m=re.exec(text))){
+    if(m.index>last) parent.appendChild(document.createTextNode(text.slice(last,m.index)));
+    var tok=m[0];
+    if(tok.slice(0,2)==='**'){
+      var s=document.createElement('strong');
+      s.textContent=tok.slice(2,-2);
+      parent.appendChild(s);
+    }else if(tok.charAt(0)==='*'){
+      var e=document.createElement('em');
+      e.textContent=tok.slice(1,-1);
+      parent.appendChild(e);
+    }else if(tok.charAt(0)==='`'){
+      var c=document.createElement('code');
+      c.textContent=tok.slice(1,-1);
+      parent.appendChild(c);
+    }else{
+      var mm=tok.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if(mm && isSafeHref(mm[2])){
+        var a=document.createElement('a');
+        a.href=mm[2];
+        a.textContent=mm[1];
+        parent.appendChild(a);
+      }else{
+        parent.appendChild(document.createTextNode(tok));
+      }
+    }
+    last=m.index+tok.length;
+  }
+  if(last<text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+}
+function renderMarkdown(root, md){
+  root.textContent='';
+  var lines=String(md||'').split('\n');
+  var i=0;
+  while(i<lines.length){
+    var t=lines[i].trim();
+    if(!t){ i++; continue; }
+    if(t==='---' || t==='***'){
+      root.appendChild(document.createElement('hr')); i++; continue;
+    }
+    if(/^###\s+/.test(t)){
+      var h3=document.createElement('h3');
+      appendInline(h3, t.replace(/^###\s+/,''));
+      root.appendChild(h3); i++; continue;
+    }
+    if(/^##\s+/.test(t)){
+      var h2=document.createElement('h2');
+      appendInline(h2, t.replace(/^##\s+/,''));
+      root.appendChild(h2); i++; continue;
+    }
+    if(/^#\s+/.test(t)){
+      var h=document.createElement('h2');
+      appendInline(h, t.replace(/^#\s+/,''));
+      root.appendChild(h); i++; continue;
+    }
+    if(/^[-*]\s+/.test(t)){
+      var ul=document.createElement('ul');
+      while(i<lines.length && /^[-*]\s+/.test(lines[i].trim())){
+        var li=document.createElement('li');
+        appendInline(li, lines[i].trim().replace(/^[-*]\s+/,''));
+        ul.appendChild(li); i++;
+      }
+      root.appendChild(ul); continue;
+    }
+    if(/^\d+\.\s+/.test(t)){
+      var ol=document.createElement('ol');
+      while(i<lines.length && /^\d+\.\s+/.test(lines[i].trim())){
+        var li2=document.createElement('li');
+        appendInline(li2, lines[i].trim().replace(/^\d+\.\s+/,''));
+        ol.appendChild(li2); i++;
+      }
+      root.appendChild(ol); continue;
+    }
+    var p=document.createElement('p');
+    var buf=t; i++;
+    while(i<lines.length){
+      var n=lines[i].trim();
+      if(!n || /^#{1,3}\s/.test(n) || /^[-*]\s+/.test(n) || /^\d+\.\s+/.test(n) || n==='---') break;
+      buf+=' '+n; i++;
+    }
+    appendInline(p, buf);
+    root.appendChild(p);
+  }
+}
 (async()=>{
   if(!key){
     const r=await fetch('/content');
@@ -61,11 +181,14 @@ const elGov=document.getElementById('govMeta');
   elKey.textContent=d.principle_key||key;
   if(!r.ok || d.ok===false){
     elTitle.textContent='Không tìm thấy';
-    elBody.textContent=d.error||'Không tìm thấy';
+    elBody.textContent='';
+    const p=document.createElement('p');
+    p.textContent=d.error||'Không tìm thấy';
+    elBody.appendChild(p);
     return;
   }
   elTitle.textContent=d.title||key;
-  elBody.textContent=d.body_markdown||'';
+  renderMarkdown(elBody, stripFrontmatter(d.body_markdown||''));
   const risk=d.risk_label||'';
   const reviewed=d.last_reviewed_at||'';
   elGov.textContent=(risk?('Rủi ro: '+risk):'')+(reviewed?(' · Đã review '+reviewed):'');

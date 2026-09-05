@@ -11,11 +11,16 @@ a{color:#7dd3fc;text-decoration:none}
 .card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
 .muted{color:#8b9bb4;font-size:13px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600;width:100%}
+button:disabled{opacity:.55}
 .status{font-size:12px;color:#8b9bb4}
 .card.focus{border-color:#38bdf8;box-shadow:0 0 0 1px #38bdf8}
 .nudge{display:block;margin-top:10px;background:#142033;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eef7;text-decoration:none;font-weight:600}
 .q{margin:10px 0}
 label{display:block;margin:4px 0}
+#kuatOut{font-size:15px;font-weight:700;margin-top:10px}
+#kuatOut.pass{color:#3dd68c}
+#kuatOut.fail{color:#ff6b6b}
+#kuatOut.err{color:#ffb020}
 </style>
 </head>
 <body>
@@ -33,7 +38,7 @@ label{display:block;margin:4px 0}
   <button type="button" id="btnRead">Đánh dấu đã đọc</button>
   <div id="kuatBox"></div>
   <button type="button" id="btnKuat">Nộp KUAT</button>
-  <p class="muted" id="kuatOut"></p>
+  <p id="kuatOut"></p>
   <p><a id="backTree" href="#">← Cây</a></p>
 </div>
 <script>
@@ -51,12 +56,16 @@ const focusKey=(params.get('key')||params.get('principle_key')||'').toUpperCase(
 function statusVi(s){
   return s==='locked'?'khóa':s==='available'?'học':s==='learning'?'học':s==='kuat_pending'?'KUAT':s==='mastered'?'đã thành thạo':(s||'');
 }
+function setXp(n){
+  if(n==null || n==='') return;
+  document.getElementById('xpLine').textContent='XP '+String(n);
+}
 function showTree(data){
   document.getElementById('lesson').hidden=true;
   document.getElementById('tree').hidden=false;
   const box=document.getElementById('tree');
   box.textContent='';
-  document.getElementById('xpLine').textContent='XP '+((data&&data.xp)||0);
+  setXp((data&&data.xp)||0);
   (data.nodes||[]).forEach(n=>{
     const el=document.createElement('div');
     el.className='card';
@@ -117,7 +126,9 @@ async function openNode(id){
     });
     box.appendChild(wrap);
   });
-  document.getElementById('kuatOut').textContent='';
+  const out=document.getElementById('kuatOut');
+  out.textContent='';
+  out.className='';
 }
 document.getElementById('btnRead').onclick=async()=>{
   if(!current) return;
@@ -125,22 +136,49 @@ document.getElementById('btnRead').onclick=async()=>{
 };
 document.getElementById('btnKuat').onclick=async()=>{
   if(!current) return;
-  const answers=[];
-  document.querySelectorAll('#kuatBox .q').forEach(w=>{
-    const sel=w.querySelector('input:checked');
-    answers.push({question_id:w.dataset.qid,choice:sel?Number(sel.value):-1});
-  });
-  const r=await fetch('/academy/kuat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id,answers})});
-  const d=await r.json();
-  const kr=d.kuat_result||{};
-  document.getElementById('kuatOut').textContent=(kr.passed?'ĐẠT':'CHƯA ĐẠT')+' · '+(kr.score!=null?Math.round(kr.score*100)+'%':'');
-  const nudge=document.getElementById('osNudge');
-  if(d.os_nudge&&d.os_nudge.href){
-    nudge.hidden=false;
-    nudge.href=d.os_nudge.href;
-    nudge.textContent='Tạo Goal trên WeloraOS';
-  }else{
-    nudge.hidden=true;
+  const btn=document.getElementById('btnKuat');
+  const out=document.getElementById('kuatOut');
+  if(btn.disabled) return;
+  btn.disabled=true;
+  out.className='';
+  out.textContent='';
+  try{
+    const answers=[];
+    document.querySelectorAll('#kuatBox .q').forEach(w=>{
+      const sel=w.querySelector('input:checked');
+      answers.push({question_id:w.dataset.qid,choice:sel?Number(sel.value):-1});
+    });
+    const r=await fetch('/academy/kuat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id,answers})});
+    let d={};
+    try{ d=await r.json(); }catch(_e){ d={}; }
+    if(!r.ok){
+      out.className='err';
+      out.textContent=d.detail||d.error||d.message||('Không nộp được KUAT ('+r.status+')');
+      out.scrollIntoView({behavior:'smooth',block:'nearest'});
+      return;
+    }
+    if(d.xp!=null) setXp(d.xp);
+    const kr=d.kuat_result||{};
+    const passed=!!kr.passed;
+    out.className=passed?'pass':'fail';
+    out.textContent=(passed?'ĐẠT':'CHƯA ĐẠT')+' · '+(kr.score!=null?Math.round(kr.score*100)+'%':'');
+    out.scrollIntoView({behavior:'smooth',block:'nearest'});
+    const nudge=document.getElementById('osNudge');
+    const mastered=(current&&current.status==='mastered')||passed||(d.status==='mastered');
+    if(d.os_nudge&&d.os_nudge.href){
+      nudge.hidden=false;
+      nudge.href=d.os_nudge.href;
+      nudge.textContent='Tạo Goal trên WeloraOS';
+    }else if(!mastered){
+      nudge.hidden=true;
+    }
+    if(passed) current.status='mastered';
+  }catch(e){
+    out.className='err';
+    out.textContent='Không nộp được KUAT. Thử lại.';
+    out.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }finally{
+    btn.disabled=false;
   }
 };
 document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();};

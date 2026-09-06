@@ -3,7 +3,7 @@
   var tabs = [
     { id: "tabHome", href: "/app", label: "Trang chủ", ico: "○", key: "home" },
     { id: "tabPedia", href: "/app/content", label: "Từ điển", ico: "□", key: "pedia" },
-    { id: "tabChat", href: "/app/chat", label: "Trợ lý AI", ico: "✉", key: "chat" },
+    { id: "tabChat", href: "/app/chat", label: "Chat với Agent", ico: "✉", key: "chat" },
     { id: "tabAcademy", href: "/app/academy", label: "Học viện", ico: "◈", key: "academy" }
   ];
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";

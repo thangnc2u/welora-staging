@@ -35,9 +35,10 @@ class TestP2UxAppShell(unittest.TestCase):
     def test_shell_assets_and_four_tabs(self):
         self.assertTrue((STATIC / "shell.css").is_file())
         js = (STATIC / "shell.js").read_text(encoding="utf-8")
-        for label in ("Trang chủ", "Từ điển", "Trợ lý AI", "Học viện"):
+        for label in ("Trang chủ", "Từ điển", "Chat với Agent", "Học viện"):
             self.assertIn(label, js)
         self.assertNotIn('label: "Mục tiêu"', js)
+        self.assertNotIn("Trợ lý AI", js)
         self.assertNotIn("/app/goals", js)
         self.assertIn("/app/content", js)
         self.assertIn("/app/chat", js)

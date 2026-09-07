@@ -9,6 +9,7 @@
 body{font-family:system-ui,sans-serif;margin:0;padding:16px 16px 88px;max-width:640px;margin-inline:auto;background:#0b1220;color:#e8eefc}
 a{color:#7dd3fc}
 .key{display:inline-block;background:#132337;color:#7dd3fc;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
+.tag{display:inline-block;background:#1a2438;color:#9fb4d0;font-weight:600;font-size:11px;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle;border:1px solid #2a3a52}
 article{background:#141c2e;border-radius:12px;padding:16px;margin-top:12px}
 article h1{font-size:1.25rem;margin:8px 0 12px}
 #contentBody{font-size:15px;line-height:1.65;margin:0}
@@ -43,6 +44,18 @@ const elKey=document.getElementById('contentKey');
 const elTitle=document.getElementById('contentTitle');
 const elBody=document.getElementById('contentBody');
 const elGov=document.getElementById('govMeta');
+function viTag(pk){
+  var k=String(pk||'');
+  if(k.indexOf('SAFE-')===0) return 'An toàn';
+  if(k.indexOf('DEBT-')===0) return 'Nợ';
+  if(k.indexOf('CORE-')===0) return 'Cốt lõi';
+  return '';
+}
+function setKeyTag(el, pk){
+  var t=viTag(pk);
+  if(t){ el.textContent=t; el.className='tag'; el.style.display=''; }
+  else { el.textContent=''; el.className='muted'; el.style.display='none'; }
+}
 function stripFrontmatter(md){
   var s=String(md||'').replace(/^\uFEFF/,'');
   var idx=s.search(/\n---\s*\n/);
@@ -168,9 +181,16 @@ function renderMarkdown(root, md){
     const pack=(j.modules&&j.modules['02']&&j.modules['02'].items)||(j.items||[]).filter(i=>i.module==='02');
     pack.forEach(i=>{
       const p=document.createElement('p');
+      const t=viTag(i.principle_key);
+      if(t){
+        const s=document.createElement('span');
+        s.className='tag';
+        s.textContent=t;
+        p.appendChild(s);
+      }
       const a=document.createElement('a');
       a.href='/app/content?key='+encodeURIComponent(i.principle_key||'');
-      a.textContent=(i.principle_key||'')+' · '+(i.title||'');
+      a.textContent=i.title||'';
       p.appendChild(a);
       elBody.appendChild(p);
     });
@@ -178,7 +198,7 @@ function renderMarkdown(root, md){
   }
   const r=await fetch('/content/'+encodeURIComponent(key));
   const d=await r.json();
-  elKey.textContent=d.principle_key||key;
+  setKeyTag(elKey, d.principle_key||key);
   if(!r.ok || d.ok===false){
     elTitle.textContent='Không tìm thấy';
     elBody.textContent='';

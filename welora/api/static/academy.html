@@ -22,12 +22,13 @@ label{display:block;margin:4px 0}
 #kuatOut.pass{color:#3dd68c}
 #kuatOut.fail{color:#ff6b6b}
 #kuatOut.err{color:#ffb020}
+.modHead{font-size:16px;font-weight:700;margin:18px 0 8px;color:#c7d7ee}
 </style>
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Welorademy</h1>
-<p class="muted">An Toàn Tài Chính · KUAT ≥ 70% · Học viện</p>
+<p class="muted">Rễ Cục · An Toàn Tài Chính · KUAT ≥ 70% · Học viện</p>
 <p class="muted" id="xpLine">XP —</p>
 <p class="muted" id="focusLine"></p>
 <a id="osNudge" class="nudge" href="/app/goals" hidden>Tạo Goal trên WeloraOS</a>
@@ -52,6 +53,7 @@ function deviceId(){
 let uid='';
 let current=null;
 const params=new URLSearchParams(location.search);
+// deep-link support: /app/academy?from=pedia&key=
 const fromPedia=params.get('from')==='pedia';
 const focusKey=(params.get('key')||params.get('principle_key')||'').toUpperCase();
 function statusVi(s){
@@ -62,6 +64,12 @@ function viTag(pk){
   if(k.indexOf('SAFE-')===0) return 'An toàn';
   if(k.indexOf('DEBT-')===0) return 'Nợ';
   if(k.indexOf('CORE-')===0) return 'Cốt lõi';
+  if(k.indexOf('MIND-')===0) return 'Tư duy';
+  if(k.indexOf('FLOW-')===0) return 'Dòng tiền';
+  if(k.indexOf('BUDG-')===0) return 'Ngân sách';
+  if(k.indexOf('TRACK-')===0) return 'Theo dõi';
+  if(k.indexOf('GOAL-')===0) return 'Mục tiêu';
+  if(k.indexOf('TIME-')===0) return 'Thời gian';
   return '';
 }
 function baiLabel(nOrId){
@@ -76,40 +84,64 @@ function setXp(n){
   if(n==null || n==='') return;
   document.getElementById('xpLine').textContent='XP '+String(n);
 }
+function renderNodeCard(n, box){
+  const el=document.createElement('div');
+  el.className='card';
+  const t=document.createElement('div');
+  const b=baiLabel(n);
+  if(b){
+    const span=document.createElement('span');
+    span.className='tag';
+    span.textContent=b;
+    t.appendChild(span);
+  }
+  t.appendChild(document.createTextNode(n.title||''));
+  const s=document.createElement('div');
+  s.className='status';
+  const pk=viTag(n.principle_key);
+  s.textContent=statusVi(n.status)+(pk?(' · '+pk):'');
+  el.appendChild(t);el.appendChild(s);
+  const keys=(n.core_map||[]).concat(n.principle_key||[]);
+  if(fromPedia&&focusKey&&keys.indexOf(focusKey)>=0){
+    el.className='card focus';
+    el.id='focusNode';
+  }
+  if(n.status!=='locked'){
+    el.addEventListener('click',()=>openNode(n.node_id));
+  }
+  box.appendChild(el);
+}
 function showTree(data){
   document.getElementById('lesson').hidden=true;
   document.getElementById('tree').hidden=false;
   const box=document.getElementById('tree');
   box.textContent='';
   setXp((data&&data.xp)||0);
-  const nodes=(data.nodes||[]).slice().sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
-  nodes.forEach(n=>{
-    const el=document.createElement('div');
-    el.className='card';
-    const t=document.createElement('div');
-    const b=baiLabel(n);
-    if(b){
-      const span=document.createElement('span');
-      span.className='tag';
-      span.textContent=b;
-      t.appendChild(span);
-    }
-    t.appendChild(document.createTextNode(n.title||''));
-    const s=document.createElement('div');
-    s.className='status';
-    const pk=viTag(n.principle_key);
-    s.textContent=statusVi(n.status)+(pk?(' · '+pk):'');
-    el.appendChild(t);el.appendChild(s);
-    const keys=(n.core_map||[]).concat(n.principle_key||[]);
-    if(fromPedia&&focusKey&&keys.indexOf(focusKey)>=0){
-      el.className='card focus';
-      el.id='focusNode';
-    }
-    if(n.status!=='locked'){
-      el.addEventListener('click',()=>openNode(n.node_id));
-    }
-    box.appendChild(el);
-  });
+  const modules=(data.modules||[]).slice().sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
+  if(modules.length){
+    modules.forEach(function(mod){
+      const h=document.createElement('div');
+      h.className='modHead';
+      h.textContent=mod.title||mod.module_id||'';
+      box.appendChild(h);
+      const nodes=(mod.nodes||[]).slice().sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
+      nodes.forEach(function(n){ renderNodeCard(n, box); });
+    });
+  }else{
+    const byMod={};
+    (data.nodes||[]).forEach(function(n){
+      const mid=n.module_id||'';
+      if(!byMod[mid]) byMod[mid]=[];
+      byMod[mid].push(n);
+    });
+    Object.keys(byMod).sort().forEach(function(mid){
+      const h=document.createElement('div');
+      h.className='modHead';
+      h.textContent=(byMod[mid][0]&&byMod[mid][0].module_title)||mid;
+      box.appendChild(h);
+      byMod[mid].slice().sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);}).forEach(function(n){ renderNodeCard(n, box); });
+    });
+  }
   const fl=document.getElementById('focusLine');
   if(fromPedia&&focusKey){
     const tag=viTag(focusKey);

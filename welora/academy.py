@@ -1,4 +1,4 @@
-"""Welorademy M01 Rễ Cục + M02 An Toàn — cây ngữ nghĩa + cổng KUAT."""
+"""Welorademy M01 Rễ Cục + M02 An Toàn + M03 Tự Do Tài Chính — cây ngữ nghĩa + cổng KUAT."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ MODULE_ID = "M02"
 MODULE_TITLE = "An Toàn Tài Chính"
 M01_MODULE_ID = "M01"
 M01_MODULE_TITLE = "Rễ Cục"
+M03_MODULE_ID = "M03"
+M03_MODULE_TITLE = "Tự Do Tài Chính"
 XP_PER_PASS = 20
 GATE_NODE = "N02-02"
 MASTERY_NODE = "no_efund_invest"
@@ -23,6 +25,7 @@ STATUS_MASTERED = "mastered"
 MODULES: list[dict[str, Any]] = [
     {"module_id": M01_MODULE_ID, "title": M01_MODULE_TITLE, "order": 1},
     {"module_id": MODULE_ID, "title": MODULE_TITLE, "order": 2},
+    {"module_id": M03_MODULE_ID, "title": M03_MODULE_TITLE, "order": 3},
 ]
 
 M01_NODES: list[dict[str, Any]] = [
@@ -185,14 +188,97 @@ M02_NODES: list[dict[str, Any]] = [
     },
 ]
 
-NODES: list[dict[str, Any]] = M01_NODES + M02_NODES
+
+M03_NODES: list[dict[str, Any]] = [
+    {
+        "node_id": "N03-01",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Hiểu tự do tài chính",
+        "lesson_id": "WA-03-01",
+        "principle_key": "FREE-01",
+        "core_map": ["CORE-01", "CORE-05"],
+        "prereq_node_ids": [],
+        "order": 1,
+    },
+    {
+        "node_id": "N03-02",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Phân biệt tài sản và nợ",
+        "lesson_id": "WA-03-02",
+        "principle_key": "ASSET-01",
+        "core_map": ["CORE-01", "CORE-03"],
+        "prereq_node_ids": ["N03-01"],
+        "order": 2,
+    },
+    {
+        "node_id": "N03-03",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Hiểu thu nhập thụ động",
+        "lesson_id": "WA-03-03",
+        "principle_key": "PASSIVE-01",
+        "core_map": ["CORE-01", "CORE-05"],
+        "prereq_node_ids": ["N03-02"],
+        "order": 3,
+    },
+    {
+        "node_id": "N03-04",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Nguyên tắc đầu tư cơ bản",
+        "lesson_id": "WA-03-04",
+        "principle_key": "INV-01",
+        "core_map": ["CORE-01", "CORE-07"],
+        "prereq_node_ids": ["N03-03"],
+        "order": 4,
+    },
+    {
+        "node_id": "N03-05",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Đa dạng hóa danh mục",
+        "lesson_id": "WA-03-05",
+        "principle_key": "DIV-01",
+        "core_map": ["CORE-01", "CORE-07"],
+        "prereq_node_ids": ["N03-04"],
+        "order": 5,
+    },
+    {
+        "node_id": "N03-06",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Lập kế hoạch hướng tới tự do tài chính",
+        "lesson_id": "WA-03-06",
+        "principle_key": "FREE-PLAN-01",
+        "core_map": ["CORE-05", "CORE-03"],
+        "prereq_node_ids": ["N03-05"],
+        "order": 6,
+    },
+    {
+        "node_id": "N03-07",
+        "module_id": M03_MODULE_ID,
+        "module_title": M03_MODULE_TITLE,
+        "title": "Nhận diện rủi ro khi theo đuổi tự do tài chính",
+        "lesson_id": "WA-03-07",
+        "principle_key": "FREE-RISK-01",
+        "core_map": ["CORE-07", "CORE-01"],
+        "prereq_node_ids": ["N03-06"],
+        "order": 7,
+    },
+]
+
+NODES: list[dict[str, Any]] = M01_NODES + M02_NODES + M03_NODES
 
 _NODE_BY_ID = {n["node_id"]: n for n in NODES}
 
 FUND_NODES = ("N02-01", "N02-02", "N02-03")
 DEBT_NODES = ("N02-04", "N02-05", "N02-06", "N02-07")
 M01_NODE_IDS = tuple(n["node_id"] for n in M01_NODES)
+M03_NODE_IDS = tuple(n["node_id"] for n in M03_NODES)
 BADGE_RE_CUC = "Rễ Cục"
+BADGE_TU_DO = "Tự Do Tài Chính"
 
 def nodes_for_principle(key: str) -> list[str]:
     """Map principle_key / CORE code → node_id trên cây M02."""
@@ -301,6 +387,42 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q07b", "prompt": "Đầu tư trước khi Cổng ĐẠT?", "choices": ["Được", "Không"], "answer": 1, "hard": True},
         {"id": "q07c", "prompt": "Ai chịu trách nhiệm quyết định cuối?", "choices": ["User", "Agent quyết thay"], "answer": 0, "hard": False},
     ],
+    "N03-01": [
+        {"id": "q301a", "prompt": "Tự do tài chính nên hiểu trước hết là gì?", "choices": ["Chỉ nghỉ hưu sớm và không làm gì nữa", "Tăng dần khả năng lựa chọn nhờ quan hệ lành mạnh giữa chi tiêu và tài sản", "All-in đầu tư để giàu nhanh"], "answer": 1, "hard": True},
+        {"id": "q301b", "prompt": "Mức An toàn cơ bản (biết nổi) thường gồm gì?", "choices": ["Quỹ khẩn cấp, không nợ lãi rất cao, sống trong tầm thu nhập", "Chỉ sở hữu nhiều bất động sản", "Vay nóng để đầu tư"], "answer": 0, "hard": False},
+        {"id": "q301c", "prompt": "Có bắt buộc phải là vận động viên 'bơi marathon' mới gọi là tự do tài chính?", "choices": ["Có — chỉ một định nghĩa đúng", "Không — có nhiều mức tự do"], "answer": 1, "hard": False},
+    ],
+    "N03-02": [
+        {"id": "q302a", "prompt": "Câu hỏi đơn giản để phân loại tài sản vs trách nhiệm?", "choices": ["Giá mua ban đầu cao hay thấp", "Giữ thêm 1 năm thì túi tiền dày hơn hay mỏng hơn", "Bạn bè có thích không"], "answer": 1, "hard": True},
+        {"id": "q302b", "prompt": "Máy 'bỏ tiền vào túi' gần với?", "choices": ["Tài sản tạo giá trị / dòng tiền", "Khoản vay tiêu dùng lãi cao", "Đồ mua sắm mất giá nhanh"], "answer": 0, "hard": False},
+        {"id": "q302c", "prompt": "Một căn nhà vừa ở vừa cho thuê một phần?", "choices": ["Luôn chỉ là nợ", "Có thể mang cả đặc điểm tài sản và chi phí — nhìn tác động ròng"], "answer": 1, "hard": False},
+    ],
+    "N03-03": [
+        {"id": "q303a", "prompt": "Thu nhập thụ động đúng nghĩa gần với?", "choices": ["Không bao giờ phải đụng vào hệ thống", "Giảm mức độ phải 'xách xô mỗi ngày', vẫn cần bảo trì", "Cam kết lãi cao không rủi ro"], "answer": 1, "hard": True},
+        {"id": "q303b", "prompt": "Thang đo hữu ích hơn 'thụ động / không thụ động' là?", "choices": ["Mức độ phụ thuộc vào thời gian trực tiếp của bạn", "Số follower mạng xã hội", "Giá vàng hôm nay"], "answer": 0, "hard": False},
+        {"id": "q303c", "prompt": "Lời hứa 'máy tưới vĩnh viễn, không bao giờ hỏng, tự đẻ thêm máy'?", "choices": ["Nên tin ngay", "Cần nghi ngờ"], "answer": 1, "hard": False},
+    ],
+    "N03-04": [
+        {"id": "q304a", "prompt": "Trước khi all-in ETF / đầu tư tăng trưởng, điều kiện nền tảng nào đúng?", "choices": ["Được all-in ngay nếu thấy cơ hội", "An Toàn trước — không all-in trước khi Cổng ĐẠT / có lớp đệm", "Vay nóng để tăng vốn luôn đúng"], "answer": 1, "hard": True},
+        {"id": "q304b", "prompt": "Nguyên tắc đầu tư cơ bản ưu tiên gì?", "choices": ["Chỉ dùng tiền chấp nhận biến động; hiểu sản phẩm; không đụng quỹ khẩn cấp", "Cam kết lãi cao không rủi ro", "Bỏ hết trứng vào một mã"], "answer": 0, "hard": False},
+        {"id": "q304c", "prompt": "Chưa có quỹ khẩn cấp + còn nợ thẻ lãi cao, bạn quen rủ góp tiền 'lời mạnh 1–2 tháng'. Hướng hợp lý?", "choices": ["Góp hết vì cơ hội hiếm", "Ưu tiên An Toàn (quỹ + xử lý nợ lãi cao); chỉ đầu tư bằng tiền dài hạn sau khi hiểu rõ", "Vay thêm để vừa trả nợ vừa đầu tư"], "answer": 1, "hard": True},
+    ],
+    "N03-05": [
+        {"id": "q305a", "prompt": "Đa dạng hóa danh mục nhằm?", "choices": ["All-in một mã để tối đa lời", "Giảm rủi ro tập trung — không bỏ tất cả vào một chỗ", "Bỏ qua An Toàn vì đã đa dạng"], "answer": 1, "hard": True},
+        {"id": "q305b", "prompt": "Đa dạng hóa thay thế Cổng An Toàn?", "choices": ["Có — đủ để bỏ quỹ khẩn cấp", "Không — An Toàn vẫn trước"], "answer": 1, "hard": True},
+        {"id": "q305c", "prompt": "Bỏ hết tiền vào một kênh vì 'chắc chắn lên'?", "choices": ["Chiến lược hay", "Rủi ro tập trung — trái đa dạng hóa"], "answer": 1, "hard": False},
+    ],
+    "N03-06": [
+        {"id": "q306a", "prompt": "Kế hoạch hướng tới tự do tài chính nên bắt đầu từ đâu?", "choices": ["All-in ngay kênh lời cao", "Định mức sống chấp nhận được, đo khoảng cách, gắn mốc có An Toàn làm nền", "Chờ giàu rồi mới lập kế hoạch"], "answer": 1, "hard": True},
+        {"id": "q306b", "prompt": "Kế hoạch tốt cần?", "choices": ["Mốc cụ thể, số liệu, thứ tự ưu tiên (An Toàn → rồi tăng trưởng)", "Chỉ cảm xúc FOMO", "Bỏ quỹ để tăng tốc"], "answer": 0, "hard": False},
+        {"id": "q306c", "prompt": "Có nên bỏ lớp đệm An Toàn để 'tăng tốc' kế hoạch tự do?", "choices": ["Nên — nhanh hơn", "Không — giữ An Toàn làm nền"], "answer": 1, "hard": False},
+    ],
+    "N03-07": [
+        {"id": "q307a", "prompt": "Rủi ro phổ biến khi theo đuổi tự do tài chính?", "choices": ["Giữ quỹ khẩn cấp quá lâu", "All-in / vay để đầu tư / bỏ An Toàn vì lời hứa giàu nhanh", "Học nguyên tắc trước khi đầu tư"], "answer": 1, "hard": True},
+        {"id": "q307b", "prompt": "Khi thấy 'lãi cao + không rủi ro', nên?", "choices": ["Tin và all-in", "Dừng lại suy nghĩ — tín hiệu cảnh báo"], "answer": 1, "hard": True},
+        {"id": "q307c", "prompt": "Ai chịu trách nhiệm quyết định cuối trên hành trình tự do tài chính?", "choices": ["User", "Agent quyết thay"], "answer": 0, "hard": False},
+    ],
+
 }
 
 _PROFILES: dict[str, dict[str, Any]] = {}
@@ -355,12 +477,15 @@ def _refresh_badges(p: dict[str, Any]) -> None:
     re_cuc = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M01_NODE_IDS)
     fund = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-01", "N02-02", "N02-03"))
     debt = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-04", "N02-05", "N02-06", "N02-07"))
+    tu_do = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M03_NODE_IDS)
     if re_cuc and BADGE_RE_CUC not in p["badges"]:
         p["badges"].append(BADGE_RE_CUC)
     if fund and "An Toàn — Quỹ" not in p["badges"]:
         p["badges"].append("An Toàn — Quỹ")
     if debt and "An Toàn — Nợ" not in p["badges"]:
         p["badges"].append("An Toàn — Nợ")
+    if tu_do and BADGE_TU_DO not in p["badges"]:
+        p["badges"].append(BADGE_TU_DO)
 
 
 def _public_questions(node_id: str) -> list[dict[str, Any]]:

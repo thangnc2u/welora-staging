@@ -72,7 +72,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
     <div class="meta" id="debtTitle">Trả nợ</div>
     <div class="bar"><i id="debtBarFill" style="width:0%"></i></div>
     <div class="meta" id="debtMeta">Chưa có mục tiêu trả nợ</div>
-    <p><a id="ctaGoalsDebt" href="/app/goals">Mở Mục tiêu</a></p>
+    <p><a id="ctaGoalsDebt" href="/app/goals?focus=debt">Mở Mục tiêu · Trả nợ</a></p>
   </div>
 </div>
 <script src="/static/money.js"></script>
@@ -172,8 +172,8 @@ function renderGateChecklist(passed){
       key:'dangerous_debt',
       label:'Nợ nguy hiểm đã xử lý',
       ok:passed || !reasons.has('dangerous_debt_unhandled'),
-      ctaHref:'/app/goals',
-      ctaText:'Mở Mục tiêu'
+      ctaHref:'/app/goals?focus=debt',
+      ctaText:'Tạo mục tiêu trả nợ'
     });
   }
   addCheckItem(box,{
@@ -216,6 +216,7 @@ function render(){
   const dm=document.getElementById("debtMeta");
   const db=document.getElementById("debtBarFill");
   const link=document.getElementById("ctaGoalsDebt");
+  if(link) link.href="/app/goals?focus=debt";
   if(state.debt){
     dt.textContent=state.debt.title||"Trả nợ nguy hiểm";
     const paid=state.debt.current&&state.debt.current.amount||0;
@@ -223,12 +224,12 @@ function render(){
     const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
     dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+WeloraMoney.formatPct(pct);
     db.style.width=pct+"%";
-    link.textContent="Mở Mục tiêu";
+    link.textContent="Mở Mục tiêu · Trả nợ";
   }else{
     dt.textContent="Trả nợ";
     dm.textContent="Chưa có mục tiêu trả nợ";
     db.style.width="0%";
-    link.textContent="Tạo trả nợ ở Mục tiêu";
+    link.textContent="Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ";
   }
 }
 document.getElementById("masteryState").onchange=async e=>{

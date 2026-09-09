@@ -22,12 +22,15 @@ button:disabled{opacity:.55}
 .err{color:#ff6b6b}
 .chips{display:flex;gap:8px;margin-top:8px}
 .chips button{margin:0;padding:8px 10px;background:#243041}
+.card.focus-debt{border-color:#f59e0b;box-shadow:0 0 0 1px #f59e0b}
+.banner{background:#1f2937;border:1px solid #f59e0b;border-radius:12px;padding:12px;margin:10px 0;color:#fde68a;font-size:14px}
 </style>
 </head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Mục tiêu</h1>
 <p class="muted">Quỹ khẩn cấp 3 tháng · Trả nợ nguy hiểm</p>
+<div class="banner" id="debtFocusBanner" hidden>Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ</div>
 <div id="goalList"></div>
 <div class="card" id="debtBox">
   <div class="label">Tạo mục tiêu trả nợ</div>
@@ -352,14 +355,33 @@ document.getElementById('addBtn').addEventListener('click', async()=>{
     if(selectedGoal()) btn.disabled=false;
   }
 });
+function applyDebtFocus(){
+  const q=new URLSearchParams(location.search);
+  const hash=(location.hash||'').replace(/^#/,'');
+  if(q.get('focus')!=='debt' && hash!=='debtForm') return;
+  const banner=document.getElementById('debtFocusBanner');
+  const box=document.getElementById('debtBox');
+  const form=document.getElementById('debtForm');
+  if(banner) banner.hidden=false;
+  if(box){
+    box.classList.add('focus-debt');
+    try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_e){ box.scrollIntoView(); }
+  }
+  if(form && !form.hidden){
+    const input=document.getElementById('debtTarget');
+    if(input) try{ input.focus(); }catch(_e){}
+  }
+}
 (async()=>{
   try{
     const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
     const a=await auth.json();
     uid=a.user_id||a.user||'';
     await loadList();
+    applyDebtFocus();
   }catch(e){
     showEmpty();
+    applyDebtFocus();
   }
 })();
 </script>

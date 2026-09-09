@@ -10,7 +10,7 @@ body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16p
 label{display:block;margin:8px 0 4px;color:#8b9bb4;font-size:13px}
 input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;box-sizing:border-box}
 button,a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
-button.secondary{background:#243041}
+button.secondary,a.btn.secondary{background:#243041}
 button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:13px}
 .hidden{display:none}
@@ -112,7 +112,9 @@ button:disabled{opacity:.55}
 <div class="card hidden" id="step5">
   <h2>Tạo quỹ khẩn cấp</h2>
   <p class="muted" id="summary"></p>
+  <p class="muted" id="debtHint" hidden>Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ sau khi tạo quỹ.</p>
   <button type="button" id="ctaGoal">Tạo quỹ 3 tháng</button>
+  <a class="btn secondary" id="ctaDebt" href="/app/goals?focus=debt" hidden>Tạo mục tiêu trả nợ</a>
   <p class="err" id="err5"></p>
 </div>
 
@@ -185,6 +187,12 @@ document.getElementById('next4').onclick=async()=>{
   const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
   document.getElementById('summary').textContent=
     lsText+' · Chi tiêu thiết yếu: '+WeloraMoney.formatVnd(essential)+'/tháng · Mục tiêu quỹ: 3 tháng.';
+  const needsDebt=document.getElementById('priority').value==='debt'||document.getElementById('debt').value==='true';
+  const hint=document.getElementById('debtHint');
+  const debtLink=document.getElementById('ctaDebt');
+  hint.hidden=!needsDebt;
+  debtLink.hidden=!needsDebt;
+  if(needsDebt && uid) debtLink.href='/app/goals?focus=debt&user_id='+encodeURIComponent(uid);
   show(5);
 };
 document.getElementById('ctaGoal').onclick=async()=>{
@@ -195,7 +203,15 @@ document.getElementById('ctaGoal').onclick=async()=>{
   ctaBusy=true;
   btn.disabled=true;
   try{
-    await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
+    const done=await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
+    let debtHref=null;
+    try{
+      const completed=await done.json();
+      if(completed&&completed.debt_cta&&completed.debt_cta.href){
+        debtHref=completed.debt_cta.href+(completed.debt_cta.href.indexOf('?')>=0?'&':'?')+'user_id='+encodeURIComponent(uid);
+      }
+    }catch(_e){}
+    const needsDebt=!!debtHref||document.getElementById('priority').value==='debt'||document.getElementById('debt').value==='true';
     const essential=essVal();
     const r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       user_id:uid,
@@ -205,7 +221,11 @@ document.getElementById('ctaGoal').onclick=async()=>{
       linked_from_onboarding:true
     })});
     if(r.ok || r.status===409){
-      location.href='/app/safety?user_id='+encodeURIComponent(uid);
+      if(needsDebt){
+        location.href=debtHref||('/app/goals?focus=debt&user_id='+encodeURIComponent(uid));
+      }else{
+        location.href='/app/safety?user_id='+encodeURIComponent(uid);
+      }
       return;
     }
     let msg='Không tạo được quỹ khẩn cấp';

@@ -205,7 +205,11 @@ def complete_session(session_id: str) -> dict[str, Any]:
     s.constitution_id = constitution["constitution_id"]
     s.current_step = 5
 
-    essential = (dna["financial_snapshot_self"].get("essential_expense_monthly") or 0)
+    snap = dna["financial_snapshot_self"]
+    essential = snap.get("essential_expense_monthly") or 0
+    has_dangerous_debt_self = bool(snap.get("has_dangerous_debt_self"))
+    near_term_priority = snap.get("near_term_priority")
+    needs_debt_cta = near_term_priority == "debt" or has_dangerous_debt_self
     cta = {
         "code": "create_emergency_fund_goal",
         "prefill_body": {
@@ -222,6 +226,15 @@ def complete_session(session_id: str) -> dict[str, Any]:
         "reason": "Hiến pháp Cá nhân đã xác nhận — tạo Goal quỹ khẩn cấp trên WeloraOS.",
         "principle_key": "SAFE-01",
     }
+    # Clear VI CTA only — never auto-POST debt_payoff (user enters amount on Goals).
+    debt_cta = None
+    if needs_debt_cta:
+        debt_cta = {
+            "code": "open_debt_payoff_form",
+            "href": "/app/goals?focus=debt",
+            "reason": "Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ",
+            "principle_key": "DEBT-01",
+        }
     return {
         "session": s.to_dict(),
         "dna": dna,
@@ -235,6 +248,7 @@ def complete_session(session_id: str) -> dict[str, Any]:
             "current_amount": 0,
         },
         "os_nudge": os_nudge,
+        "debt_cta": debt_cta,
     }
 
 

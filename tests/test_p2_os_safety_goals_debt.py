@@ -24,7 +24,7 @@ class TestP2OsSafetyGoalsDebt(unittest.TestCase):
         self.assertIn('id="debtCard"', HTML)
         self.assertIn('id="debtMeta"', HTML)
         self.assertIn('id="ctaGoalsDebt"', HTML)
-        self.assertIn('href="/app/goals"', HTML)
+        self.assertIn('href="/app/goals?focus=debt"', HTML)
         self.assertIn("Chưa có mục tiêu trả nợ", HTML)
         self.assertIn("type=debt_payoff", HTML)
         self.assertNotIn("essential_expense_monthly:ess,type:\"debt_payoff\"", HTML)

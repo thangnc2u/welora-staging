@@ -90,7 +90,7 @@ class TestP2AcademyM01ReCuc(unittest.TestCase):
         # modules grouping present
         self.assertTrue(tree.get("modules"))
         titles = [m["title"] for m in tree["modules"]]
-        self.assertEqual(titles, ["Rễ Cục", "An Toàn Tài Chính", "Tự Do Tài Chính", "Bền Vững & Di Sản"])
+        self.assertEqual(titles, ["Rễ Cục", "An Toàn Tài Chính", "Tự Do Tài Chính", "Bền Vững & Di Sản", "Kết Nối & Thực Hành"])
         flat_ids = [n["node_id"] for n in tree["nodes"]]
         self.assertIn("N01-01", flat_ids)
         self.assertIn("N02-01", flat_ids)
@@ -120,6 +120,7 @@ class TestP2AcademyM01ReCuc(unittest.TestCase):
         self.assertIn("An Toàn Tài Chính", html)
         self.assertIn("Tự Do Tài Chính", html)
         self.assertIn("Bền Vững & Di Sản", html)
+        self.assertIn("Kết Nối & Thực Hành", html)
         self.assertIn("data.modules", html)
         self.assertIn("modHead", html)
         self.assertIn("baiLabel", html)

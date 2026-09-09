@@ -73,9 +73,9 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
         self.assertEqual(GATE_NODE, "N02-02")
         self.assertEqual(
             [(m["module_id"], m["order"]) for m in MODULES],
-            [("M01", 1), ("M02", 2), ("M03", 3), ("M04", 4)],
+            [("M01", 1), ("M02", 2), ("M03", 3), ("M04", 4), ("M05", 5)],
         )
-        self.assertEqual(len(NODES), 28)
+        self.assertEqual(len(NODES), 35)
 
     def test_kuat_pass_awards_xp(self):
         out = submit_kuat("u-m03", "N03-01", _correct("N03-01"))
@@ -96,7 +96,7 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
         self.assertIn(BADGE_TU_DO, tree["badges"])
         self.assertEqual(tree["xp"], XP_PER_PASS * 7)
         titles = [m["title"] for m in tree["modules"]]
-        self.assertEqual(titles, ["Rễ Cục", "An Toàn Tài Chính", "Tự Do Tài Chính", "Bền Vững & Di Sản"])
+        self.assertEqual(titles, ["Rễ Cục", "An Toàn Tài Chính", "Tự Do Tài Chính", "Bền Vững & Di Sản", "Kết Nối & Thực Hành"])
         flat_ids = [n["node_id"] for n in tree["nodes"]]
         self.assertIn("N03-01", flat_ids)
         self.assertIn("N01-01", flat_ids)
@@ -145,6 +145,7 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
         self.assertIn("An Toàn Tài Chính", html)
         self.assertIn("Tự Do Tài Chính", html)
         self.assertIn("Bền Vững & Di Sản", html)
+        self.assertIn("Kết Nối & Thực Hành", html)
         self.assertIn("data.modules", html)
         self.assertIn("modHead", html)
         self.assertIn("baiLabel", html)

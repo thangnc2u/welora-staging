@@ -1,4 +1,4 @@
-"""Welorademy M01 Rễ Cục + M02 An Toàn + M03 Tự Do + M04 Bền Vững & Di Sản — cây ngữ nghĩa + cổng KUAT."""
+"""Welorademy M01 Rễ Cục + M02 An Toàn + M03 Tự Do + M04 Bền Vững & Di Sản + M05 Kết Nối & Thực Hành — cây ngữ nghĩa + cổng KUAT."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ M03_MODULE_ID = "M03"
 M03_MODULE_TITLE = "Tự Do Tài Chính"
 M04_MODULE_ID = "M04"
 M04_MODULE_TITLE = "Bền Vững & Di Sản"
+M05_MODULE_ID = "M05"
+M05_MODULE_TITLE = "Kết Nối & Thực Hành"
 XP_PER_PASS = 20
 GATE_NODE = "N02-02"
 MASTERY_NODE = "no_efund_invest"
@@ -29,6 +31,7 @@ MODULES: list[dict[str, Any]] = [
     {"module_id": MODULE_ID, "title": MODULE_TITLE, "order": 2},
     {"module_id": M03_MODULE_ID, "title": M03_MODULE_TITLE, "order": 3},
     {"module_id": M04_MODULE_ID, "title": M04_MODULE_TITLE, "order": 4},
+    {"module_id": M05_MODULE_ID, "title": M05_MODULE_TITLE, "order": 5},
 ]
 
 M01_NODES: list[dict[str, Any]] = [
@@ -353,7 +356,88 @@ M04_NODES: list[dict[str, Any]] = [
     },
 ]
 
-NODES: list[dict[str, Any]] = M01_NODES + M02_NODES + M03_NODES + M04_NODES
+
+M05_NODES: list[dict[str, Any]] = [
+    {
+        "node_id": "N05-01",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Chuyển kiến thức thành hành động",
+        "lesson_id": "WA-05-01",
+        "principle_key": "ACT-01",
+        "core_map": ["CORE-01", "CORE-10"],
+        "prereq_node_ids": [],
+        "order": 1,
+    },
+    {
+        "node_id": "N05-02",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Xây dựng thói quen tài chính",
+        "lesson_id": "WA-05-02",
+        "principle_key": "HABIT-01",
+        "core_map": ["CORE-01", "CORE-10"],
+        "prereq_node_ids": ["N05-01"],
+        "order": 2,
+    },
+    {
+        "node_id": "N05-03",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Theo dõi và điều chỉnh kế hoạch",
+        "lesson_id": "WA-05-03",
+        "principle_key": "ADJUST-01",
+        "core_map": ["CORE-05", "CORE-10"],
+        "prereq_node_ids": ["N05-02"],
+        "order": 3,
+    },
+    {
+        "node_id": "N05-04",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Ra quyết định tài chính hàng ngày",
+        "lesson_id": "WA-05-04",
+        "principle_key": "DECIDE-01",
+        "core_map": ["CORE-01", "CORE-07"],
+        "prereq_node_ids": ["N05-03"],
+        "order": 4,
+    },
+    {
+        "node_id": "N05-05",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Cộng đồng và học hỏi cùng nhau",
+        "lesson_id": "WA-05-05",
+        "principle_key": "PEER-01",
+        "core_map": ["CORE-01", "CORE-10"],
+        "prereq_node_ids": ["N05-04"],
+        "order": 5,
+    },
+    {
+        "node_id": "N05-06",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Sử dụng công cụ và hệ thống hỗ trợ",
+        "lesson_id": "WA-05-06",
+        "principle_key": "TOOLS-01",
+        "core_map": ["CORE-10"],
+        "prereq_node_ids": ["N05-05"],
+        "order": 6,
+    },
+    {
+        "node_id": "N05-07",
+        "module_id": M05_MODULE_ID,
+        "module_title": M05_MODULE_TITLE,
+        "title": "Duy trì động lực dài hạn",
+        "lesson_id": "WA-05-07",
+        "principle_key": "DRIVE-01",
+        "core_map": ["CORE-10", "CORE-01"],
+        "prereq_node_ids": ["N05-06"],
+        "order": 7,
+    },
+]
+
+NODES: list[dict[str, Any]] = M01_NODES + M02_NODES + M03_NODES + M04_NODES + M05_NODES
 
 _NODE_BY_ID = {n["node_id"]: n for n in NODES}
 
@@ -362,9 +446,11 @@ DEBT_NODES = ("N02-04", "N02-05", "N02-06", "N02-07")
 M01_NODE_IDS = tuple(n["node_id"] for n in M01_NODES)
 M03_NODE_IDS = tuple(n["node_id"] for n in M03_NODES)
 M04_NODE_IDS = tuple(n["node_id"] for n in M04_NODES)
+M05_NODE_IDS = tuple(n["node_id"] for n in M05_NODES)
 BADGE_RE_CUC = "Rễ Cục"
 BADGE_TU_DO = "Tự Do Tài Chính"
 BADGE_BEN_VUNG = "Bền Vững & Di Sản"
+BADGE_KET_NOI = "Kết Nối & Thực Hành"
 
 def nodes_for_principle(key: str) -> list[str]:
     """Map principle_key / CORE code → node_id trên cây M02."""
@@ -543,6 +629,41 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q407b", "prompt": "Khi tích lũy quá mức làm khổ hiện tại, hướng điều chỉnh?", "choices": ["Giữ An Toàn, điều chỉnh tỷ lệ tiết kiệm/tiêu dùng theo giá trị sống", "Bỏ quỹ khẩn cấp để vui hơn", "Vay để vừa tích lũy vừa tiêu"], "answer": 0, "hard": False},
         {"id": "q407c", "prompt": "Chất lượng sống có thay thế lớp An Toàn?", "choices": ["Có", "Không — An Toàn vẫn là nền"], "answer": 1, "hard": False},
     ],
+    "N05-01": [
+        {"id": "q501a", "prompt": "Cách thu hẹp khoảng cách biết → làm hiệu quả nhất?", "choices": ["Đọc thêm nhiều sách rồi mới bắt đầu", "Chọn một hành động đủ nhỏ và rõ trong 7 ngày, rồi đánh giá lại — không phá An Toàn", "Đặt mục tiêu all-in quỹ 6 tháng ngay tuần này"], "answer": 1, "hard": True},
+        {"id": "q501b", "prompt": "Hành động đầu tiên tốt nên có đặc điểm nào?", "choices": ["Đủ rõ, đủ nhỏ, có phản hồi sớm", "Càng lớn càng tốt", "Chỉ cảm xúc quyết tâm"], "answer": 0, "hard": False},
+        {"id": "q501c", "prompt": "Chờ 'ổn định hơn' rồi mới làm thường dẫn tới?", "choices": ["Bắt đầu sớm hơn", "Trì hoãn kéo dài"], "answer": 1, "hard": False},
+    ],
+    "N05-02": [
+        {"id": "q502a", "prompt": "Xây thói quen tài chính bền nên bắt đầu thế nào?", "choices": ["Ép thay đổi 10 thói quen cùng lúc", "Một thói quen nhỏ lặp lại (vd. chuyển đều vào quỹ) — giữ An Toàn làm nền, tránh all-in vì hứng", "Bỏ quỹ khẩn cấp để 'tập kỷ luật mạnh'"], "answer": 1, "hard": True},
+        {"id": "q502b", "prompt": "Thói quen tốt thường gắn với?", "choices": ["Mốc thời gian / trigger rõ + phần thưởng nhỏ hợp lý", "Chỉ dựa vào ý chí mỗi sáng", "FOMO mạng xã hội"], "answer": 0, "hard": False},
+        {"id": "q502c", "prompt": "Thất bại một ngày với thói quen nghĩa là?", "choices": ["Bỏ hết chương trình", "Quay lại lần sau — không all-in bù đắp bằng rủi ro"], "answer": 1, "hard": False},
+    ],
+    "N05-03": [
+        {"id": "q503a", "prompt": "Theo dõi và điều chỉnh kế hoạch nghĩa là?", "choices": ["Đổi kế hoạch mỗi ngày theo tin nóng", "Đo tiến độ định kỳ, chỉnh vừa sức — không phá An Toàn / all-in đuổi kịp", "Bỏ kế hoạch khi lệch một lần"], "answer": 1, "hard": True},
+        {"id": "q503b", "prompt": "Khi kế hoạch lệch nhẹ, hướng xử lý hợp lý?", "choices": ["Giữ An Toàn, điều chỉnh mốc / mức đóng góp", "Vay nóng để đuổi kịp ngay", "All-in kênh lời cao"], "answer": 0, "hard": True},
+        {"id": "q503c", "prompt": "Theo dõi có ích khi?", "choices": ["Có số liệu và nhịp xem lại cố định", "Chỉ cảm giác 'đang ổn'"], "answer": 0, "hard": False},
+    ],
+    "N05-04": [
+        {"id": "q504a", "prompt": "Ra quyết định tài chính hàng ngày nên ưu tiên gì?", "choices": ["Theo FOMO / lời hứa lãi cao", "Khớp với ngân sách và lớp An Toàn — không all-in vì cơ hội nóng", "Quyết nhanh không cần nghĩ"], "answer": 1, "hard": True},
+        {"id": "q504b", "prompt": "Trước khi chi lớn ngoài kế hoạch, nên?", "choices": ["Hỏi: có phá quỹ khẩn cấp / An Toàn không? Có chờ 24–48h?", "Mua ngay kẻo lỡ", "Vay tiêu dùng để không đụng tiết kiệm"], "answer": 0, "hard": True},
+        {"id": "q504c", "prompt": "Quyết định nhỏ lặp lại ảnh hưởng thế nào?", "choices": ["Ít ảnh hưởng tổng thể", "Tạo quỹ đạo lớn theo thời gian"], "answer": 1, "hard": False},
+    ],
+    "N05-05": [
+        {"id": "q505a", "prompt": "Học hỏi cùng cộng đồng hữu ích khi?", "choices": ["Copy all-in chiến lược người khác không xét An Toàn của mình", "Trao đổi kinh nghiệm, giữ quyết định cuối thuộc về bạn và lớp An Toàn", "Tin mọi tip lãi cao trên nhóm"], "answer": 1, "hard": True},
+        {"id": "q505b", "prompt": "Peer learning tốt nên kèm?", "choices": ["Câu hỏi phản biện và kiểm chứng nguồn", "Chỉ like và FOMO", "Ép nhau all-in cùng một mã"], "answer": 0, "hard": False},
+        {"id": "q505c", "prompt": "Ai chịu trách nhiệm quyết định cuối khi học cùng nhóm?", "choices": ["Admin nhóm", "Bạn — không giao An Toàn cho đám đông"], "answer": 1, "hard": False},
+    ],
+    "N05-06": [
+        {"id": "q506a", "prompt": "Công cụ / hệ thống hỗ trợ (app, Goal, ngân sách) nên dùng thế nào?", "choices": ["Thay thế hoàn toàn kỷ luật và An Toàn", "Giảm ma sát thực hành — nhắc nhở, theo dõi — không khuyến khích all-in", "Càng nhiều app càng tốt dù rối"], "answer": 1, "hard": True},
+        {"id": "q506b", "prompt": "Chọn công cụ phù hợp bắt đầu từ?", "choices": ["Nhu cầu thật (theo dõi / Goal / nhắc) rồi giữ đơn giản", "App đắt nhất", "Bot trade tự động all-in"], "answer": 0, "hard": False},
+        {"id": "q506c", "prompt": "Công cụ có thay quỹ khẩn cấp?", "choices": ["Có", "Không — An Toàn vẫn cần lớp đệm thật"], "answer": 1, "hard": False},
+    ],
+    "N05-07": [
+        {"id": "q507a", "prompt": "Duy trì động lực dài hạn nên dựa vào?", "choices": ["Hứng FOMO và all-in theo sóng", "Mốc nhỏ lặp lại, nhìn tiến bộ, giữ An Toàn làm nền — không đốt hết vì 'một lần nữa'", "Chỉ mục tiêu khổng lồ không chia nhỏ"], "answer": 1, "hard": True},
+        {"id": "q507b", "prompt": "Khi mất động lực, hướng phục hồi lành mạnh?", "choices": ["Quay lại hành động đủ nhỏ + ôn lại vì sao bắt đầu", "Bỏ An Toàn để 'reset mạnh'", "All-in một cú để lấy lại cảm giác thắng"], "answer": 0, "hard": True},
+        {"id": "q507c", "prompt": "Động lực bền thường đi kèm?", "choices": ["Hệ thống và thói quen, không chỉ cảm xúc", "Chỉ chờ cảm hứng"], "answer": 0, "hard": False},
+    ],
 
 }
 
@@ -600,6 +721,7 @@ def _refresh_badges(p: dict[str, Any]) -> None:
     debt = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-04", "N02-05", "N02-06", "N02-07"))
     tu_do = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M03_NODE_IDS)
     ben_vung = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M04_NODE_IDS)
+    ket_noi = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M05_NODE_IDS)
     if re_cuc and BADGE_RE_CUC not in p["badges"]:
         p["badges"].append(BADGE_RE_CUC)
     if fund and "An Toàn — Quỹ" not in p["badges"]:
@@ -610,6 +732,8 @@ def _refresh_badges(p: dict[str, Any]) -> None:
         p["badges"].append(BADGE_TU_DO)
     if ben_vung and BADGE_BEN_VUNG not in p["badges"]:
         p["badges"].append(BADGE_BEN_VUNG)
+    if ket_noi and BADGE_KET_NOI not in p["badges"]:
+        p["badges"].append(BADGE_KET_NOI)
 
 
 def _public_questions(node_id: str) -> list[dict[str, Any]]:

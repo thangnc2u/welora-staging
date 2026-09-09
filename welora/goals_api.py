@@ -197,7 +197,26 @@ def _mastery_block(flags: dict) -> dict:
     }
 
 
+def _dna_has_dangerous_debt_self(user_id: str) -> bool:
+    """Onboarding self-report: financial_snapshot_self.has_dangerous_debt_self."""
+    try:
+        from welora.onboarding import get_dna
+
+        dna = get_dna(user_id) or {}
+        snap = dna.get("financial_snapshot_self") or {}
+        return bool(snap.get("has_dangerous_debt_self"))
+    except Exception:
+        return False
+
+
 def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
+    """Merge DNA self-report + debt_payoff goal into gate debt flags.
+
+    DNA has_dangerous_debt_self=true with no completed/on-track debt_payoff
+    keeps has_dangerous_debt=true and debt_on_track=false → dangerous_debt_unhandled.
+    Does not auto-create debt goals from near_term_priority.
+    """
+    dna_debt = _dna_has_dangerous_debt_self(user_id)
     debt = None
     if hasattr(STORE, "get_debt_for_user"):
         try:
@@ -207,10 +226,13 @@ def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
     if debt:
         from welora.goal_debt_payoff import debt_on_track_from_goal, has_dangerous_debt_from_goal
 
-        flags["has_dangerous_debt"] = has_dangerous_debt_from_goal(debt)
+        flags["has_dangerous_debt"] = dna_debt or has_dangerous_debt_from_goal(debt)
         flags["debt_on_track"] = debt_on_track_from_goal(debt)
         flags["debt_goal_id"] = debt.goal_id
         flags["debt_goal_progress_percent"] = debt.percent
+    elif dna_debt:
+        flags["has_dangerous_debt"] = True
+        flags["debt_on_track"] = False
     return flags
 
 

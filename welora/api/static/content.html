@@ -46,9 +46,16 @@ const elBody=document.getElementById('contentBody');
 const elGov=document.getElementById('govMeta');
 function viTag(pk){
   var k=String(pk||'');
+  if(k.indexOf('MIND-')===0) return 'Tư duy';
+  if(k.indexOf('FLOW-')===0) return 'Dòng tiền';
+  if(k.indexOf('BUDG-')===0) return 'Ngân sách';
+  if(k.indexOf('TRACK-')===0) return 'Theo dõi';
+  if(k.indexOf('GOAL-')===0) return 'Mục tiêu';
+  if(k.indexOf('TIME-')===0) return 'Thời gian';
   if(k.indexOf('SAFE-')===0) return 'An toàn';
   if(k.indexOf('DEBT-')===0) return 'Nợ';
   if(k.indexOf('CORE-')===0) return 'Cốt lõi';
+  if(k.indexOf('TAX-')===0) return 'Thuế';
   return '';
 }
 function setKeyTag(el, pk){
@@ -175,11 +182,9 @@ function renderMarkdown(root, md){
     elKey.textContent='danh sách';
     elTitle.textContent='Welorapedia';
     elBody.textContent='';
-    const h=document.createElement('p');
-    h.textContent='An Toàn Tài Chính';
-    elBody.appendChild(h);
-    const pack=(j.modules&&j.modules['02']&&j.modules['02'].items)||(j.items||[]).filter(i=>i.module==='02');
-    pack.forEach(i=>{
+    const mods=j.modules||{};
+    const mids=Object.keys(mods).sort(function(a,b){return (Number(a)||0)-(Number(b)||0);});
+    function renderItem(i){
       const p=document.createElement('p');
       const t=viTag(i.principle_key);
       if(t){
@@ -193,7 +198,18 @@ function renderMarkdown(root, md){
       a.textContent=i.title||'';
       p.appendChild(a);
       elBody.appendChild(p);
-    });
+    }
+    if(mids.length){
+      mids.forEach(function(mid){
+        const mod=mods[mid]||{};
+        const h=document.createElement('p');
+        h.textContent=mod.title||('Module '+mid);
+        elBody.appendChild(h);
+        (mod.items||[]).forEach(renderItem);
+      });
+    }else{
+      (j.items||[]).forEach(renderItem);
+    }
     return;
   }
   const r=await fetch('/content/'+encodeURIComponent(key));

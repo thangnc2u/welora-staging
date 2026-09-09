@@ -17,26 +17,38 @@ button{background:#0f766e;color:#fff;border:0;font-weight:600}
 a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
 .hs-note{font-size:11px;color:#c2410c;background:#fff7ed;border-radius:8px;padding:8px;margin-top:8px}
 .hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:#374151}
+.check-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;margin:8px 0;background:#fff}
+.check-item.ok{background:#ecfdf5;border-color:#a7f3d0}
+.check-item.fail{background:#fff7ed;border-color:#fed7aa}
+.check-row{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.check-label{font-weight:600;font-size:14px}
+.check-state{font-size:12px;color:#6b7280}
+.check-item a.cta{display:inline-block;margin-top:4px;font-weight:600}
+#ctaGateChat{display:block;margin:10px 0 14px;padding:12px;border-radius:12px;background:#0f766e;color:#fff;text-align:center;text-decoration:none;font-weight:700}
+#ctaGateChat[hidden]{display:none}
+#masteryState[hidden]{display:none}
 </style></head><body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <div class="shell">
   <h1>An Toàn</h1>
-  <div class="section-title">Danh sách</div>
+  <div class="section-title">Checklist cổng</div>
   <div id="gateCard" class="badge-card fail"><div class="status" id="gateStatus">CHƯA ĐẠT</div><div class="meta" id="gateMeta"></div></div>
+  <div id="gateChecklist"></div>
+  <a id="ctaGateChat" href="/app/chat" hidden>Chat với Agent</a>
   <div class="badge-card fail" id="masteryBadge">
     <div class="status" id="masteryStatus">Hiểu nguyên tắc · —</div>
     <div class="meta" id="masteryMeta">Cổng kiến thức: chưa</div>
-    <select id="masteryState">
+    <select id="masteryState" hidden>
       <option value="not_started">Chưa bắt đầu</option><option value="learning">Đang học</option>
       <option value="familiar">Quen thuộc</option><option value="apply">Áp dụng</option><option value="mastered">Thành thạo</option>
     </select>
-    <p><a href="/app/content?key=SAFE-02">Học: Khi nào được dùng quỹ</a></p>
+    <p><a id="ctaMasteryLearn" href="/app/academy">Học trên Welorademy</a> · <a href="/app/content?key=SAFE-02">An Toàn · Khi nào được dùng quỹ</a></p>
   </div>
   <div class="section-title">Điểm sức khỏe</div>
   <div class="hs-card" id="hsCard"><div id="hsScore">— / 1000</div><div id="hsBars"></div>
     <div class="hs-note">Điểm không bỏ qua Cổng An Toàn</div></div>
   <div class="section-title">Mục tiêu</div>
-  <div class="goal-card">
+  <div class="goal-card" id="goalCard">
     <div class="bar"><i id="barFill" style="width:0%"></i></div>
     <div class="meta" id="goalMeta">Chưa có quỹ khẩn cấp</div>
     <label>Chi tiêu thiết yếu / tháng</label>
@@ -120,17 +132,73 @@ function renderHsBars(components){
     box.appendChild(row);
   });
 }
+function addCheckItem(box, item){
+  const el=document.createElement('div');
+  el.className='check-item '+(item.ok?'ok':'fail');
+  el.dataset.key=item.key;
+  const row=document.createElement('div');
+  row.className='check-row';
+  const lab=document.createElement('div');
+  lab.className='check-label';
+  lab.textContent=item.label;
+  const stEl=document.createElement('div');
+  stEl.className='check-state';
+  stEl.textContent=item.ok?'Đạt':'Chưa';
+  row.appendChild(lab); row.appendChild(stEl);
+  el.appendChild(row);
+  if(!item.ok && item.ctaHref && item.ctaText){
+    const a=document.createElement('a');
+    a.className='cta';
+    a.href=item.ctaHref;
+    a.textContent=item.ctaText;
+    el.appendChild(a);
+  }
+  box.appendChild(el);
+}
+function renderGateChecklist(passed){
+  const box=document.getElementById('gateChecklist');
+  box.textContent='';
+  const reasons=new Set((state.gate&&state.gate.reasons)||[]);
+  const masteryOk=!!(state.mastery&&state.mastery.meets_gate);
+  addCheckItem(box,{
+    key:'emergency_fund',
+    label:'Quỹ khẩn cấp ≥ 3 tháng',
+    ok:passed || !reasons.has('emergency_fund_below_3_months'),
+    ctaHref:'#goalCard',
+    ctaText: state.goal ? 'Cập nhật số dư quỹ' : 'Tạo quỹ khẩn cấp 3 tháng'
+  });
+  if(reasons.has('dangerous_debt_unhandled') || state.debt){
+    addCheckItem(box,{
+      key:'dangerous_debt',
+      label:'Nợ nguy hiểm đã xử lý',
+      ok:passed || !reasons.has('dangerous_debt_unhandled'),
+      ctaHref:'/app/goals',
+      ctaText:'Mở Mục tiêu'
+    });
+  }
+  addCheckItem(box,{
+    key:'mastery',
+    label:'Làm chủ nguyên tắc (Áp dụng trở lên)',
+    ok:passed || masteryOk || !reasons.has('mastery_missing'),
+    ctaHref:'/app/academy',
+    ctaText:'Học trên Welorademy'
+  });
+}
 function render(){
   const passed=state.gate&&state.gate.status==="passed";
   document.getElementById("gateCard").className="badge-card "+(passed?"ok":"fail");
   document.getElementById("gateStatus").textContent=passed?"ĐẠT":"CHƯA ĐẠT";
   document.getElementById("gateMeta").textContent=formatGateReasons(state.gate&&state.gate.reasons, passed);
+  renderGateChecklist(passed);
+  const chat=document.getElementById('ctaGateChat');
+  if(chat) chat.hidden=!passed;
   const st=(state.mastery&&state.mastery.state)||"not_started";
   const ok=!!(state.mastery&&state.mastery.meets_gate);
   document.getElementById("masteryBadge").className="badge-card "+(ok?"ok":"fail");
   document.getElementById("masteryStatus").textContent="Hiểu nguyên tắc · "+(st==="not_started"?"Chưa bắt đầu":st==="learning"?"Đang học":st==="familiar"?"Quen thuộc":st==="apply"?"Áp dụng":st==="mastered"?"Thành thạo":st);
   document.getElementById("masteryMeta").textContent="Cổng kiến thức: "+(ok?"đạt":"chưa");
-  document.getElementById("masteryState").value=st;
+  const ms=document.getElementById("masteryState");
+  if(ms){ ms.value=st; ms.hidden=true; }
   if(state.health){
     document.getElementById("hsScore").textContent=(state.health.score||0)+" / 1000";
     renderHsBars(state.health.components||{});

@@ -64,8 +64,12 @@ function viTag(pk){
   if(k.indexOf('CORE-')===0) return 'Cốt lõi';
   return '';
 }
-function baiLabel(nid){
-  var m=String(nid||'').match(/-(\d+)\s*$/);
+function baiLabel(nOrId){
+  if(nOrId && typeof nOrId==='object'){
+    if(nOrId.order!=null && nOrId.order!=='') return 'Bài '+Number(nOrId.order);
+    nOrId=nOrId.node_id;
+  }
+  var m=String(nOrId||'').match(/-(\d+)\s*$/);
   return m?('Bài '+Number(m[1])):'';
 }
 function setXp(n){
@@ -78,11 +82,12 @@ function showTree(data){
   const box=document.getElementById('tree');
   box.textContent='';
   setXp((data&&data.xp)||0);
-  (data.nodes||[]).forEach(n=>{
+  const nodes=(data.nodes||[]).slice().sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
+  nodes.forEach(n=>{
     const el=document.createElement('div');
     el.className='card';
     const t=document.createElement('div');
-    const b=baiLabel(n.node_id);
+    const b=baiLabel(n);
     if(b){
       const span=document.createElement('span');
       span.className='tag';
@@ -124,7 +129,7 @@ async function openNode(id){
   current=n;
   document.getElementById('tree').hidden=true;
   document.getElementById('lesson').hidden=false;
-  const bai=baiLabel(n.node_id);
+  const bai=baiLabel(n);
   document.getElementById('lessonTitle').textContent=(bai?bai+' · ':'')+(n.title||'');
   document.getElementById('lessonStub').textContent=n.lesson_stub||'';
   const a=document.getElementById('pediaLink');

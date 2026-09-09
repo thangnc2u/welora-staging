@@ -1,4 +1,4 @@
-"""Welorademy M01 Rễ Cục + M02 An Toàn + M03 Tự Do Tài Chính — cây ngữ nghĩa + cổng KUAT."""
+"""Welorademy M01 Rễ Cục + M02 An Toàn + M03 Tự Do + M04 Bền Vững & Di Sản — cây ngữ nghĩa + cổng KUAT."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ M01_MODULE_ID = "M01"
 M01_MODULE_TITLE = "Rễ Cục"
 M03_MODULE_ID = "M03"
 M03_MODULE_TITLE = "Tự Do Tài Chính"
+M04_MODULE_ID = "M04"
+M04_MODULE_TITLE = "Bền Vững & Di Sản"
 XP_PER_PASS = 20
 GATE_NODE = "N02-02"
 MASTERY_NODE = "no_efund_invest"
@@ -26,6 +28,7 @@ MODULES: list[dict[str, Any]] = [
     {"module_id": M01_MODULE_ID, "title": M01_MODULE_TITLE, "order": 1},
     {"module_id": MODULE_ID, "title": MODULE_TITLE, "order": 2},
     {"module_id": M03_MODULE_ID, "title": M03_MODULE_TITLE, "order": 3},
+    {"module_id": M04_MODULE_ID, "title": M04_MODULE_TITLE, "order": 4},
 ]
 
 M01_NODES: list[dict[str, Any]] = [
@@ -269,7 +272,88 @@ M03_NODES: list[dict[str, Any]] = [
     },
 ]
 
-NODES: list[dict[str, Any]] = M01_NODES + M02_NODES + M03_NODES
+
+M04_NODES: list[dict[str, Any]] = [
+    {
+        "node_id": "N04-01",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Hiểu bền vững tài chính",
+        "lesson_id": "WA-04-01",
+        "principle_key": "SUSTAIN-01",
+        "core_map": ["CORE-01", "CORE-10"],
+        "prereq_node_ids": [],
+        "order": 1,
+    },
+    {
+        "node_id": "N04-02",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Bảo hiểm và quản lý rủi ro",
+        "lesson_id": "WA-04-02",
+        "principle_key": "INSURE-01",
+        "core_map": ["CORE-07", "CORE-10"],
+        "prereq_node_ids": ["N04-01"],
+        "order": 2,
+    },
+    {
+        "node_id": "N04-03",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Chuẩn bị tài chính cho tuổi già",
+        "lesson_id": "WA-04-03",
+        "principle_key": "RETIRE-01",
+        "core_map": ["CORE-05", "CORE-10"],
+        "prereq_node_ids": ["N04-02"],
+        "order": 3,
+    },
+    {
+        "node_id": "N04-04",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Dạy con về tiền bạc",
+        "lesson_id": "WA-04-04",
+        "principle_key": "KIDS-01",
+        "core_map": ["CORE-01", "CORE-10"],
+        "prereq_node_ids": ["N04-03"],
+        "order": 4,
+    },
+    {
+        "node_id": "N04-05",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Di sản và thừa kế cơ bản",
+        "lesson_id": "WA-04-05",
+        "principle_key": "LEGACY-01",
+        "core_map": ["CORE-10"],
+        "prereq_node_ids": ["N04-04"],
+        "order": 5,
+    },
+    {
+        "node_id": "N04-06",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Di sản phi tài chính",
+        "lesson_id": "WA-04-06",
+        "principle_key": "LEGACY-SOFT-01",
+        "core_map": ["CORE-10", "CORE-01"],
+        "prereq_node_ids": ["N04-05"],
+        "order": 6,
+    },
+    {
+        "node_id": "N04-07",
+        "module_id": M04_MODULE_ID,
+        "module_title": M04_MODULE_TITLE,
+        "title": "Cân bằng tích lũy và chất lượng sống",
+        "lesson_id": "WA-04-07",
+        "principle_key": "BALANCE-01",
+        "core_map": ["CORE-10", "CORE-05"],
+        "prereq_node_ids": ["N04-06"],
+        "order": 7,
+    },
+]
+
+NODES: list[dict[str, Any]] = M01_NODES + M02_NODES + M03_NODES + M04_NODES
 
 _NODE_BY_ID = {n["node_id"]: n for n in NODES}
 
@@ -277,8 +361,10 @@ FUND_NODES = ("N02-01", "N02-02", "N02-03")
 DEBT_NODES = ("N02-04", "N02-05", "N02-06", "N02-07")
 M01_NODE_IDS = tuple(n["node_id"] for n in M01_NODES)
 M03_NODE_IDS = tuple(n["node_id"] for n in M03_NODES)
+M04_NODE_IDS = tuple(n["node_id"] for n in M04_NODES)
 BADGE_RE_CUC = "Rễ Cục"
 BADGE_TU_DO = "Tự Do Tài Chính"
+BADGE_BEN_VUNG = "Bền Vững & Di Sản"
 
 def nodes_for_principle(key: str) -> list[str]:
     """Map principle_key / CORE code → node_id trên cây M02."""
@@ -422,6 +508,41 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q307b", "prompt": "Khi thấy 'lãi cao + không rủi ro', nên?", "choices": ["Tin và all-in", "Dừng lại suy nghĩ — tín hiệu cảnh báo"], "answer": 1, "hard": True},
         {"id": "q307c", "prompt": "Ai chịu trách nhiệm quyết định cuối trên hành trình tự do tài chính?", "choices": ["User", "Agent quyết thay"], "answer": 0, "hard": False},
     ],
+    "N04-01": [
+        {"id": "q401a", "prompt": "Bền vững tài chính khác An Toàn / Tự Do ở điểm nào?", "choices": ["Chỉ là tên gọi khác của tự do sớm", "Nhìn thêm giai đoạn thu nhập giảm, rủi ro lớn và chuyển giao cho thế hệ sau", "Chỉ dành cho người đã giàu"], "answer": 1, "hard": True},
+        {"id": "q401b", "prompt": "Ba trụ cột bền vững đơn giản gồm?", "choices": ["Bảo vệ – duy trì – chuyển giao", "All-in – FOMO – vay nóng", "Chỉ tích lũy tài sản"], "answer": 0, "hard": False},
+        {"id": "q401c", "prompt": "Có thể bắt đầu bền vững khi chưa giàu?", "choices": ["Không — phải chờ giàu", "Có — bảo hiểm phù hợp, để dành nhỏ đều, trao đổi gia đình"], "answer": 1, "hard": False},
+    ],
+    "N04-02": [
+        {"id": "q402a", "prompt": "Bảo hiểm nên hiểu trước hết là gì?", "choices": ["Cách làm giàu nhanh", "Công cụ quản lý rủi ro lớn — lớp bảo vệ, không thay An Toàn / quỹ khẩn cấp", "Sản phẩm bắt buộc phải mua hết mọi gói"], "answer": 1, "hard": True},
+        {"id": "q402b", "prompt": "Trước khi mua thêm bảo hiểm phức tạp, nên ưu tiên?", "choices": ["An Toàn (quỹ khẩn cấp) + hiểu rủi ro thật sự cần bảo vệ", "All-in gói lời cao do tư vấn", "Bỏ quỹ để trả phí bảo hiểm"], "answer": 0, "hard": True},
+        {"id": "q402c", "prompt": "Bảo hiểm thay thế quỹ khẩn cấp?", "choices": ["Có — đủ rồi", "Không — An Toàn vẫn cần lớp đệm riêng"], "answer": 1, "hard": False},
+    ],
+    "N04-03": [
+        {"id": "q403a", "prompt": "Chuẩn bị tài chính tuổi già nên bắt đầu thế nào?", "choices": ["Đợi giàu rồi mới nghĩ", "Để dành đều đặn sớm, giữ An Toàn làm nền, tránh all-in vì 'đuổi kịp hưu trí'", "Vay nóng để đầu tư hưu trí"], "answer": 1, "hard": True},
+        {"id": "q403b", "prompt": "Khi chưa có quỹ khẩn cấp, ưu tiên hưu trí thế nào?", "choices": ["Bỏ An Toàn để đóng hết vào hưu trí", "Giữ An Toàn trước; đóng góp hưu trí vừa sức bằng tiền dài hạn", "All-in cổ phiếu để bù nhanh"], "answer": 1, "hard": True},
+        {"id": "q403c", "prompt": "Mục tiêu chuẩn bị tuổi già hữu ích cần?", "choices": ["Số tiền / mức sống chấp nhận được + thời hạn + kỷ luật đều", "Chỉ cảm xúc sợ già", "Chờ lương tăng gấp đôi"], "answer": 0, "hard": False},
+    ],
+    "N04-04": [
+        {"id": "q404a", "prompt": "Dạy con về tiền nên bắt đầu từ đâu?", "choices": ["Chỉ đưa tiền khi xin, không giải thích", "Theo độ tuổi: chi tiêu – tiết kiệm – chia sẻ có chủ đích", "Ép con all-in đầu tư sớm"], "answer": 1, "hard": True},
+        {"id": "q404b", "prompt": "Mục tiêu dạy con về tiền là?", "choices": ["Truyền thói quen và giá trị, không chỉ số dư", "Khiến con giàu nhanh hơn bố mẹ", "Giấu hoàn toàn chuyện tiền bạc"], "answer": 0, "hard": False},
+        {"id": "q404c", "prompt": "Cho con tiêu không giới hạn để 'học hỏi'?", "choices": ["Ổn — tự học được", "Không — cần khung rõ ràng và trò chuyện"], "answer": 1, "hard": False},
+    ],
+    "N04-05": [
+        {"id": "q405a", "prompt": "Di sản / thừa kế cơ bản nên bắt đầu bằng gì?", "choices": ["Chờ đến khi ốm nặng mới nói", "Liệt kê tài sản – mong muốn – trao đổi gia đình sớm, rõ ràng", "All-in một tài sản rồi để mặc số phận"], "answer": 1, "hard": True},
+        {"id": "q405b", "prompt": "Di sản tài chính tốt kèm theo?", "choices": ["Thông tin, thỏa thuận, giảm tranh chấp về sau", "Chỉ giấu kín tuyệt đối", "Chỉ chuyển hết thành crypto"], "answer": 0, "hard": False},
+        {"id": "q405c", "prompt": "Có cần luật sư / giấy tờ khi tài sản phức tạp?", "choices": ["Không bao giờ", "Nên tìm hiểu / nhờ chuyên môn phù hợp khi cần"], "answer": 1, "hard": False},
+    ],
+    "N04-06": [
+        {"id": "q406a", "prompt": "Di sản phi tài chính gồm gì?", "choices": ["Chỉ số dư ngân hàng", "Giá trị, câu chuyện, kỹ năng sống, cách xử lý tiền và quan hệ", "Chỉ bất động sản"], "answer": 1, "hard": True},
+        {"id": "q406b", "prompt": "Truyền di sản phi tài chính hữu ích bằng?", "choices": ["Thực hành và trò chuyện có chủ đích", "Chỉ để lại thư không giải thích", "Ép con sao chép mọi quyết định của mình"], "answer": 0, "hard": False},
+        {"id": "q406c", "prompt": "Di sản phi tài chính có thể bắt đầu khi chưa giàu?", "choices": ["Không", "Có — giá trị và thói quen không chờ giàu"], "answer": 1, "hard": False},
+    ],
+    "N04-07": [
+        {"id": "q407a", "prompt": "Cân bằng tích lũy và chất lượng sống nghĩa là?", "choices": ["Bỏ hết tiêu dùng để all-in tích lũy", "Tích lũy có kỷ luật nhưng vẫn dành phần hợp lý cho sống tốt hôm nay — không phá An Toàn", "Tiêu hết vì 'sống một lần'"], "answer": 1, "hard": True},
+        {"id": "q407b", "prompt": "Khi tích lũy quá mức làm khổ hiện tại, hướng điều chỉnh?", "choices": ["Giữ An Toàn, điều chỉnh tỷ lệ tiết kiệm/tiêu dùng theo giá trị sống", "Bỏ quỹ khẩn cấp để vui hơn", "Vay để vừa tích lũy vừa tiêu"], "answer": 0, "hard": False},
+        {"id": "q407c", "prompt": "Chất lượng sống có thay thế lớp An Toàn?", "choices": ["Có", "Không — An Toàn vẫn là nền"], "answer": 1, "hard": False},
+    ],
 
 }
 
@@ -478,6 +599,7 @@ def _refresh_badges(p: dict[str, Any]) -> None:
     fund = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-01", "N02-02", "N02-03"))
     debt = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-04", "N02-05", "N02-06", "N02-07"))
     tu_do = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M03_NODE_IDS)
+    ben_vung = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M04_NODE_IDS)
     if re_cuc and BADGE_RE_CUC not in p["badges"]:
         p["badges"].append(BADGE_RE_CUC)
     if fund and "An Toàn — Quỹ" not in p["badges"]:
@@ -486,6 +608,8 @@ def _refresh_badges(p: dict[str, Any]) -> None:
         p["badges"].append("An Toàn — Nợ")
     if tu_do and BADGE_TU_DO not in p["badges"]:
         p["badges"].append(BADGE_TU_DO)
+    if ben_vung and BADGE_BEN_VUNG not in p["badges"]:
+        p["badges"].append(BADGE_BEN_VUNG)
 
 
 def _public_questions(node_id: str) -> list[dict[str, Any]]:

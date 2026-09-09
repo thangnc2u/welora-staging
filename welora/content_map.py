@@ -1,6 +1,6 @@
 """
 Welora P1-E8 — Content deep-link from principle_key / Deny CTA
-P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 full + governance + CTA Welorademy.
+P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 full + governance + CTA Welorademy.
 """
 
 from __future__ import annotations
@@ -249,6 +249,78 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "risk_level": "medium",
         "academy_href": "/app/academy",
     },
+
+    "FREE-01": {
+        "title": "Tự do tài chính là gì",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-01", "WP-03-02"],
+        "wa": ["WA-03-01"],
+        "path_wp": "WP-03-01-tu-do-tai-chinh-la-gi.md",
+        "path_wp_extra": ["WP-03-02-cac-muc-do-tu-do-tai-chinh.md"],
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "ASSET-01": {
+        "title": "Tài sản và nợ",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-03"],
+        "wa": ["WA-03-02"],
+        "path_wp": "WP-03-03-tai-san-va-no.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "PASSIVE-01": {
+        "title": "Thu nhập thụ động",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-04"],
+        "wa": ["WA-03-03"],
+        "path_wp": "WP-03-04-thu-nhap-thu-dong.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "INV-01": {
+        "title": "Đầu tư cơ bản",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-05"],
+        "wa": ["WA-03-04"],
+        "path_wp": "WP-03-05-dau-tu-co-ban.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "DIV-01": {
+        "title": "Đa dạng hóa",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-06"],
+        "wa": ["WA-03-05"],
+        "path_wp": "WP-03-06-da-dang-hoa.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "FREE-PLAN-01": {
+        "title": "Kế hoạch tự do tài chính",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-07"],
+        "wa": ["WA-03-06"],
+        "path_wp": "WP-03-07-ke-hoach-tu-do-tai-chinh.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "FREE-RISK-01": {
+        "title": "Rủi ro tự do tài chính",
+        "module": "03",
+        "module_title": "Tự Do Tài Chính",
+        "wp": ["WP-03-08"],
+        "wa": ["WA-03-07"],
+        "path_wp": "WP-03-08-rui-ro-tu-do-tai-chinh.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
     "CORE-07": {
         "title": "Phòng thủ đi trước tăng trưởng",
         "module": "02",
@@ -481,4 +553,6 @@ def service_list_content_keys() -> tuple[int, dict]:
         modules["01"]["title"] = "Rễ Cục"
     if "02" in modules and not modules["02"].get("title"):
         modules["02"]["title"] = "An Toàn Tài Chính"
+    if "03" in modules and not modules["03"].get("title"):
+        modules["03"]["title"] = "Tự Do Tài Chính"
     return 200, {"items": items, "modules": modules}

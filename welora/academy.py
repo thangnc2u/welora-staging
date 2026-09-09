@@ -1,4 +1,4 @@
-"""Welorademy M02 An Toàn — cây ngữ nghĩa + cổng KUAT."""
+"""Welorademy M01 Rễ Cục + M02 An Toàn — cây ngữ nghĩa + cổng KUAT."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from typing import Any
 KUAT_PASS_THRESHOLD = 0.70
 MODULE_ID = "M02"
 MODULE_TITLE = "An Toàn Tài Chính"
+M01_MODULE_ID = "M01"
+M01_MODULE_TITLE = "Rễ Cục"
 XP_PER_PASS = 20
 GATE_NODE = "N02-02"
 MASTERY_NODE = "no_efund_invest"
@@ -18,10 +20,96 @@ STATUS_LEARNING = "learning"
 STATUS_KUAT_PENDING = "kuat_pending"
 STATUS_MASTERED = "mastered"
 
-NODES: list[dict[str, Any]] = [
+MODULES: list[dict[str, Any]] = [
+    {"module_id": M01_MODULE_ID, "title": M01_MODULE_TITLE, "order": 1},
+    {"module_id": MODULE_ID, "title": MODULE_TITLE, "order": 2},
+]
+
+M01_NODES: list[dict[str, Any]] = [
+    {
+        "node_id": "N01-01",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Xây dựng tư duy về tiền",
+        "lesson_id": "WA-01-01",
+        "principle_key": "MIND-01",
+        "core_map": ["CORE-01"],
+        "prereq_node_ids": [],
+        "order": 1,
+    },
+    {
+        "node_id": "N01-02",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Hiểu dòng tiền – Thu nhập và chi tiêu",
+        "lesson_id": "WA-01-02",
+        "principle_key": "FLOW-01",
+        "core_map": ["CORE-03"],
+        "prereq_node_ids": ["N01-01"],
+        "order": 2,
+    },
+    {
+        "node_id": "N01-03",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Lập ngân sách cơ bản",
+        "lesson_id": "WA-01-03",
+        "principle_key": "BUDG-01",
+        "core_map": ["CORE-03"],
+        "prereq_node_ids": ["N01-02"],
+        "order": 3,
+    },
+    {
+        "node_id": "N01-04",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Áp dụng quy tắc 50/30/20",
+        "lesson_id": "WA-01-04",
+        "principle_key": "BUDG-02",
+        "core_map": ["CORE-03"],
+        "prereq_node_ids": ["N01-03"],
+        "order": 4,
+    },
+    {
+        "node_id": "N01-05",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Theo dõi chi tiêu hiệu quả",
+        "lesson_id": "WA-01-05",
+        "principle_key": "TRACK-01",
+        "core_map": ["CORE-03"],
+        "prereq_node_ids": ["N01-04"],
+        "order": 5,
+    },
+    {
+        "node_id": "N01-06",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Đặt mục tiêu tài chính đúng cách",
+        "lesson_id": "WA-01-06",
+        "principle_key": "GOAL-01",
+        "core_map": ["CORE-05"],
+        "prereq_node_ids": ["N01-05"],
+        "order": 6,
+    },
+    {
+        "node_id": "N01-07",
+        "module_id": M01_MODULE_ID,
+        "module_title": M01_MODULE_TITLE,
+        "title": "Hiểu lãi kép và giá trị thời gian của tiền",
+        "lesson_id": "WA-01-07",
+        "principle_key": "TIME-01",
+        "core_map": ["CORE-01"],
+        "prereq_node_ids": ["N01-06"],
+        "order": 7,
+    },
+]
+
+M02_NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-01",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Xây dựng quỹ khẩn cấp",
         "lesson_id": "WA-02-01",
         "principle_key": "SAFE-01",
@@ -32,6 +120,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-02",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Nguyên tắc sử dụng quỹ",
         "lesson_id": "WA-02-02",
         "principle_key": "SAFE-02",
@@ -42,6 +131,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-03",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Nơi giữ quỹ",
         "lesson_id": "WA-02-03",
         "principle_key": "SAFE-03",
@@ -52,6 +142,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-05",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Nhận diện nợ tốt/xấu",
         "lesson_id": "WA-02-05",
         "principle_key": "DEBT-01",
@@ -62,6 +153,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-04",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Chọn phương pháp trả nợ",
         "lesson_id": "WA-02-04",
         "principle_key": "DEBT-02",
@@ -72,6 +164,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-06",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Lập kế hoạch trả nợ",
         "lesson_id": "WA-02-06",
         "principle_key": "DEBT-02",
@@ -82,6 +175,7 @@ NODES: list[dict[str, Any]] = [
     {
         "node_id": "N02-07",
         "module_id": MODULE_ID,
+        "module_title": MODULE_TITLE,
         "title": "Ưu tiên trả nợ vs đầu tư",
         "lesson_id": "WA-02-07",
         "principle_key": "DEBT-03",
@@ -91,11 +185,14 @@ NODES: list[dict[str, Any]] = [
     },
 ]
 
+NODES: list[dict[str, Any]] = M01_NODES + M02_NODES
+
 _NODE_BY_ID = {n["node_id"]: n for n in NODES}
 
 FUND_NODES = ("N02-01", "N02-02", "N02-03")
 DEBT_NODES = ("N02-04", "N02-05", "N02-06", "N02-07")
-
+M01_NODE_IDS = tuple(n["node_id"] for n in M01_NODES)
+BADGE_RE_CUC = "Rễ Cục"
 
 def nodes_for_principle(key: str) -> list[str]:
     """Map principle_key / CORE code → node_id trên cây M02."""
@@ -134,6 +231,41 @@ def os_nudge_for(node_id: str, *, first_pass: bool = True) -> dict[str, Any] | N
 
 
 QUESTIONS: dict[str, list[dict[str, Any]]] = {
+    "N01-01": [
+        {"id": "q101a", "prompt": "Bước đầu phù hợp để điều chỉnh tư duy về tiền?", "choices": ["Ép tiêu nhiều hơn", "Nhận diện niềm tin đang chi phối rồi đặt quy tắc", "Rút hết tiết kiệm để đầu tư mạo hiểm"], "answer": 1, "hard": True},
+        {"id": "q101b", "prompt": "Tư duy về tiền giống gì nhất?", "choices": ["Bản đồ trong đầu hướng dẫn quyết định", "Số dư tài khoản", "Lời khuyên trên mạng xã hội"], "answer": 0, "hard": False},
+        {"id": "q101c", "prompt": "Thay đổi tư duy bắt đầu từ đâu?", "choices": ["Ép buộc nghĩ tích cực", "Nhận diện rồi điều chỉnh có chủ đích"], "answer": 1, "hard": False},
+    ],
+    "N01-02": [
+        {"id": "q102a", "prompt": "Trước khi kiếm thêm thu nhập vì 'hết tiền', nên làm gì?", "choices": ["Ngay lập tức tăng ca", "Liệt kê chi tiêu thực tế rồi so với thu nhập", "Cắt hết giải trí ngay"], "answer": 1, "hard": True},
+        {"id": "q102b", "prompt": "Dòng tiền là gì?", "choices": ["Thu nhập vào và chi tiêu ra theo thời gian", "Chỉ số dư cuối tháng", "Giá cổ phiếu"], "answer": 0, "hard": False},
+        {"id": "q102c", "prompt": "Không theo dõi chi nhỏ có thể dẫn tới?", "choices": ["An toàn hơn", "Thâm hụt mà không rõ vì sao"], "answer": 1, "hard": False},
+    ],
+    "N01-03": [
+        {"id": "q103a", "prompt": "Lập ngân sách lần đầu nên bắt đầu thế nào?", "choices": ["Hơn 20 hạng mục chi tiết ngay", "Ghi chi tiêu 2–4 tuần rồi chia 3 nhóm lớn", "Ép khớp 50/30/20 từ ngày đầu"], "answer": 1, "hard": True},
+        {"id": "q103b", "prompt": "Ba nhóm ngân sách cơ bản thường là?", "choices": ["Thiết yếu – linh hoạt – cho tương lai", "Crypto – vàng – bất động sản", "Lương – thưởng – nợ"], "answer": 0, "hard": False},
+        {"id": "q103c", "prompt": "Ngân sách quá chi tiết dễ dẫn tới?", "choices": ["Duy trì lâu hơn", "Bỏ cuộc sớm"], "answer": 1, "hard": False},
+    ],
+    "N01-04": [
+        {"id": "q104a", "prompt": "Khi chi thiết yếu >50%, hướng điều chỉnh hợp lý?", "choices": ["Ép cắt thiết yếu ngay dù cần thiết", "Giữ thiết yếu thật, giảm linh hoạt để tăng phần tương lai", "Bỏ quy tắc 50/30/20"], "answer": 1, "hard": True},
+        {"id": "q104b", "prompt": "Quy tắc 50/30/20 là gì?", "choices": ["La bàn phân bổ thiết yếu/linh hoạt/tương lai", "Công thức lãi suất ngân hàng", "Luật thuế bắt buộc"], "answer": 0, "hard": False},
+        {"id": "q104c", "prompt": "50/30/20 nên hiểu như?", "choices": ["Xiềng xích cứng nhắc", "La bàn linh hoạt theo hoàn cảnh"], "answer": 1, "hard": False},
+    ],
+    "N01-05": [
+        {"id": "q105a", "prompt": "Cách theo dõi chi tiêu bền vững khi hay quên?", "choices": ["Ép ghi mọi giao dịch ngay trong ngày", "Ít nhóm, ghi cuối ngày/tuần, xem số liệu không phải lời phê", "Chỉ theo dõi chi lớn"], "answer": 1, "hard": True},
+        {"id": "q105b", "prompt": "Theo dõi chi tiêu giúp gì?", "choices": ["Có dữ liệu để cải thiện có chủ đích", "Tự động tăng lương", "Thay quỹ khẩn cấp"], "answer": 0, "hard": False},
+        {"id": "q105c", "prompt": "Bỏ qua khoản nhỏ khi theo dõi?", "choices": ["Ổn vì không đáng kể", "Dễ bỏ sót khoản tích tụ thành lớn"], "answer": 1, "hard": False},
+    ],
+    "N01-06": [
+        {"id": "q106a", "prompt": "Biến 'muốn tiết kiệm nhiều hơn' thành mục tiêu hành động?", "choices": ["Giữ chung chung", "Gắn số tiền, thời hạn, chia mốc hàng tháng", "Đặt ngay mục tiêu 1 tỷ / 2 năm"], "answer": 1, "hard": True},
+        {"id": "q106b", "prompt": "Mục tiêu tài chính tốt cần?", "choices": ["Cụ thể, số tiền, thời hạn", "Chỉ cảm xúc", "Chờ lương tăng mới đặt"], "answer": 0, "hard": False},
+        {"id": "q106c", "prompt": "Mục tiêu mơ hồ thường dẫn tới?", "choices": ["Hành động nhất quán", "Khó duy trì kỷ luật"], "answer": 1, "hard": False},
+    ],
+    "N01-07": [
+        {"id": "q107a", "prompt": "Bắt đầu để dành sớm với số nhỏ hơn vs đợi 5 năm để nhiều hơn?", "choices": ["Đợi chắc chắn tốt hơn", "Bắt đầu sớm thường có lợi nhờ thời gian / lãi kép", "Hai phương án luôn như nhau"], "answer": 1, "hard": True},
+        {"id": "q107b", "prompt": "Lãi kép là gì?", "choices": ["Lãi được tái đầu tư và tiếp tục sinh lãi", "Chỉ lãi suất vay ngân hàng", "Phí giao dịch"], "answer": 0, "hard": False},
+        {"id": "q107c", "prompt": "Giá trị thời gian của tiền nói lên điều gì?", "choices": ["Tiền hôm nay có thể sinh sôi theo thời gian", "Tiền không đổi giá trị theo năm"], "answer": 0, "hard": False},
+    ],
     "N02-01": [
         {"id": "q01a", "prompt": "Quỹ khẩn cấp dùng để làm gì?", "choices": ["Chi tiêu thường ngày", "Đệm khi mất thu nhập / sốc", "All-in cổ phiếu"], "answer": 1, "hard": False},
         {"id": "q01b", "prompt": "Mục tiêu tối thiểu của Cổng An Toàn là bao nhiêu tháng chi thiết yếu?", "choices": ["1 tháng", "3 tháng", "12 tháng"], "answer": 1, "hard": True},
@@ -220,8 +352,11 @@ def _refresh_locks(p: dict[str, Any]) -> None:
 
 
 def _refresh_badges(p: dict[str, Any]) -> None:
+    re_cuc = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in M01_NODE_IDS)
     fund = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-01", "N02-02", "N02-03"))
     debt = all(p["nodes"][i]["status"] == STATUS_MASTERED for i in ("N02-04", "N02-05", "N02-06", "N02-07"))
+    if re_cuc and BADGE_RE_CUC not in p["badges"]:
+        p["badges"].append(BADGE_RE_CUC)
     if fund and "An Toàn — Quỹ" not in p["badges"]:
         p["badges"].append("An Toàn — Quỹ")
     if debt and "An Toàn — Nợ" not in p["badges"]:
@@ -244,6 +379,19 @@ def get_tree(user_id: str) -> dict[str, Any]:
         item = dict(n)
         item.update({"status": st["status"], "mastery_level": st["mastery_level"], "last_kuat": st["last_kuat"]})
         nodes.append(item)
+    modules = []
+    for mod in MODULES:
+        mid = mod["module_id"]
+        mod_nodes = [x for x in nodes if x.get("module_id") == mid]
+        mod_nodes = sorted(mod_nodes, key=lambda x: int(x.get("order") or 0))
+        modules.append(
+            {
+                "module_id": mid,
+                "title": mod["title"],
+                "order": mod.get("order"),
+                "nodes": mod_nodes,
+            }
+        )
     return {
         "module_id": MODULE_ID,
         "title": MODULE_TITLE,
@@ -251,6 +399,7 @@ def get_tree(user_id: str) -> dict[str, Any]:
         "xp": p["xp"],
         "badges": list(p["badges"]),
         "nodes": nodes,
+        "modules": modules,
     }
 
 

@@ -38,10 +38,11 @@ class TestP0AcademyKuatM02(unittest.TestCase):
 
     def test_threshold_and_tree(self):
         self.assertEqual(KUAT_PASS_THRESHOLD, 0.70)
-        ids = [n["node_id"] for n in NODES]
+        m02 = [n for n in NODES if n.get("module_id") == "M02"]
+        ids = [n["node_id"] for n in m02]
         self.assertEqual(ids, ["N02-01", "N02-02", "N02-03", "N02-05", "N02-04", "N02-06", "N02-07"])
-        self.assertEqual(NODES[1]["prereq_node_ids"], ["N02-01"])
-        self.assertEqual(NODES[3]["node_id"], "N02-05")
+        self.assertEqual(m02[1]["prereq_node_ids"], ["N02-01"])
+        self.assertEqual(m02[3]["node_id"], "N02-05")
 
     def test_read_no_xp(self):
         before = mark_read("u1", "N02-01")

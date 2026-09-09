@@ -1,6 +1,6 @@
 """
 Welora P1-E8 — Content deep-link from principle_key / Deny CTA
-P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 + Kết Nối M05 full + governance + CTA Welorademy.
+P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 + Bền Vững M04 + Kết Nối M05 full + governance + CTA Welorademy.
 """
 
 from __future__ import annotations
@@ -322,6 +322,78 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "academy_href": "/app/academy",
     },
 
+    "SUSTAIN-01": {
+        "title": "Bền vững tài chính là gì",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-01"],
+        "wa": ["WA-04-01"],
+        "path_wp": "WP-04-01-ben-vung-tai-chinh.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "INSURE-01": {
+        "title": "Bảo hiểm và quản lý rủi ro",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-02", "WP-04-04"],
+        "wa": ["WA-04-02"],
+        "path_wp": "WP-04-02-bao-hiem-rui-ro.md",
+        "path_wp_extra": ["WP-04-04-chi-phi-y-te.md"],
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "RETIRE-01": {
+        "title": "Chuẩn bị tài chính cho tuổi già",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-03"],
+        "wa": ["WA-04-03"],
+        "path_wp": "WP-04-03-chuan-bi-tuoi-gia.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "KIDS-01": {
+        "title": "Giáo dục tài chính cho con cái",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-05"],
+        "wa": ["WA-04-04"],
+        "path_wp": "WP-04-05-giao-duc-tai-chinh-con.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "LEGACY-01": {
+        "title": "Di sản và thừa kế cơ bản",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-06"],
+        "wa": ["WA-04-05"],
+        "path_wp": "WP-04-06-di-san-thua-ke.md",
+        "risk_level": "high",
+        "academy_href": "/app/academy",
+    },
+    "LEGACY-SOFT-01": {
+        "title": "Giá trị và di sản phi tài chính",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-07"],
+        "wa": ["WA-04-06"],
+        "path_wp": "WP-04-07-gia-tri-di-san-phi-tai-chinh.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "BALANCE-01": {
+        "title": "Sống bền vững với tiền",
+        "module": "04",
+        "module_title": "Bền Vững & Di Sản",
+        "wp": ["WP-04-08"],
+        "wa": ["WA-04-07"],
+        "path_wp": "WP-04-08-song-ben-vung-voi-tien.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+
     "ACT-01": {
         "title": "Từ kiến thức đến hành động",
         "module": "05",
@@ -628,6 +700,8 @@ def service_list_content_keys() -> tuple[int, dict]:
         modules["02"]["title"] = "An Toàn Tài Chính"
     if "03" in modules and not modules["03"].get("title"):
         modules["03"]["title"] = "Tự Do Tài Chính"
+    if "04" in modules and not modules["04"].get("title"):
+        modules["04"]["title"] = "Bền Vững & Di Sản"
     if "05" in modules and not modules["05"].get("title"):
         modules["05"]["title"] = "Kết Nối & Thực Hành"
     return 200, {"items": items, "modules": modules}

@@ -1,6 +1,6 @@
 """
 Welora P1-E8 — Content deep-link from principle_key / Deny CTA
-P1 Pedia ship An Toàn: full WP-02 + governance + CTA Welorademy.
+P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 full + governance + CTA Welorademy.
 """
 
 from __future__ import annotations
@@ -156,6 +156,7 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
     "CORE-01": {
         "title": "Trách nhiệm tuyệt đối",
         "module": "01",
+        "module_title": "Rễ Cục",
         "wp": ["WP-01-01"],
         "wa": ["WA-01-01"],
         "path_wp": "WP-01-01-tu-duy-ve-tien-la-gi.md",
@@ -166,10 +167,85 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
     "CORE-05": {
         "title": "Cảm xúc không ra quyết định",
         "module": "01",
+        "module_title": "Rễ Cục",
         "wp": ["WP-01-07"],
         "wa": ["WA-01-06"],
         "path_wp": "WP-01-07-muc-tieu-tai-chinh.md",
         "path_wa": "WA-01-06-dat-muc-tieu-tai-chinh.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+
+    "MIND-01": {
+        "title": "Tư duy về tiền",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-01"],
+        "wa": ["WA-01-01"],
+        "path_wp": "WP-01-01-tu-duy-ve-tien-la-gi.md",
+        "path_wa": "WA-01-01-xay-dung-tu-duy-ve-tien.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "FLOW-01": {
+        "title": "Thu nhập và chi tiêu",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-02"],
+        "wa": ["WA-01-02"],
+        "path_wp": "WP-01-02-thu-nhap-va-chi-tieu.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "BUDG-01": {
+        "title": "Ngân sách là gì",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-03", "WP-01-05"],
+        "wa": ["WA-01-03"],
+        "path_wp": "WP-01-03-ngan-sach-la-gi.md",
+        "path_wp_extra": ["WP-01-05-quy-tac-50-30-20.md"],
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "BUDG-02": {
+        "title": "Lập ngân sách thực tế",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-04"],
+        "wa": ["WA-01-04"],
+        "path_wp": "WP-01-04-lap-ngan-sach-thuc-te.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "TRACK-01": {
+        "title": "Theo dõi chi tiêu",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-06"],
+        "wa": ["WA-01-05"],
+        "path_wp": "WP-01-06-theo-doi-chi-tieu.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "GOAL-01": {
+        "title": "Mục tiêu tài chính",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-07"],
+        "wa": ["WA-01-06"],
+        "path_wp": "WP-01-07-muc-tieu-tai-chinh.md",
+        "path_wa": "WA-01-06-dat-muc-tieu-tai-chinh.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "TIME-01": {
+        "title": "Lãi kép và giá trị thời gian của tiền",
+        "module": "01",
+        "module_title": "Rễ Cục",
+        "wp": ["WP-01-08"],
+        "wa": ["WA-01-07"],
+        "path_wp": "WP-01-08-lai-kep-va-gia-tri-thoi-gian.md",
         "risk_level": "medium",
         "academy_href": "/app/academy",
     },
@@ -379,7 +455,7 @@ def service_get_content(key: str) -> tuple[int, dict]:
 
 def service_list_content_keys() -> tuple[int, dict]:
     items = []
-    an_toan = []
+    modules: dict[str, dict[str, Any]] = {}
     for k, v in CONTENT_BY_KEY.items():
         row = {
             "principle_key": k,
@@ -390,6 +466,19 @@ def service_list_content_keys() -> tuple[int, dict]:
             "wp": v.get("wp") or [],
         }
         items.append(row)
-        if v.get("module") == "02":
-            an_toan.append(row)
-    return 200, {"items": items, "modules": {"02": {"title": "An Toàn Tài Chính", "items": an_toan}}}
+        mid = str(v.get("module") or "")
+        if not mid:
+            continue
+        bucket = modules.setdefault(
+            mid,
+            {"title": v.get("module_title") or "", "items": []},
+        )
+        if v.get("module_title") and not bucket.get("title"):
+            bucket["title"] = v["module_title"]
+        bucket["items"].append(row)
+    # Stable preferred titles for known modules
+    if "01" in modules and not modules["01"].get("title"):
+        modules["01"]["title"] = "Rễ Cục"
+    if "02" in modules and not modules["02"].get("title"):
+        modules["02"]["title"] = "An Toàn Tài Chính"
+    return 200, {"items": items, "modules": modules}

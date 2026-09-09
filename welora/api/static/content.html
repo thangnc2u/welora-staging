@@ -63,6 +63,13 @@ function viTag(pk){
   if(k.indexOf('DEBT-')===0) return 'Nợ';
   if(k.indexOf('CORE-')===0) return 'Cốt lõi';
   if(k.indexOf('TAX-')===0) return 'Thuế';
+  if(k.indexOf('ACT-')===0) return 'Hành động';
+  if(k.indexOf('HABIT-')===0) return 'Thói quen';
+  if(k.indexOf('ADJUST-')===0) return 'Điều chỉnh';
+  if(k.indexOf('DECIDE-')===0) return 'Quyết định';
+  if(k.indexOf('PEER-')===0) return 'Cộng đồng';
+  if(k.indexOf('TOOLS-')===0) return 'Công cụ';
+  if(k.indexOf('DRIVE-')===0) return 'Động lực';
   return '';
 }
 function setKeyTag(el, pk){

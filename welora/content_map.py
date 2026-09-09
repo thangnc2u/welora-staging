@@ -1,6 +1,6 @@
 """
 Welora P1-E8 — Content deep-link from principle_key / Deny CTA
-P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 full + governance + CTA Welorademy.
+P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 + Kết Nối M05 full + governance + CTA Welorademy.
 """
 
 from __future__ import annotations
@@ -321,6 +321,79 @@ CONTENT_BY_KEY: dict[str, dict[str, Any]] = {
         "risk_level": "high",
         "academy_href": "/app/academy",
     },
+
+    "ACT-01": {
+        "title": "Từ kiến thức đến hành động",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-01"],
+        "wa": ["WA-05-01"],
+        "path_wp": "WP-05-01-tu-kien-thuc-den-hanh-dong.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "HABIT-01": {
+        "title": "Xây dựng thói quen tài chính",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-02"],
+        "wa": ["WA-05-02"],
+        "path_wp": "WP-05-02-xay-dung-thoi-quen.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "ADJUST-01": {
+        "title": "Theo dõi và điều chỉnh kế hoạch",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-03", "WP-05-05"],
+        "wa": ["WA-05-03"],
+        "path_wp": "WP-05-03-theo-doi-dieu-chinh.md",
+        "path_wp_extra": ["WP-05-05-xu-ly-ke-hoach-lech.md"],
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "DECIDE-01": {
+        "title": "Ra quyết định tài chính hàng ngày",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-04"],
+        "wa": ["WA-05-04"],
+        "path_wp": "WP-05-04-ra-quyet-dinh-hang-ngay.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "PEER-01": {
+        "title": "Cộng đồng và học hỏi cùng nhau",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-06"],
+        "wa": ["WA-05-05"],
+        "path_wp": "WP-05-06-cong-dong-hoc-hoi.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "TOOLS-01": {
+        "title": "Công cụ và hệ thống hỗ trợ",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-07"],
+        "wa": ["WA-05-06"],
+        "path_wp": "WP-05-07-cong-cu-he-thong.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+    "DRIVE-01": {
+        "title": "Duy trì động lực dài hạn",
+        "module": "05",
+        "module_title": "Kết Nối & Thực Hành",
+        "wp": ["WP-05-08"],
+        "wa": ["WA-05-07"],
+        "path_wp": "WP-05-08-duy-tri-dong-luc.md",
+        "risk_level": "medium",
+        "academy_href": "/app/academy",
+    },
+
     "CORE-07": {
         "title": "Phòng thủ đi trước tăng trưởng",
         "module": "02",
@@ -555,4 +628,6 @@ def service_list_content_keys() -> tuple[int, dict]:
         modules["02"]["title"] = "An Toàn Tài Chính"
     if "03" in modules and not modules["03"].get("title"):
         modules["03"]["title"] = "Tự Do Tài Chính"
+    if "05" in modules and not modules["05"].get("title"):
+        modules["05"]["title"] = "Kết Nối & Thực Hành"
     return 200, {"items": items, "modules": modules}

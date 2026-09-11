@@ -128,6 +128,7 @@ def retrieve_constitution(
 
 
 def core_label(code: str, bundle: Optional[ConstitutionBundle] = None) -> str:
+    """Learner-facing VI title only — never leak raw CORE-* / SAFE-* / DEBT-*."""
     art = None
     if bundle and bundle.ok:
         art = next((a for a in bundle.core_articles if a.get("code") == code), None)
@@ -137,13 +138,12 @@ def core_label(code: str, bundle: Optional[ConstitutionBundle] = None) -> str:
         except Exception:
             art = None
     if not art:
-        return code
-    title = str(art.get("title") or "").strip()
-    return f"{code} · {title}" if title else code
+        return ""
+    return str(art.get("title") or "").strip()
 
 
 def labels_for_rule(rule_id: str, bundle: Optional[ConstitutionBundle] = None) -> list[str]:
-    return [core_label(c, bundle) for c in RULE_TO_CORE.get(rule_id, [])]
+    return [lab for c in RULE_TO_CORE.get(rule_id, []) if (lab := core_label(c, bundle))]
 
 
 def enrich_deny_reply(rule_id: str, body: str, bundle: Optional[ConstitutionBundle] = None) -> str:
@@ -151,9 +151,8 @@ def enrich_deny_reply(rule_id: str, body: str, bundle: Optional[ConstitutionBund
     if not labels:
         return body
     header = "Nguyên lý Cốt lõi: " + " · ".join(labels)
-    if header.split("Nguyên lý Cốt lõi: ", 1)[-1] and any(
-        lab.split(" · ", 1)[0] in body for lab in labels
-    ):
+    # Avoid duplicating the same VI title already present in the template body.
+    if any(lab in body for lab in labels):
         return header + "\n" + body
     return header + "\n" + body
 

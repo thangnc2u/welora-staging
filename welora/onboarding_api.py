@@ -36,6 +36,8 @@ def service_patch_step(session_id: str, step: int, body: dict) -> tuple[int, dic
         return 200, out
     except KeyError:
         return 404, {"error": "session not found"}
+    except ob.OnboardingEnumError as e:
+        return 422, {"error": str(e)}
     except ValueError as e:
         return 400, {"error": str(e)}
 

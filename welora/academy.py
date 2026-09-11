@@ -776,6 +776,41 @@ def get_tree(user_id: str) -> dict[str, Any]:
     }
 
 
+
+def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
+    """Load WA markdown by lesson_id; fall back to mapped WA/WP, then FALLBACK_BODY."""
+    from welora.content_map import CONTENT_BY_KEY, FALLBACK_BODY, content_root, _read_rel
+
+    root = content_root()
+    lid = (lesson_id or "").strip()
+    if lid:
+        matches = sorted(root.glob(f"{lid}-*.md"))
+        if not matches:
+            direct = root / f"{lid}.md"
+            if direct.is_file():
+                matches = [direct]
+        if matches:
+            body = matches[0].read_text(encoding="utf-8", errors="replace")
+            if len(body) > 20000:
+                return body[:20000] + "\n\n… (truncated)"
+            return body
+    meta = CONTENT_BY_KEY.get(principle_key) or {}
+    for rel in (meta.get("path_wa"), meta.get("path_wp")):
+        body, _ = _read_rel(root, rel)
+        if (body or "").strip():
+            if len(body) > 20000:
+                return body[:20000] + "\n\n… (truncated)"
+            return body
+    for rel in meta.get("path_wp_extra") or []:
+        body, _ = _read_rel(root, rel)
+        if (body or "").strip():
+            if len(body) > 20000:
+                return body[:20000] + "\n\n… (truncated)"
+            return body
+    fb = FALLBACK_BODY.get(principle_key) or ""
+    return fb
+
+
 def get_node(user_id: str, node_id: str) -> dict[str, Any] | None:
     if node_id not in _NODE_BY_ID:
         return None
@@ -783,6 +818,7 @@ def get_node(user_id: str, node_id: str) -> dict[str, Any] | None:
     _refresh_locks(p)
     n = dict(_NODE_BY_ID[node_id])
     st = p["nodes"][node_id]
+    body = _lesson_body_markdown(str(n.get("lesson_id") or ""), str(n.get("principle_key") or ""))
     n.update(
         {
             "status": st["status"],
@@ -790,7 +826,9 @@ def get_node(user_id: str, node_id: str) -> dict[str, Any] | None:
             "last_kuat": st["last_kuat"],
             "questions": _public_questions(node_id),
             "content_href": "/app/content?key=" + n["principle_key"],
-            "lesson_stub": n["title"] + " · " + n["principle_key"],
+            # Learner-facing stub: VI title only — never leak principle_key / SAFE-* / DEBT-*
+            "lesson_stub": n["title"],
+            "body_markdown": body,
         }
     )
     return n

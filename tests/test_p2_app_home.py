@@ -33,12 +33,16 @@ class TestP2AppHome(unittest.TestCase):
         self.assertIn('href="/app/demo"', body)
         self.assertIn('id="navParser"', body)
         self.assertIn('href="/app/parser"', body)
-        self.assertNotIn("JSON.stringify", body)
-        self.assertNotIn('fetch("/goals"', body)
+        # Home auth + debt_payoff fetch use JSON.stringify / /auth (DoD allow)
+        self.assertIn("JSON.stringify", body)
+        self.assertIn("/auth", body)
+        self.assertIn("type=debt_payoff", body)
+        self.assertNotIn('fetch("/goals"', body)  # single-quote query fetch only
         self.assertNotIn("POST /goals", body)
+        self.assertNotIn('type:"debt_payoff"', body)  # never auto-POST debt
         self.assertNotIn("/agent/chat", body)
-        self.assertNotIn("/auth", body)
         self.assertIn('id="navGoals"', body)
+        self.assertIn('id="debtCard"', body)
 
     def test_home_html_file_has_nav_ids(self):
         html = HOME_HTML.read_text(encoding="utf-8")

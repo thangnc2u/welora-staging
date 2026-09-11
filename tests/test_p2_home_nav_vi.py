@@ -17,7 +17,7 @@ NAVS = (
     ("navSafety", "/app/safety", "Cổng An Toàn"),
     ("navChat", "/app/chat", "Chat với Agent"),
     ("navContent", "/app/content", "Welorapedia"),
-    ("navDemo", "/app/demo", "Demo 8 bước"),
+    ("navDemo", "/app/demo", "Xem thử 8 bước"),
     ("navParser", "/app/parser", "Sao kê CSV"),
     ("navMetrics", "/app/metrics", "Chỉ số"),
     ("navLogs", "/app/logs", "Nhật ký quyết định"),
@@ -25,7 +25,7 @@ NAVS = (
     ("navDna", "/app/dna", "DNA tài chính"),
     ("navGoals", "/app/goals", "Mục tiêu"),
     ("navOtp", "/app/otp", "OTP điện thoại"),
-    ("navPreRule", "/app/pre-rule", "Pre-Rule · gỡ lỗi"),
+    ("navPreRule", "/app/pre-rule", "Quy tắc trước · gỡ lỗi"),
     ("navHealth", "/app/health-score", "Điểm sức khỏe"),
 )
 

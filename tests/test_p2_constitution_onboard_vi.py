@@ -23,7 +23,7 @@ class TestP2ConstitutionOnboardVi(unittest.TestCase):
         self.assertNotIn("onboarding", html)
         self.assertNotIn("Onboarding", html)
         self.assertIn("<h1>Hiến pháp cá nhân</h1>", html)
-        self.assertIn("<title>Hiến pháp cá nhân</title>", html)
+        self.assertIn("<title>Welora · Hiến pháp cá nhân</title>", html)
         self.assertIn("/personal-constitution", html)
         self.assertIn("/auth/device", html)
         self.assertIn("welora_device_id", html)

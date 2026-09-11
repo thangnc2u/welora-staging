@@ -2,9 +2,11 @@
 <html lang="vi"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · An Toàn</title>
+<link rel="stylesheet" href="/static/shell.css"/>
 <style>
 body{font-family:system-ui;margin:0;background:#f6f7f9;color:#1a1d21}
-.shell{max-width:430px;margin:0 auto;background:#fff;min-height:100dvh;padding:16px}
+body.welora-shell{background:#f6f7f9;color:#1a1d21;max-width:none;padding:0;margin:0}
+.shell{max-width:430px;margin:0 auto;background:#fff;min-height:100dvh;padding:16px 16px 88px}
 .badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #e5e7eb}
 .badge-card.ok{background:#ecfdf5}.badge-card.fail{background:#fff7ed}
 .status{font-weight:700;font-size:18px}.meta{color:#6b7280;font-size:14px}
@@ -248,4 +250,5 @@ document.getElementById("btnSave").onclick=async()=>{
   await load();
 };
 load();
-</script></body></html>
+</script>
+<script src="/static/shell.js" data-shell-tab="home"></script></body></html>

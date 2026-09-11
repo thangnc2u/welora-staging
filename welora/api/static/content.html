@@ -255,7 +255,7 @@ function renderMarkdown(root, md){
     const base=String(d.cta_academy.href).split('?')[0]||'/app/academy';
     ac.href=base+'?from=pedia&key='+encodeURIComponent(pediaKey);
   }
-})().catch(e=>{elTitle.textContent='Lỗi';elBody.textContent=String(e);});
+})().catch(e=>{elTitle.textContent='Không tải được';elBody.textContent='Vui lòng thử lại.';});
 </script>
 <script src="/static/shell.js" data-shell-tab="pedia"></script>
 </body>

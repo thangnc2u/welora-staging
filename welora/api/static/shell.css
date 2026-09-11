@@ -43,3 +43,4 @@ body.welora-shell{
   line-height:1.2;
   margin-bottom:2px;
 }
+#weloraBottomNav a[hidden]{display:none!important}

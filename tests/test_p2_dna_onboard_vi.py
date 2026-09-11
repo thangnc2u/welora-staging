@@ -23,7 +23,7 @@ class TestP2DnaOnboardVi(unittest.TestCase):
         self.assertNotIn("onboarding", html)
         self.assertNotIn("Onboarding", html)
         self.assertIn("<h1>DNA tài chính</h1>", html)
-        self.assertIn("<title>DNA tài chính</title>", html)
+        self.assertIn("<title>Welora · DNA tài chính</title>", html)
         self.assertIn("/dna", html)
         self.assertIn("/auth/device", html)
         self.assertIn("life_stage", html)

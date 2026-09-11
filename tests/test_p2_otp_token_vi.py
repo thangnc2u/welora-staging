@@ -26,7 +26,7 @@ class TestP2OtpTokenVi(unittest.TestCase):
         self.assertIn("/auth/me", html)
         self.assertIn("d.token", html)
         self.assertIn("welora_token", html)
-        self.assertIn("<title>OTP điện thoại</title>", html)
+        self.assertIn("<title>Welora · OTP điện thoại</title>", html)
         self.assertIn("<h1>OTP điện thoại</h1>", html)
         self.assertIn("textContent", html)
         self.assertNotIn("innerHTML", html)

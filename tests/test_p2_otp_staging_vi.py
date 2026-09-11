@@ -29,7 +29,7 @@ class TestP2OtpStagingVi(unittest.TestCase):
         self.assertIn("d.token", html)
         self.assertIn("welora_token", html)
         self.assertIn("/auth/otp/request", html)
-        self.assertIn("<title>OTP điện thoại</title>", html)
+        self.assertIn("<title>Welora · OTP điện thoại</title>", html)
         self.assertIn("<h1>OTP điện thoại</h1>", html)
         self.assertNotIn("innerHTML", html)
         for nid in (

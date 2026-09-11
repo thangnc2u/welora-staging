@@ -18,7 +18,7 @@ a{color:#7dd3fc;text-decoration:none}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Hiến pháp Cốt lõi</h1>
-<p class="muted">10 Nguyên lý Bất biến · Welorademy · CORE-01 … CORE-10</p>
+<p class="muted">10 Nguyên lý Bất biến · Welorademy</p>
 <p><a id="ctaPersonal" href="/app/constitution">Hiến pháp Cá nhân</a></p>
 <div id="articles"></div>
 <script>
@@ -31,9 +31,6 @@ function render(list){
   (list||[]).forEach(a=>{
     const el=document.createElement('div');
     el.className='card';
-    const c=document.createElement('div');
-    c.className='code';
-    c.textContent=a.code||'';
     const t=document.createElement('div');
     t.className='title';
     t.textContent=a.title||'';
@@ -46,7 +43,7 @@ function render(list){
     const tag=document.createElement('div');
     tag.className='tag';
     tag.textContent=constraintVi(a.constraint_type);
-    el.appendChild(c);el.appendChild(t);el.appendChild(p);el.appendChild(e);el.appendChild(tag);
+    el.appendChild(t);el.appendChild(p);el.appendChild(e);el.appendChild(tag);
     box.appendChild(el);
   });
 }

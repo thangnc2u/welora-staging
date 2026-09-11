@@ -76,7 +76,8 @@ class TestDebtPayoffGoal(unittest.TestCase):
         self.assertFalse(gate["debt_on_track"])
         self.assertGreaterEqual(gate["months_covered"], TARGET_MONTHS)
 
-    def test_gate_on_track_can_pass(self):
+    def test_gate_plan_or_contribution_alone_not_passed(self):
+        """Plan/monthly_contribution without full payoff must keep debt unhandled."""
         service_create_goal(
             {
                 "user_id": "d4",
@@ -96,12 +97,12 @@ class TestDebtPayoffGoal(unittest.TestCase):
         )
         code, gate = service_safety_gate("d4")
         self.assertEqual(code, 200)
-        self.assertNotIn("dangerous_debt_unhandled", gate["reasons"])
-        self.assertTrue(gate["debt_on_track"])
-        self.assertEqual(gate["status"], "passed")
+        self.assertIn("dangerous_debt_unhandled", gate["reasons"])
+        self.assertFalse(gate["debt_on_track"])
+        self.assertEqual(gate["status"], "not_passed")
         self.assertEqual(debt["principle_keys"], ["DEBT-01", "DEBT-03", "CORE-07"])
 
-    def test_progress_then_on_track(self):
+    def test_partial_progress_not_on_track_until_completed(self):
         service_create_goal(
             {
                 "user_id": "d5",
@@ -116,9 +117,15 @@ class TestDebtPayoffGoal(unittest.TestCase):
         _, unpaid = service_safety_gate("d5")
         self.assertEqual(unpaid["status"], "not_passed")
         service_progress(debt["goal_id"], {"add_amount": 500_000})
+        _, partial = service_safety_gate("d5")
+        self.assertFalse(partial["debt_on_track"])
+        self.assertEqual(partial["status"], "not_passed")
+        self.assertIn("dangerous_debt_unhandled", partial["reasons"])
+        service_progress(debt["goal_id"], {"set_amount": 8_000_000})
         _, paid = service_safety_gate("d5")
         self.assertTrue(paid["debt_on_track"])
         self.assertEqual(paid["status"], "passed")
+        self.assertNotIn("dangerous_debt_unhandled", paid["reasons"])
 
     def test_health_score_does_not_bypass(self):
         service_create_goal(

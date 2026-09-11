@@ -106,6 +106,26 @@ class TestGateDnaDangerousDebt(unittest.TestCase):
         self.assertTrue(gate["has_dangerous_debt"])
         self.assertFalse(gate["debt_on_track"])
 
+    def test_2b_dna_true_partial_progress_set_amount_1_not_passed(self):
+        """DNA true + debt progress set_amount=1 (~0%) must NOT pass / clear unhandled."""
+        _complete_onboarding("dna2b", has_dangerous_debt_self=True)
+        _efund_ready("dna2b")
+        _, debt = service_create_goal(
+            {
+                "user_id": "dna2b",
+                "type": "debt_payoff",
+                "target_amount": 8_000_000,
+                "current_amount": 0,
+            }
+        )
+        service_progress(debt["goal_id"], {"set_amount": 1})
+        code, gate = service_safety_gate("dna2b")
+        self.assertEqual(code, 200)
+        self.assertEqual(gate["status"], "not_passed")
+        self.assertIn("dangerous_debt_unhandled", gate["reasons"])
+        self.assertTrue(gate["has_dangerous_debt"])
+        self.assertFalse(gate["debt_on_track"])
+
     def test_3_dna_true_debt_completed_may_pass(self):
         """DNA true + debt_payoff completed + efund≥TARGET_MONTHS + mastery apply → may passed."""
         _complete_onboarding("dna3", has_dangerous_debt_self=True)

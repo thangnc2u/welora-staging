@@ -212,8 +212,9 @@ def _dna_has_dangerous_debt_self(user_id: str) -> bool:
 def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
     """Merge DNA self-report + debt_payoff goal into gate debt flags.
 
-    DNA has_dangerous_debt_self=true with no completed/on-track debt_payoff
-    keeps has_dangerous_debt=true and debt_on_track=false → dangerous_debt_unhandled.
+    DNA has_dangerous_debt_self=true with no completed debt_payoff
+    (status=completed or current≥target) keeps has_dangerous_debt=true and
+    debt_on_track=false → dangerous_debt_unhandled. Partial progress does not pass.
     Does not auto-create debt goals from near_term_priority.
     """
     dna_debt = _dna_has_dangerous_debt_self(user_id)

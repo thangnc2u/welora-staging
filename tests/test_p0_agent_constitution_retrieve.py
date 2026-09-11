@@ -169,7 +169,10 @@ class TestP0AgentConstitutionRetrieve(unittest.TestCase):
         logs: list = []
         out = handle_chat(seed["user_id"], "Tôi muốn all-in ETF ngay", ctx, logs=logs)
         self.assertEqual(out["guardrail_result"], "deny")
-        self.assertIn("CORE-07", out["reply"])
+        # Learner bubble: VI title only — raw CORE-* stays in principle_keys JSON
+        self.assertIn("Phòng thủ", out["reply"])
+        self.assertNotRegex(out["reply"], r"\b(?:SAFE|CORE|DEBT)-\d{2}\b")
+        self.assertIn("CORE-07", out.get("principle_keys") or [])
         self.assertTrue(logs)
         self.assertIn("constitution_version", logs[0])
         self.assertIn("personal_codes_count", logs[0])

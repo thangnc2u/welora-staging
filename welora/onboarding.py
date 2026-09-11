@@ -45,6 +45,35 @@ DEFAULT_ARTICLES = [
 ]
 
 
+# UI allowlists — must match welora/api/static/onboarding.html <option value=…>
+LIFE_STAGE_VALUES = frozenset({
+    "young_single",
+    "established_single",
+    "young_couple",
+    "family",
+    "pre_retire",
+    "retired",
+})
+INCOME_STABILITY_VALUES = frozenset({"stable", "variable"})
+FAMILY_CONTEXT_VALUES = frozenset({"alone", "with_family"})
+NEAR_TERM_PRIORITY_VALUES = frozenset({"safety", "debt"})
+SURPLUS_HABIT_VALUES = frozenset({"hold", "spend"})
+AGENT_ROLE_PREFERENCE_VALUES = frozenset({"advisor_only"})
+RISK_TOLERANCE_VALUES = frozenset({1, 2, 3, 4, 5})
+
+
+class OnboardingEnumError(ValueError):
+    """Enum outside UI allowlist — HTTP layer maps to 422."""
+
+
+def _require_enum(field: str, value: Any, allowed: frozenset) -> Any:
+    if value not in allowed:
+        raise OnboardingEnumError(
+            f"{field} must be one of: {', '.join(sorted(str(x) for x in allowed))}"
+        )
+    return value
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -113,6 +142,15 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
         for req in ("life_stage", "income_stability", "family_context"):
             if req not in data:
                 raise ValueError(f"step 1 requires {req}")
+        data["life_stage"] = _require_enum(
+            "life_stage", data["life_stage"], LIFE_STAGE_VALUES
+        )
+        data["income_stability"] = _require_enum(
+            "income_stability", data["income_stability"], INCOME_STABILITY_VALUES
+        )
+        data["family_context"] = _require_enum(
+            "family_context", data["family_context"], FAMILY_CONTEXT_VALUES
+        )
     if step == 2:
         if "essential_expense_monthly" not in data:
             raise ValueError("step 2 requires essential_expense_monthly")
@@ -125,6 +163,34 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
         data["essential_expense_monthly"] = ess
         if "has_dangerous_debt_self" in data:
             data["has_dangerous_debt_self"] = bool(data["has_dangerous_debt_self"])
+        if "near_term_priority" in data:
+            data["near_term_priority"] = _require_enum(
+                "near_term_priority",
+                data["near_term_priority"],
+                NEAR_TERM_PRIORITY_VALUES,
+            )
+
+    if step == 3:
+        if "surplus_habit" in data:
+            data["surplus_habit"] = _require_enum(
+                "surplus_habit", data["surplus_habit"], SURPLUS_HABIT_VALUES
+            )
+        if "agent_role_preference" in data:
+            data["agent_role_preference"] = _require_enum(
+                "agent_role_preference",
+                data["agent_role_preference"],
+                AGENT_ROLE_PREFERENCE_VALUES,
+            )
+        if "risk_tolerance" in data:
+            try:
+                rt = int(data["risk_tolerance"])
+            except (TypeError, ValueError) as e:
+                raise OnboardingEnumError(
+                    "risk_tolerance must be one of: 1, 2, 3, 4, 5"
+                ) from e
+            data["risk_tolerance"] = _require_enum(
+                "risk_tolerance", rt, RISK_TOLERANCE_VALUES
+            )
 
     if step == 4:
         articles = data.get("articles")

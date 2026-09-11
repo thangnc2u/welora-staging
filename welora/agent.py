@@ -236,43 +236,46 @@ def evaluate_pre_rules(query: str, ctx: AgentContext) -> PreRuleResult:
 
 
 DENY_TEMPLATES: dict[str, str] = {
+    # Learner-facing VI only — never leak raw SAFE-* / CORE-* / DEBT-* (keys stay in JSON).
     "R05": (
         "Welora không cam kết lợi suất cố định hay 'chắc lời / không lỗ'.\n"
-        "Theo CORE-05: không để FOMO hoặc lời hứa ảo thay cho nguyên tắc.\n"
+        "Theo «Cảm xúc không được quyền ra quyết định»: không để FOMO hoặc lời hứa ảo thay cho nguyên tắc.\n"
         "→ Có thể bàn khung rủi ro và Goal — không phải bảo đảm lợi nhuận."
     ),
     "R01": (
         "Không nên rút quỹ khẩn cấp để đầu tư.\n"
-        "Theo SAFE-02 và CORE-07, quỹ khẩn cấp là lớp bảo vệ — chỉ dùng khi có sự cố bất ngờ.\n"
+        "Theo «Chỉ dùng quỹ cho sự cố bất ngờ» và «Phòng thủ đi trước Tăng trưởng», "
+        "quỹ khẩn cấp là lớp bảo vệ — chỉ dùng khi có sự cố bất ngờ.\n"
         "→ Giữ nguyên quỹ. Quyết định cuối cùng thuộc về bạn."
     ),
     "R02": (
         "Hiện tại không nên bắt đầu đầu tư.\n"
-        "Cổng An Toàn chưa đạt (DEBT-03, CORE-07). An Toàn trước tăng trưởng.\n"
+        "Cổng An Toàn chưa đạt («An Toàn trước đầu tư», «Phòng thủ đi trước Tăng trưởng»). "
+        "An Toàn trước tăng trưởng.\n"
         "→ Tạo Goal quỹ khẩn cấp 3 tháng. Quyết định cuối cùng thuộc về bạn."
     ),
     "R03": (
-        "Không nên vay nóng / lãi cao để đầu tư (CORE-07).\n"
+        "Không nên vay nóng / lãi cao để đầu tư («Phòng thủ đi trước Tăng trưởng»).\n"
         "Welora Agent không ủng hộ hướng này. Quyết định cuối cùng thuộc về bạn."
     ),
     "R04": (
-        "Tôi không thể quyết định thay bạn (CORE-01).\n"
+        "Tôi không thể quyết định thay bạn («Trách nhiệm Tuyệt đối»).\n"
         "Bạn là người chịu trách nhiệm cuối cùng. Tôi chỉ giúp phân tích lựa chọn."
     ),
     "R06": (
-        "Không nên giảm quỹ dưới 3 tháng (CORE-07 — ngưỡng cứng).\n"
+        "Không nên giảm quỹ dưới 3 tháng («Phòng thủ đi trước Tăng trưởng» — ngưỡng cứng).\n"
         "→ Giữ phần 3 tháng. Quyết định cuối cùng thuộc về bạn."
     ),
     "R07": (
-        "Không nên dùng quỹ khẩn cấp cho chi tiêu đã lên kế hoạch (SAFE-02).\n"
+        "Không nên dùng quỹ khẩn cấp cho chi tiêu đã lên kế hoạch («Chỉ dùng quỹ cho sự cố bất ngờ»).\n"
         "→ Tạo Goal tiết kiệm riêng. Quyết định cuối cùng thuộc về bạn."
     ),
     "R08": (
-        "Không thể mở Stage 3 khi Cổng An Toàn chưa Passed (CORE-07).\n"
+        "Không thể mở Stage 3 khi Cổng An Toàn chưa Passed («Phòng thủ đi trước Tăng trưởng»).\n"
         "→ Xây quỹ ≥ 3 tháng trước. Quyết định cuối cùng thuộc về bạn."
     ),
     "R09": (
-        "Tôi không đưa mã cụ thể khi Cổng An Toàn chưa đạt (CORE-07).\n"
+        "Tôi không đưa mã cụ thể khi Cổng An Toàn chưa đạt («Phòng thủ đi trước Tăng trưởng»).\n"
         "→ Tạo Goal quỹ khẩn cấp trước. Quyết định cuối cùng thuộc về bạn."
     ),
 }
@@ -281,7 +284,7 @@ DENY_TEMPLATES: dict[str, str] = {
 def render_deny(hit: RuleHit, bundle: Any = None) -> str:
     body = DENY_TEMPLATES.get(
         hit.rule_id,
-        f"Không thể hỗ trợ theo {', '.join(hit.principle_keys)}. Quyết định cuối cùng thuộc về bạn.",
+        "Không thể hỗ trợ theo nguyên tắc Welora. Quyết định cuối cùng thuộc về bạn.",
     )
     try:
         from welora.constitution_retrieve import enrich_deny_reply

@@ -171,6 +171,9 @@ def compute_health_score(
 def health_score_for_user(user_id: str) -> dict[str, Any]:
     goal = goals_api.STORE.get_active_for_user(user_id)
     flags = goals_api.get_user_flags(user_id)
+    # Parity with service_safety_gate: DNA has_dangerous_debt_self + debt_payoff
+    # must feed components.debt / embedded safety_gate via the same helper.
+    flags = goals_api._apply_debt_goal_flags(user_id, flags)
     if not goal:
         return compute_health_score(
             user_id=user_id,

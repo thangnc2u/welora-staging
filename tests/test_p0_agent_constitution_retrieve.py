@@ -78,9 +78,11 @@ class TestP0AgentConstitutionRetrieve(unittest.TestCase):
         self.assertEqual(out["guardrail_result"], "pass")
         self.assertTrue(out.get("llm_called"))
         self.assertGreaterEqual(out.get("core_articles_count") or 0, 1)
-        self.assertIn("CORE-", seen["sys"])
+        self.assertNotRegex(seen["sys"], r"\b(?:SAFE|CORE|DEBT|PC)-")
+        self.assertIn("Phòng thủ", seen["sys"])
         self.assertIn("Welorademy", seen["sys"])
         self.assertNotIn("Welora Academy", seen["sys"])
+        self.assertIn("CẤM nhắc mã nguyên lý nội bộ", seen["sys"])
 
     def test_missing_core_is_safe_deny(self):
         seed = dict(self.pair["passed"]["agent_context_seed"])

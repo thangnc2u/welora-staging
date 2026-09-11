@@ -271,7 +271,7 @@ DENY_TEMPLATES: dict[str, str] = {
         "→ Tạo Goal tiết kiệm riêng. Quyết định cuối cùng thuộc về bạn."
     ),
     "R08": (
-        "Không thể mở Stage 3 khi Cổng An Toàn chưa Passed («Phòng thủ đi trước Tăng trưởng»).\n"
+        "Không thể mở Giai đoạn 3 khi Cổng An Toàn chưa đạt («Phòng thủ đi trước Tăng trưởng»).\n"
         "→ Xây quỹ ≥ 3 tháng trước. Quyết định cuối cùng thuộc về bạn."
     ),
     "R09": (
@@ -333,7 +333,12 @@ def handle_chat(
             reply = render_deny(pre.primary_hit, bundle)
             model = "rule_only"
         elif call_llm:
-            system = advisory_system_prefix(bundle) + "CONTEXT: " + str(ctx)
+            gate = ctx.safety_gate
+            ctx_blurb = (
+                f"Cổng An Toàn: {'đã đạt' if gate.status == 'passed' else 'chưa đạt'}; "
+                f"tháng phủ={gate.months_covered}; tin cậy={ctx.data_confidence}."
+            )
+            system = advisory_system_prefix(bundle) + "NGỮ CẢNH: " + ctx_blurb
             reply = call_llm(system, message)
             model = "llm"
             llm_called = True

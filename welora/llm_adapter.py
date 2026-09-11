@@ -18,7 +18,7 @@ import urllib.request
 from typing import Callable, Optional
 
 
-SYSTEM_BASE = """Bạn là Welora CFO Agent (advisory-only).
+SYSTEM_BASE = """Bạn là Welora CFO Agent (chỉ tư vấn).
 Nguyên tắc cứng:
 - An Toàn trước: quỹ khẩn cấp ≥ 3 tháng, không khuyến khích phá quỹ để đầu tư.
 - Không cam kết lợi suất % cố định / “chắc lời”.
@@ -30,9 +30,9 @@ Nguyên tắc cứng:
 
 def stub_llm(system: str, message: str) -> str:
     return (
-        f"[stub-llm] {system.split(chr(10))[0][:80]}…\n\n"
+        f"[stub] {system.split(chr(10))[0][:80]}…\n\n"
         f"Tôi đã nhận: «{message[:160]}». "
-        "Đây là phản hồi advisory stub (chưa gọi model thật). "
+        "Đây là phản hồi mẫu (chưa gọi model thật). "
         "Khi Cổng An Toàn đã đạt, bạn có thể hỏi khung rủi ro, Goal tiết kiệm, "
         "hoặc nguyên tắc phân bổ — không phải lệnh all-in."
     )
@@ -180,7 +180,7 @@ def safe_call_llm(
         snippet = _http_error_snippet(e)
         detail = f"{status}: {snippet}" if snippet else str(status)
         return (
-            f"Không gọi được model (HTTPError {detail}).",
+            f"Không gọi được mô hình tư vấn (HTTP {detail}).",
             "llm_error",
             False,
         )
@@ -194,7 +194,7 @@ def safe_call_llm(
         json.JSONDecodeError,
     ) as e:
         return (
-            f"Không gọi được model ({type(e).__name__}).",
+            "Không gọi được mô hình tư vấn lúc này. Bạn thử lại sau nhé.",
             "llm_error",
             False,
         )

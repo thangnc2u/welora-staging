@@ -11,6 +11,9 @@ form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;border-radiu
 button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
 button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:12px}
+#suggestChips{display:none;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+#suggestChips.show{display:flex}
+#suggestChips button{margin:0;padding:8px 10px;width:auto;background:#243041;color:#e8eef7;border:1px solid #334155;border-radius:999px;font-size:12px}
 #denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
 #typing{display:none;align-items:center;gap:8px;margin:8px 0;color:#8b9bb4;font-size:13px}
@@ -23,9 +26,10 @@ button:disabled{opacity:.55}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Chat với Agent</h1>
-<p class="muted">Từ chối cứng trước LLM · An Toàn ≥ 3 tháng</p>
+<p class="muted">Từ chối cứng trước tư vấn · An Toàn ≥ 3 tháng</p>
 <a id="denyCta" href="/app/content?key=SAFE-02">Đọc nguyên tắc An Toàn</a>
 <div id="log"></div>
+<div id="suggestChips" aria-label="Gợi ý sau Cổng"></div>
 <div id="typing" aria-live="polite" aria-busy="false">
   <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
   <span id="typingText">Đang soạn…</span>
@@ -84,14 +88,33 @@ function weloraDeviceId(){
   }
   return id;
 }
+const suggestChips=document.getElementById('suggestChips');
+const POST_PASS_CHIPS=['Quỹ khẩn cấp nên giữ thế nào?','Tiền dư sau An Toàn dùng ra sao?'];
+function hideChips(){ if(suggestChips){ suggestChips.classList.remove('show'); suggestChips.replaceChildren(); } }
+function showPostPassChips(){
+  if(!suggestChips || log.querySelector('.msg.user')) return;
+  suggestChips.replaceChildren();
+  for(const label of POST_PASS_CHIPS){
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=label;
+    b.onclick=()=>{ hideChips(); document.getElementById('q').value=label; document.getElementById('f').requestSubmit(); };
+    suggestChips.appendChild(b);
+  }
+  suggestChips.classList.add('show');
+}
 (async()=>{
   const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
   const d=await r.json(); uid=d.user_id;
   add('Sẵn sàng','bot muted');
+  try{
+    const g=await fetch('/users/'+encodeURIComponent(uid)+'/safety-gate');
+    const gate=await g.json();
+    if(gate && gate.status==='passed') showPostPassChips();
+  }catch(_e){}
 })();
 document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return;
-  document.getElementById('q').value=''; add(q,'user');
+  document.getElementById('q').value=''; add(q,'user'); hideChips();
   setLoading(true);
   try{
     const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});

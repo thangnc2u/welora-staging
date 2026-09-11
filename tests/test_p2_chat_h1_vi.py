@@ -20,12 +20,11 @@ class TestP2ChatH1Vi(unittest.TestCase):
         self.assertIn("<h1>Chat với Agent</h1>", html)
         self.assertIn("\u1edb", html)
         self.assertNotIn("<h1>CFO Agent</h1>", html)
-        self.assertIn("Từ chối cứng trước LLM · An Toàn ≥ 3 tháng", html)
-        self.assertIn("Cổng: ĐẠT", html)
-        self.assertIn("Cổng: CHƯA ĐẠT", html)
-        self.assertIn("className=s", html)
-        for nid in ("navHome", "gateBadge", "denyCta", "log", "f", "q"):
+        self.assertIn("Từ chối cứng trước tư vấn · An Toàn ≥ 3 tháng", html)
+        self.assertIn("className=", html)
+        for nid in ("navHome", "denyCta", "log", "f", "q"):
             self.assertIn(f'id="{nid}"', html)
+        self.assertNotIn('id="gateBadge"', html)
         self.assertIn("welora_device_id", html)
         self.assertIn("/agent/chat", html)
         self.assertIn("user_id:uid", html)

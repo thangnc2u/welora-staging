@@ -172,26 +172,32 @@ def top_core_articles(
 
 
 def advisory_system_prefix(bundle: ConstitutionBundle) -> str:
-    """Khối context bắt buộc cho advisory LLM. hard_ban trước."""
+    """Khối context bắt buộc cho tư vấn LLM — VI titles/principles only (no raw keys)."""
     if not bundle.ok:
         return (
             "DỬNG. Không tải được Hiến pháp Cốt lõi. Không tư vấn cá nhân hóa.\n"
         )
     lines = [
-        "Welora Agent Stage 1 — An Toàn trước. Trụ giáo dục: Welorademy.",
+        "Welora Agent Giai đoạn 1 — An Toàn trước. Trụ giáo dục: Welorademy.",
         f"Hiến pháp Cốt lõi version={bundle.constitution_version}.",
-        "Nguyên lý bắt buộc (ưu tiên hard_ban):",
+        "Nguyên lý bắt buộc (ưu tiên cấm cứng):",
     ]
     for a in top_core_articles(bundle):
-        lines.append(
-            f"- {a.get('code')} · {a.get('title')} [{a.get('constraint_type')}]: "
-            f"{a.get('principle')}"
-        )
+        title = str(a.get("title") or "").strip()
+        principle = str(a.get("principle") or "").strip()
+        if title and principle:
+            lines.append(f"- {title}: {principle}")
+        elif title:
+            lines.append(f"- {title}")
     if bundle.personal_codes:
-        lines.append(
-            "Hiến pháp Cá nhân (mã): " + ", ".join(bundle.personal_codes)
-        )
+        # Confirm personal constitution exists — never list PC-/CORE-/SAFE-/DEBT- codes.
+        lines.append("Hiến pháp Cá nhân: đã xác nhận (không nhắc mã nguyên lý).")
     lines.append("Không cam kết lợi suất. Không quyết định thay user.")
+    lines.append(
+        "Trong câu trả lời cho học viên: chỉ tiếng Việt + tiêu đề nguyên lý; "
+        "CẤM nhắc mã nguyên lý nội bộ hay jargon tiếng Anh "
+        "(Emergency Fund, Stage, Passed, advisory)."
+    )
     return "\n".join(lines) + "\n"
 
 

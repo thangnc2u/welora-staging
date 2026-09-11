@@ -1,4 +1,4 @@
-"""P2 Ticket AU — chat muted Vietnamese."""
+"""P2 Ticket AU — chat muted Vietnamese (no LLM jargon)."""
 
 from __future__ import annotations
 
@@ -16,14 +16,17 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "chat
 class TestP2ChatMutedVi(unittest.TestCase):
     def test_muted(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Từ chối cứng trước LLM · An Toàn ≥ 3 tháng", html)
+        self.assertIn("Từ chối cứng trước tư vấn · An Toàn ≥ 3 tháng", html)
         self.assertIn("\u1eeb", html)
         self.assertIn("c\u1ee9ng", html)
         self.assertNotIn("Hard Deny trước LLM · An Toàn ≥ 3 tháng", html)
+        self.assertNotIn("trước LLM", html)
         self.assertIn("<h1>Chat với Agent</h1>", html)
-        self.assertIn("Cổng: ĐẠT", html)
-        self.assertIn("Cổng: CHƯA ĐẠT", html)
-        for nid in ("navHome", "gateBadge", "denyCta", "log", "f", "q"):
+        # badge Cổng ẩn trên chat (UX hide gate badge)
+        self.assertNotIn('id="gateBadge"', html)
+        self.assertNotIn("Cổng: ĐẠT", html)
+        self.assertNotIn("Cổng: CHƯA ĐẠT", html)
+        for nid in ("navHome", "denyCta", "log", "f", "q"):
             self.assertIn(f'id="{nid}"', html)
         self.assertIn("welora_device_id", html)
         self.assertIn("/agent/chat", html)

@@ -18,10 +18,11 @@ class TestP2HomeDemoVi(unittest.TestCase):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn('id="navDemo"', html)
         self.assertIn('href="/app/demo"', html)
-        self.assertIn("Demo 8 bước", html)
+        self.assertIn("Xem thử 8 bước", html)
+        self.assertIn('class="nav dev-only" id="navDemo"', html)
         self.assertIn("\u1edb", html)
         self.assertNotIn("Demo E2E", html)
-        self.assertIn("Pre-Rule · gỡ lỗi", html)
+        self.assertIn("Quy tắc trước · gỡ lỗi", html)
         self.assertIn('id="navPreRule"', html)
         self.assertNotIn("innerHTML", html)
 

@@ -33,7 +33,7 @@ class TestP2DnaLifeStageVi(unittest.TestCase):
         self.assertIn("['Chấp nhận rủi ro'", html)
         self.assertIn("['Vai trò Agent ưa thích'", html)
         self.assertIn("fields.forEach(([k,v])=>box.appendChild(row(k,v)))", html)
-        self.assertIn("<title>DNA tài chính</title>", html)
+        self.assertIn("<title>Welora · DNA tài chính</title>", html)
         self.assertIn("<h1>DNA tài chính</h1>", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "dna"):

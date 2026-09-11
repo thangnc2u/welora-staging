@@ -20,7 +20,7 @@ class TestP2PreruleNavVi(unittest.TestCase):
         pre = PRE.read_text(encoding="utf-8")
         self.assertIn('id="navPreRule"', home)
         self.assertIn('href="/app/pre-rule"', home)
-        self.assertIn("Pre-Rule · gỡ lỗi", home)
+        self.assertIn("Quy tắc trước · gỡ lỗi", home)
         self.assertIn("<title>Pre-Rule · gỡ lỗi</title>", pre)
         self.assertIn("<h1>Pre-Rule</h1>", pre)
         self.assertIn("Chạy Pre-Rule", pre)

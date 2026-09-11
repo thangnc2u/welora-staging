@@ -63,7 +63,7 @@ class TestP1AcademyFlow12Xp(unittest.TestCase):
         self.assertIn("from=pedia", html)
         self.assertIn("focusNode", html)
         self.assertIn("osNudge", html)
-        self.assertIn("Tạo Goal trên WeloraOS", html)
+        self.assertIn("Tạo mục tiêu trên WeloraOS", html)
         self.assertNotIn("Welora Academy", html)
         self.assertNotIn("innerHTML", html)
         self.assertIn("N02-01", nodes_for_principle("SAFE-01"))

@@ -39,7 +39,7 @@ class TestP2UxAppShell(unittest.TestCase):
             self.assertIn(label, js)
         self.assertNotIn('label: "Mục tiêu"', js)
         self.assertNotIn("Trợ lý AI", js)
-        self.assertNotIn("/app/goals", js)
+        self.assertNotIn('href: "/app/goals"', js)  # goals is not a bottom tab
         self.assertIn("/app/content", js)
         self.assertIn("/app/chat", js)
         self.assertIn("/app/academy", js)

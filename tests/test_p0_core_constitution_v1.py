@@ -79,7 +79,9 @@ class TestP0CoreConstitutionV1(unittest.TestCase):
     def test_html_core_cta(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn("Cốt lõi", html)
-        self.assertIn("CORE-01", html)
+        self.assertIn("10 Nguyên lý Bất biến", html)
+        self.assertNotIn("CORE-01 … CORE-10", html)
+        self.assertNotIn("c.textContent=a.code", html)
         self.assertIn('id="ctaPersonal"', html)
         self.assertIn('href="/app/constitution"', html)
         self.assertIn("/constitution/core", html)

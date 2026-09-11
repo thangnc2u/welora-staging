@@ -1,4 +1,4 @@
-"""P2 Ticket AK — chat gate badge Vietnamese."""
+"""P2 Ticket AK — chat gate badge Vietnamese (badge ẩn; setGate no-op)."""
 
 from __future__ import annotations
 
@@ -16,14 +16,13 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "chat
 class TestP2ChatGateVi(unittest.TestCase):
     def test_gate_badge_vietnamese(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("Cổng: ĐẠT", html)
-        self.assertIn("Cổng: CHƯA ĐẠT", html)
+        # Badge Cổng ẩn trên chat — labels không còn trên DOM
+        self.assertNotIn("Cổng: ĐẠT", html)
+        self.assertNotIn("Cổng: CHƯA ĐẠT", html)
+        self.assertNotIn('id="gateBadge"', html)
         self.assertIn("function setGate", html)
-        self.assertIn("className=s", html)
-        self.assertIn("'passed'", html)
+        self.assertIn("safety_gate_status", html)
         self.assertIn("'not_passed'", html)
-        self.assertNotIn("'Cổng: '+s", html)
-        self.assertNotIn('"Cổng: "+s', html)
         self.assertNotIn("innerHTML", html)
         self.assertIn('id="navHome"', html)
         self.assertIn('id="denyCta"', html)

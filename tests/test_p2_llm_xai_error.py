@@ -40,9 +40,11 @@ class TestP2LlmXaiError(unittest.TestCase):
         reply, tag, invoked = safe_call_llm(boom, "sys", "hi")
         self.assertFalse(invoked)
         self.assertEqual(tag, "llm_error")
-        self.assertIn("HTTPError", reply)
+        self.assertNotIn("HTTPError", reply)
+        self.assertIn("HTTP", reply)
         self.assertIn("400", reply)
         self.assertIn("unknown field", reply)
+        self.assertIn("mô hình tư vấn", reply)
         self.assertNotIn("xai-", reply)
 
         code, out = service_chat(
@@ -58,7 +60,8 @@ class TestP2LlmXaiError(unittest.TestCase):
         if out.get("guardrail_result") != "deny":
             self.assertEqual(out.get("model_used"), "llm_error")
             self.assertFalse(out.get("llm_called"))
-            self.assertIn("HTTPError", out.get("reply") or "")
+            self.assertNotIn("HTTPError", out.get("reply") or "")
+            self.assertIn("mô hình tư vấn", out.get("reply") or "")
 
     def test_deny_all_in_etf_no_llm(self):
         reset_logs()

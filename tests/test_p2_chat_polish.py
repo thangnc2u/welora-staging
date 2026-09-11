@@ -19,7 +19,7 @@ class TestP2ChatPolish(unittest.TestCase):
         self.assertNotIn("JSON.stringify(d)", html)
         self.assertNotIn("user='+uid", html)
         self.assertNotIn('user="+uid', html)
-        self.assertIn('id="gateBadge"', html)
+        self.assertNotIn('id="gateBadge"', html)
         self.assertIn('id="denyCta"', html)
         self.assertIn('id="navHome"', html)
         self.assertIn("welora_device_id", html)

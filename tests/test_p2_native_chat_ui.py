@@ -1,4 +1,4 @@
-"""P2 Native UI /app/chat — gateBadge + denyCta. Deny never calls LLM."""
+"""P2 Native UI /app/chat — denyCta (badge Cổng ẩn). Deny never calls LLM."""
 
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ class TestP2NativeChatUi(unittest.TestCase):
         self.pair = load_pair()
         self.client = TestClient(create_app())
 
-    def test_chat_html_has_gate_badge_and_deny_cta(self):
+    def test_chat_html_has_deny_cta_no_gate_badge(self):
         html = CHAT_HTML.read_text(encoding="utf-8")
-        self.assertIn('id="gateBadge"', html)
+        self.assertNotIn('id="gateBadge"', html)
         self.assertIn('id="denyCta"', html)
         self.assertIn("/app/content?key=SAFE-02", html)
         self.assertIn("<a", html)

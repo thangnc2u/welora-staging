@@ -92,7 +92,10 @@ def advisory_stub(message: str, gate_status: str) -> str:
             "Tôi có thể hỗ trợ trong phạm vi An Toàn. "
             "Cổng chưa đạt — ưu tiên quỹ ≥ 3 tháng."
         )
-    return "Cổng An Toàn đã đạt. Tôi hỗ trợ advisory, không quyết định thay bạn."
+    return (
+        "Cổng An Toàn đã đạt. Tôi hỗ trợ tư vấn trong phạm vi An Toàn, "
+        "không quyết định thay bạn."
+    )
 
 
 def soft_warning_stub() -> str:
@@ -131,7 +134,7 @@ def service_chat(
     llm_called = False
     model_used = "rule_only"
     low_conf = False
-    sys_prefix = pre.get("advisory_prefix") or "Welora Agent Stage 1. An Toàn trước. Trụ giáo dục: Welorademy.\n"
+    sys_prefix = pre.get("advisory_prefix") or "Welora Agent Giai đoạn 1. An Toàn trước. Trụ giáo dục: Welorademy.\n"
 
     answer_confidence = float(pre.get("answer_confidence") if pre.get("answer_confidence") is not None else 0.0)
     if context_seed and context_seed.get("answer_confidence") is not None:
@@ -163,7 +166,7 @@ def service_chat(
     else:
         from welora.llm_adapter import safe_call_llm
         reply, model_used, llm_called = safe_call_llm(
-            call_llm, sys_prefix + "Welora Agent Stage 1 advisory.", message
+            call_llm, sys_prefix + "Welora Agent Giai đoạn 1 — tư vấn An Toàn.", message
         )
         if not llm_called and model_used != "llm_error":
             reply = advisory_stub(message, gate_status)

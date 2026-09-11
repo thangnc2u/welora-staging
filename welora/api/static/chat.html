@@ -7,7 +7,7 @@ body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16p
 #log{flex:1;overflow:auto;background:#141b24;border-radius:12px;padding:12px;border:1px solid #243041}
 .msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%}.user{background:#1e3a5f;margin-left:auto}.bot{background:#1a2332}
 .deny{border-left:3px solid #ff6b6b}.pass{border-left:3px solid #3dd68c}
-form{display:flex;gap:8px;margin-top:12px}input{flex:1;padding:12px;border-radius:10px;border:1px solid #243041;background:#0b0f14;color:#e8eef7}
+form{display:flex;gap:8px;margin-top:12px}form#f[hidden]{display:none}input{flex:1;padding:12px;border-radius:10px;border:1px solid #243041;background:#0b0f14;color:#e8eef7}
 button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
 button:disabled{opacity:.55}
 .muted{color:#8b9bb4;font-size:12px}
@@ -16,6 +16,16 @@ button:disabled{opacity:.55}
 #suggestChips button{margin:0;padding:8px 10px;width:auto;background:#243041;color:#e8eef7;border:1px solid #334155;border-radius:999px;font-size:12px}
 #denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
+#unlockWall{display:none;margin:0 0 12px;padding:14px;border-radius:12px;background:#141b24;border:1px solid #ffb020;color:#e8eef7}
+#unlockWall.show{display:block}
+#unlockWall h2{font-size:16px;margin:0 0 8px}
+#unlockWall p{margin:0 0 12px;color:#8b9bb4;font-size:14px;line-height:1.45}
+#unlockWall .ctas{display:flex;flex-direction:column;gap:8px}
+#unlockCtaSafety{display:block;padding:12px;border-radius:10px;background:#3b82f6;color:#fff;text-align:center;text-decoration:none;font-weight:600}
+#unlockCtaOnboard{display:block;padding:12px;border-radius:10px;background:#243041;color:#e8eef7;border:1px solid #334155;text-align:center;text-decoration:none;font-weight:600}
+#prePassChips{display:none;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+#prePassChips.show{display:flex}
+#prePassChips a{display:inline-block;padding:8px 10px;background:#243041;color:#e8eef7;border:1px solid #334155;border-radius:999px;font-size:12px;text-decoration:none;font-weight:600}
 #typing{display:none;align-items:center;gap:8px;margin:8px 0;color:#8b9bb4;font-size:13px}
 #typing.show{display:flex}
 #typing .dots span{display:inline-block;width:6px;height:6px;margin-right:3px;border-radius:99px;background:#8b9bb4;animation:blink 1s infinite}
@@ -27,6 +37,18 @@ button:disabled{opacity:.55}
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Chat với Agent</h1>
 <p class="muted">Từ chối cứng trước tư vấn · An Toàn ≥ 3 tháng</p>
+<div id="unlockWall">
+  <h2>Cổng An Toàn chưa đạt</h2>
+  <p>Chat với Agent mở sau khi hoàn thành Cổng. Từ chối cứng vẫn áp dụng trước mọi tư vấn — không giả trạng thái đã đạt.</p>
+  <div class="ctas">
+    <a id="unlockCtaSafety" href="/app/safety">Mở Cổng An Toàn</a>
+    <a id="unlockCtaOnboard" href="/app/onboarding">Bắt đầu · Hiến pháp</a>
+  </div>
+  <div id="prePassChips" aria-label="Gợi ý trước Cổng">
+    <a href="/app/safety">Xem checklist Cổng</a>
+    <a href="/app/onboarding">Thiết lập Hiến pháp</a>
+  </div>
+</div>
 <a id="denyCta" href="/app/safety">Đọc nguyên tắc An Toàn</a>
 <div id="log"></div>
 <div id="suggestChips" aria-label="Gợi ý sau Cổng"></div>
@@ -34,7 +56,7 @@ button:disabled{opacity:.55}
   <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
   <span id="typingText">Đang soạn…</span>
 </div>
-<form id="f"><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
+<form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script>
 const log=document.getElementById('log');
 const denyCta=document.getElementById('denyCta');
@@ -100,7 +122,12 @@ function weloraDeviceId(){
   return id;
 }
 const suggestChips=document.getElementById('suggestChips');
+const unlockWall=document.getElementById('unlockWall');
+const prePassChips=document.getElementById('prePassChips');
+const chatForm=document.getElementById('f');
 const POST_PASS_CHIPS=['Quỹ khẩn cấp nên giữ thế nào?','Tiền dư sau An Toàn dùng ra sao?'];
+const GREETING_PRE='Cổng An Toàn chưa đạt. Hoàn thành Cổng trước khi chat. Từ chối cứng vẫn áp dụng trước tư vấn.';
+const GREETING_POST='Cổng An Toàn đã đạt. Hỏi trong phạm vi An Toàn — từ chối cứng vẫn được kiểm tra trước.';
 function hideChips(){ if(suggestChips){ suggestChips.classList.remove('show'); suggestChips.replaceChildren(); } }
 function showPostPassChips(){
   if(!suggestChips || log.querySelector('.msg.user')) return;
@@ -113,15 +140,35 @@ function showPostPassChips(){
   }
   suggestChips.classList.add('show');
 }
+function showUnlockWall(){
+  if(unlockWall) unlockWall.classList.add('show');
+  if(prePassChips) prePassChips.classList.add('show');
+  if(chatForm) chatForm.hidden=true;
+  hideChips();
+}
+function hideUnlockWall(){
+  if(unlockWall) unlockWall.classList.remove('show');
+  if(prePassChips) prePassChips.classList.remove('show');
+  if(chatForm) chatForm.hidden=false;
+}
 (async()=>{
   const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
   const d=await r.json(); uid=d.user_id;
-  add('Sẵn sàng','bot muted');
   try{
     const g=await fetch('/users/'+encodeURIComponent(uid)+'/safety-gate');
     const gate=await g.json();
-    if(gate && gate.status==='passed') showPostPassChips();
-  }catch(_e){}
+    if(gate && gate.status==='passed'){
+      hideUnlockWall();
+      add(GREETING_POST,'bot muted');
+      showPostPassChips();
+    }else{
+      showUnlockWall();
+      add(GREETING_PRE,'bot muted');
+    }
+  }catch(_e){
+    showUnlockWall();
+    add(GREETING_PRE,'bot muted');
+  }
 })();
 document.getElementById('f').onsubmit=async(e)=>{
   e.preventDefault(); const q=document.getElementById('q').value.trim(); if(!q)return;

@@ -208,7 +208,7 @@ def evaluate_pre_rules(query: str, ctx: AgentContext) -> PreRuleResult:
         hits.append(RuleHit("R01", ["SAFE-02", "CORE-07"], "Dùng quỹ khẩn cấp để đầu tư",
                             ["keep_emergency_fund", "create_invest_goal_surplus_only"]))
     if _has_any(query, K_INVEST) and gate_not_passed:
-        hits.append(RuleHit("R02", ["DEBT-03", "CORE-07"], "Đầu tư khi Cổng An Toàn chưa Passed",
+        hits.append(RuleHit("R02", ["DEBT-03", "CORE-07"], "Đầu tư khi Cổng An Toàn chưa đạt",
                             ["create_emergency_fund_goal", "view_safety_gate"]))
     if _has_any(query, K_LOAN) and _has_any(query, K_INVEST):
         hits.append(RuleHit("R03", ["CORE-07"], "Vay lãi cao / nóng để đầu tư", ["create_debt_payoff_goal"]))
@@ -222,7 +222,7 @@ def evaluate_pre_rules(query: str, ctx: AgentContext) -> PreRuleResult:
     if _has_any(query, K_EFUND) and _has_any(query, K_PLAN):
         hits.append(RuleHit("R07", ["SAFE-02"], "Dùng quỹ cho chi tiêu kế hoạch", ["create_savings_goal"]))
     if _has_any(query, K_STAGE3) and gate_not_passed:
-        hits.append(RuleHit("R08", ["CORE-07"], "Mở Stage 3 khi chưa Passed",
+        hits.append(RuleHit("R08", ["CORE-07"], "Mở Giai đoạn 3 khi chưa đạt",
                             ["create_emergency_fund_goal", "view_safety_gate"]))
     if _has_any(query, K_TICKER) and gate_not_passed:
         hits.append(RuleHit("R09", ["CORE-07"], "Yêu cầu mã khi chưa An Toàn", ["create_emergency_fund_goal"]))
@@ -239,7 +239,7 @@ DENY_TEMPLATES: dict[str, str] = {
     # Learner-facing VI only — never leak raw SAFE-* / CORE-* / DEBT-* (keys stay in JSON).
     "R05": (
         "Welora không cam kết lợi suất cố định hay 'chắc lời / không lỗ'.\n"
-        "Theo «Cảm xúc không được quyền ra quyết định»: không để FOMO hoặc lời hứa ảo thay cho nguyên tắc.\n"
+        "Theo «Cảm xúc không được quyền ra quyết định»: không để nỗi sợ bỏ lỡ hoặc lời hứa ảo thay cho nguyên tắc.\n"
         "→ Có thể bàn khung rủi ro và Goal — không phải bảo đảm lợi nhuận."
     ),
     "R01": (

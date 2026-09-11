@@ -141,6 +141,8 @@ def apply_progress(
     set_amount: Optional[float] = None,
     add_amount: Optional[float] = None,
 ) -> EmergencyFundGoal:
+    if goal.status == "completed":
+        raise ValueError("goal already completed")
     if set_amount is not None and add_amount is not None:
         raise ValueError("Provide either set_amount or add_amount, not both")
     if set_amount is None and add_amount is None:

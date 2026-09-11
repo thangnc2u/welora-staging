@@ -24,6 +24,7 @@ button:disabled{opacity:.55}
 .chips button{margin:0;padding:8px 10px;background:#243041}
 .card.focus-debt{border-color:#f59e0b;box-shadow:0 0 0 1px #f59e0b}
 .banner{background:#1f2937;border:1px solid #f59e0b;border-radius:12px;padding:12px;margin:10px 0;color:#fde68a;font-size:14px}
+.badge-done{display:inline-block;margin-top:8px;padding:4px 10px;border-radius:999px;background:#14532d;color:#bbf7d0;font-size:12px;font-weight:700}
 </style>
 </head>
 <body>
@@ -52,7 +53,7 @@ button:disabled{opacity:.55}
   <div class="label">Cộng tiến độ</div>
   <p class="muted" id="addHint"></p>
   <select id="goalPick"></select>
-  <input id="addAmount" type="text" inputmode="numeric" placeholder="Số tiền cộng"/>
+  <input id="addAmount" type="text" inputmode="numeric" placeholder="Số đã trả hướng mục tiêu"/>
   <div class="chips" id="addChips">
     <button type="button" data-vnd="5000000">5tr</button>
     <button type="button" data-vnd="10000000">10tr</button>
@@ -113,11 +114,22 @@ function syncDebtBox(items){
 function syncAddUi(){
   const btn=document.getElementById('addBtn');
   const hint=document.getElementById('addHint');
+  const amt=document.getElementById('addAmount');
   const g=selectedGoal();
   if(!g){
     setProgressEnabled(false);
     btn.textContent='Cộng tiền';
     hint.textContent=emptyProgressHint();
+    if(amt) amt.placeholder='Số đã trả hướng mục tiêu';
+    return;
+  }
+  if(amt){
+    amt.placeholder=(g.type==='debt_payoff')?'Số đã trả hướng mục tiêu':'Số tiền cộng';
+  }
+  if(g.status==='completed'){
+    setProgressEnabled(false);
+    btn.textContent='Đã hoàn thành';
+    hint.textContent='Mục tiêu đã hoàn thành — không cộng thêm.';
     return;
   }
   setProgressEnabled(true);
@@ -252,6 +264,12 @@ function renderItems(items){
     const isDebt=g.type==='debt_payoff';
     el.appendChild(line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title||(isDebt?'Trả nợ nguy hiểm':'Quỹ khẩn cấp')));
     el.appendChild(line('Loại', typeLabel(g.type)));
+    if(g.status==='completed'){
+      const badge=document.createElement('div');
+      badge.className='badge-done';
+      badge.textContent='Hoàn thành';
+      el.appendChild(badge);
+    }
     if(isDebt){
       el.appendChild(line('Số cần trả', tgt.amount, true));
       el.appendChild(line('Đã trả', cur.amount, true));
@@ -339,6 +357,8 @@ document.getElementById('addBtn').addEventListener('click', async()=>{
   if(btn.disabled) return;
   const n=WeloraMoney.parseVnd(document.getElementById('addAmount').value);
   const gid=document.getElementById('goalPick').value||lastId;
+  const gSel=goalsById[gid]||selectedGoal();
+  if(gSel && gSel.status==='completed'){err.textContent='Mục tiêu đã hoàn thành — không cộng thêm.';return;}
   if(!(n>0)||!gid){err.textContent='Chọn mục tiêu và nhập số > 0';return;}
   btn.disabled=true;
   try{
@@ -363,8 +383,32 @@ function applyDebtFocus(){
   if(q.get('focus')!=='debt' && hash!=='debtForm') return;
   const banner=document.getElementById('debtFocusBanner');
   const box=document.getElementById('debtBox');
+  const addBox=document.getElementById('addBox');
   const form=document.getElementById('debtForm');
-  if(banner) banner.hidden=false;
+  const hasDebt=hasDebtGoal();
+  if(banner){
+    banner.hidden=false;
+    banner.textContent=hasDebt
+      ? 'Đã có mục tiêu trả nợ — dùng Cộng tiến độ bên dưới.'
+      : 'Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ';
+  }
+  if(hasDebt){
+    if(box) box.classList.remove('focus-debt');
+    if(addBox){
+      addBox.classList.add('focus-debt');
+      try{ addBox.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_e){ addBox.scrollIntoView(); }
+    }
+    const debtId=Object.keys(goalsById).find(function(k){ return goalsById[k].type==='debt_payoff'; });
+    if(debtId){
+      lastId=debtId;
+      const sel=document.getElementById('goalPick');
+      if(sel) sel.value=debtId;
+      syncAddUi();
+    }
+    const input=document.getElementById('addAmount');
+    if(input && !input.disabled) try{ input.focus(); }catch(_e){}
+    return;
+  }
   if(box){
     box.classList.add('focus-debt');
     try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_e){ box.scrollIntoView(); }

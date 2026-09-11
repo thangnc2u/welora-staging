@@ -231,7 +231,9 @@ class SqliteEmergencyFundStore:
             principle_keys=(["DEBT-01", "DEBT-03", "CORE-07"] if row["type"] == "debt_payoff" else ["SAFE-01", "CORE-07"]),
             target_amount=float(row["target_amount"] or 0),
             target_unit="VND",
-            months_of_expense=int(row["months_of_expense"] or 3),
+            months_of_expense=(
+                3 if row["months_of_expense"] is None else int(row["months_of_expense"])
+            ),
             target_date=row["target_date"],
             current_amount=float(row["current_amount"] or 0),
             percent=percent,

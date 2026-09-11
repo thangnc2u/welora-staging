@@ -60,7 +60,7 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
   <div class="muted">Cổng An Toàn</div>
   <div class="badge not_passed" id="gateBadge">Cổng: …</div>
   <p class="muted" id="gateNote">Mục tiêu quỹ 3 tháng chi tiêu thiết yếu.</p>
-  <a class="more" id="navSafety" href="/app/safety">Xem checklist Cổng</a>
+  <a class="more" id="navSafety" href="/app/safety">Xem danh sách kiểm Cổng</a>
 </div>
 
 <div class="card" id="efCard">
@@ -79,17 +79,17 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 <nav class="tools" id="tools">
   <a class="nav" id="navOnboarding" href="/app/onboarding">Bắt đầu · Hiến pháp</a>
   <a class="nav" id="navChat" href="/app/chat" hidden>Chat với Agent</a>
-  <a class="nav" id="navContent" href="/app/content">Welorapedia</a>
-  <a class="nav" id="navAcademy" href="/app/academy">Welorademy</a>
+  <a class="nav dev-only" id="navContent" href="/app/content">Welorapedia</a>
+  <a class="nav dev-only" id="navAcademy" href="/app/academy">Welorademy</a>
   <a class="nav dev-only" id="navDemo" href="/app/demo">Xem thử 8 bước</a>
-  <a class="nav" id="navParser" href="/app/parser">Sao kê CSV</a>
-  <a class="nav" id="navMetrics" href="/app/metrics">Chỉ số</a>
+  <a class="nav dev-only" id="navParser" href="/app/parser">Sao kê CSV</a>
+  <a class="nav dev-only" id="navMetrics" href="/app/metrics">Chỉ số</a>
   <a class="nav dev-only" id="navLogs" href="/app/logs">Nhật ký quyết định</a>
-  <a class="nav" id="navCoreConstitution" href="/app/core-constitution">Hiến pháp Cốt lõi</a>
+  <a class="nav dev-only" id="navCoreConstitution" href="/app/core-constitution">Hiến pháp Cốt lõi</a>
   <a class="nav" id="navConstitution" href="/app/constitution">Hiến pháp cá nhân</a>
   <a class="nav" id="navDna" href="/app/dna">DNA tài chính</a>
   <a class="nav" id="navGoals" href="/app/goals">Mục tiêu</a>
-  <a class="nav" id="navOtp" href="/app/otp">OTP điện thoại</a>
+  <a class="nav dev-only" id="navOtp" href="/app/otp">OTP điện thoại</a>
   <a class="nav dev-only" id="navPreRule" href="/app/pre-rule">Quy tắc trước · gỡ lỗi</a>
   <a class="nav" id="navHealth" href="/app/health-score">Điểm sức khỏe</a>
 </nav>
@@ -114,7 +114,7 @@ function setDonut(score, level){
   arc.setAttribute('stroke-dasharray', String(circ));
   arc.setAttribute('stroke-dashoffset', String(off));
   arc.setAttribute('stroke', COLORS[level]||'#3b82f6');
-  document.getElementById('hsPctLabel').textContent=pct(s/10)+' thang 1000';
+  document.getElementById('hsPctLabel').textContent=pct(s/10);
 }
 (function(){
   var q=new URLSearchParams(location.search);
@@ -153,22 +153,63 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     badge.className='badge '+(passed?'passed':'not_passed');
     const navChat=document.getElementById('navChat');
     if(navChat) navChat.hidden=!passed;
+    const reasons=gate.reasons||[];
+    const GATE_REASON_VI={
+      data_missing:'Thiếu dữ liệu',
+      emergency_fund_below_3_months:'Quỹ khẩn cấp dưới 3 tháng',
+      dangerous_debt_unhandled:'Nợ nguy hiểm chưa xử lý',
+      mastery_missing:'Chưa đạt làm chủ (cần Áp dụng)',
+      recent_hard_rule_violation:'Vi phạm Luật cứng gần đây'
+    };
+    function formatGateReasons(list){
+      return (list||[]).map(function(c){return GATE_REASON_VI[c]||c;}).filter(function(t){
+        return t && !/^(SAFE|DEBT|CORE|N0)-/i.test(t) && !/^N0\d/i.test(t);
+      }).join(' · ');
+    }
+    const dataMissing=reasons.indexOf('data_missing')>=0;
     const ef=(hs.components&&hs.components.emergency_fund)||{};
     const det=ef.details||{};
     const months=det.months_covered;
-    const rawPct=det.percent_to_target;
-    const w=Math.max(0,Math.min(100,Number(rawPct)||0));
-    document.getElementById('efBar').style.width=w+'%';
-    document.getElementById('efPct').textContent=pct(w);
     const cur=det.current_amount;
     const tgt=det.target_amount;
-    var extra='';
-    if(cur!=null && tgt!=null && window.WeloraMoney){
-      extra=' · '+WeloraMoney.formatVnd(cur)+' / '+WeloraMoney.formatVnd(tgt);
+    const noGoal=!det.goal_id || tgt==null || Number(tgt)===0;
+    const gateCta=document.getElementById('navSafety');
+    if(dataMissing || noGoal){
+      gateCta.href='/app/onboarding';
+      gateCta.textContent='Bắt đầu · Hiến pháp';
+      const next=formatGateReasons(reasons);
+      if(next) document.getElementById('gateNote').textContent=next;
+      else document.getElementById('gateNote').textContent='Hoàn tất Bắt đầu để mở Cổng An Toàn.';
+    }else{
+      gateCta.href='/app/safety';
+      gateCta.textContent='Xem danh sách kiểm Cổng';
+      const next=formatGateReasons(reasons);
+      if(next && !passed) document.getElementById('gateNote').textContent=next;
     }
-    document.getElementById('efLabel').textContent=
-      (months==null?'Chưa có quỹ':(String(months)+' / 3 tháng'))+
-      ' · '+pct(w)+extra;
+    if(noGoal){
+      document.getElementById('efBar').style.width='0%';
+      document.getElementById('efPct').textContent=pct(0);
+      document.getElementById('efLabel').textContent='Chưa có quỹ';
+    }else{
+      const rawPct=det.percent_to_target;
+      const w=Math.max(0,Math.min(100,Number(rawPct)||0));
+      document.getElementById('efBar').style.width=w+'%';
+      document.getElementById('efPct').textContent=pct(w);
+      var mStr='';
+      if(months==null){ mStr='Chưa có quỹ'; }
+      else{
+        var mNum=Number(months);
+        mStr=(isFinite(mNum) && Math.abs(mNum-Math.round(mNum))<1e-9)
+          ? String(Math.round(mNum))
+          : String(mNum);
+        mStr=mStr+' / 3 tháng';
+      }
+      var extra='';
+      if(cur!=null && tgt!=null && Number(tgt)!==0 && window.WeloraMoney){
+        extra=' · '+WeloraMoney.formatVnd(cur)+' / '+WeloraMoney.formatVnd(tgt);
+      }
+      document.getElementById('efLabel').textContent=mStr+' · '+pct(w)+extra;
+    }
   }catch(e){
     document.getElementById('hsLevel').textContent='Chưa đọc được điểm';
   }

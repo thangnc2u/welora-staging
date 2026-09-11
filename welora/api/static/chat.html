@@ -27,7 +27,7 @@ button:disabled{opacity:.55}
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Chat với Agent</h1>
 <p class="muted">Từ chối cứng trước tư vấn · An Toàn ≥ 3 tháng</p>
-<a id="denyCta" href="/app/content?key=SAFE-02">Đọc nguyên tắc An Toàn</a>
+<a id="denyCta" href="/app/safety">Đọc nguyên tắc An Toàn</a>
 <div id="log"></div>
 <div id="suggestChips" aria-label="Gợi ý sau Cổng"></div>
 <div id="typing" aria-live="polite" aria-busy="false">
@@ -41,26 +41,37 @@ const denyCta=document.getElementById('denyCta');
 const typing=document.getElementById('typing');
 const sendBtn=document.getElementById('sendBtn');
 let uid=null;
-const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;log.appendChild(d);log.scrollTop=log.scrollHeight;};
+function stripMdMarkers(t){
+  return String(t||'')
+    .replace(/^#{1,6}\s+/gm,'')
+    .replace(/\*\*([^*]+)\*\*/g,'$1')
+    .replace(/__([^_]+)__/g,'$1');
+}
+const add=(t,cls)=>{const d=document.createElement('div');d.className='msg '+cls;d.textContent=stripMdMarkers(t);log.appendChild(d);log.scrollTop=log.scrollHeight;};
 function setLoading(on){
   typing.classList.toggle('show', !!on);
   typing.setAttribute('aria-busy', on?'true':'false');
   sendBtn.disabled=!!on;
 }
 function setGate(_status){ /* badge Cổng ẩn trên chat — Founder 04/09 */ }
+function isLeakyHref(h){
+  return /(?:CORE|SAFE|DEBT|PC)-/.test(String(h||''));
+}
 function pickHref(d){
   const links=d.content_links||[];
   for(const L of links){
-    if(L && (L.href||L.path||L.learn_href)) return L.href||L.learn_href||L.path;
+    if(!L) continue;
+    if(L.academy_href && !isLeakyHref(L.academy_href)) return L.academy_href;
+    const h=L.href||L.path||L.learn_href;
+    if(h && !isLeakyHref(h)) return h;
   }
   const ctas=d.cta||[];
   for(const c of ctas){
-    if(c && (c.learn_href||c.href) && String(c.learn_href||c.href).indexOf('/app/content')===0)
-      return c.learn_href||c.href;
+    if(!c) continue;
+    const h=c.learn_href||c.href;
+    if(h && String(h).indexOf('/app/')===0 && !isLeakyHref(h)) return h;
   }
-  const keys=d.principle_keys||[];
-  if(keys.length) return '/app/content?key='+encodeURIComponent(keys[0]);
-  return '/app/content?key=SAFE-02';
+  return '/app/safety';
 }
 function pickDenyLabel(d){
   const links=d.content_links||[];

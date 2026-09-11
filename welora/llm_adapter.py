@@ -175,12 +175,10 @@ def safe_call_llm(
         return "", "none", False
     try:
         return call_llm(system, message), "llm", True
-    except urllib.error.HTTPError as e:
-        status = getattr(e, "code", "") or ""
-        snippet = _http_error_snippet(e)
-        detail = f"{status}: {snippet}" if snippet else str(status)
+    except urllib.error.HTTPError:
+        # Learner-facing: fixed VI only — never leak HTTP body / provider snippet / jargon.
         return (
-            f"Không gọi được mô hình tư vấn (HTTP {detail}).",
+            "Không gọi được mô hình tư vấn lúc này. Bạn thử lại sau nhé.",
             "llm_error",
             False,
         )

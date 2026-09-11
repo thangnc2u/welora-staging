@@ -41,11 +41,15 @@ class TestP2LlmXaiError(unittest.TestCase):
         self.assertFalse(invoked)
         self.assertEqual(tag, "llm_error")
         self.assertNotIn("HTTPError", reply)
-        self.assertIn("HTTP", reply)
-        self.assertIn("400", reply)
-        self.assertIn("unknown field", reply)
+        self.assertNotIn("HTTP", reply)
+        self.assertNotIn("400", reply)
+        self.assertNotIn("unknown field", reply)
         self.assertIn("mô hình tư vấn", reply)
         self.assertNotIn("xai-", reply)
+        self.assertEqual(
+            reply,
+            "Không gọi được mô hình tư vấn lúc này. Bạn thử lại sau nhé.",
+        )
 
         code, out = service_chat(
             user_id="u-pass-budget",

@@ -31,7 +31,8 @@ class TestP2NativeChatUi(unittest.TestCase):
         html = CHAT_HTML.read_text(encoding="utf-8")
         self.assertNotIn('id="gateBadge"', html)
         self.assertIn('id="denyCta"', html)
-        self.assertIn("/app/content?key=SAFE-02", html)
+        self.assertIn('href="/app/safety"', html)
+        self.assertNotIn("/app/content?key=SAFE-02", html)
         self.assertIn("<a", html)
         self.assertNotIn("TARGET_MONTHS", html)
 

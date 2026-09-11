@@ -5,6 +5,7 @@ Schema LOCKED:
   type=debt_payoff, principle_keys DEBT-01 + DEBT-03 + CORE-07
   safety_gate_relevant=true
   Cổng: has_dangerous_debt AND NOT debt_on_track → not_passed
+  debt_on_track only when status=completed or current≥target
 
 Reuse EmergencyFundGoal shape so existing store.save works.
 TARGET_MONTHS / emergency_fund rules unchanged.
@@ -27,13 +28,18 @@ def _now() -> str:
 
 
 def debt_on_track_from_goal(goal: EmergencyFundGoal) -> bool:
+    """Gate treats debt as handled only when payoff is complete.
+
+    Partial progress (current>0 but current<target), monthly_contribution,
+    or plan_method alone must NOT clear dangerous_debt_unhandled.
+    """
     if goal.status == "completed":
         return True
-    if (goal.monthly_contribution or 0) > 0:
+    target = float(goal.target_amount or 0)
+    current = float(goal.current_amount or 0)
+    if target > 0 and current >= target:
         return True
-    if (goal.percent or 0) > 0:
-        return True
-    if goal.plan_method in ("snowball", "avalanche"):
+    if (goal.percent or 0) >= 100.0:
         return True
     return False
 

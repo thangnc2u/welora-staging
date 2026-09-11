@@ -78,7 +78,7 @@ a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10
 <p><a class="more" id="toggleTools" href="#tools">Công cụ khác</a></p>
 <nav class="tools" id="tools">
   <a class="nav" id="navOnboarding" href="/app/onboarding">Bắt đầu · Hiến pháp</a>
-  <a class="nav" id="navChat" href="/app/chat">Chat với Agent</a>
+  <a class="nav" id="navChat" href="/app/chat" hidden>Chat với Agent</a>
   <a class="nav" id="navContent" href="/app/content">Welorapedia</a>
   <a class="nav" id="navAcademy" href="/app/academy">Welorademy</a>
   <a class="nav" id="navDemo" href="/app/demo">Demo 8 bước</a>
@@ -151,6 +151,8 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
     const badge=document.getElementById('gateBadge');
     badge.textContent=passed?'Cổng: ĐẠT':'Cổng: CHƯA ĐẠT';
     badge.className='badge '+(passed?'passed':'not_passed');
+    const navChat=document.getElementById('navChat');
+    if(navChat) navChat.hidden=!passed;
     const ef=(hs.components&&hs.components.emergency_fund)||{};
     const det=ef.details||{};
     const months=det.months_covered;

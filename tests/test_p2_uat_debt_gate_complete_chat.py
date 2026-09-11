@@ -28,7 +28,8 @@ class TestP2UatDebtGateCompleteChat(unittest.TestCase):
     def test_chat_deny_cta_vi_no_raw_keys_in_label(self):
         html = CHAT.read_text(encoding="utf-8")
         self.assertIn('id="denyCta"', html)
-        self.assertIn("/app/content?key=SAFE-02", html)  # href OK
+        self.assertIn('href="/app/safety"', html)  # learner href: no SAFE-/CORE- leak
+        self.assertNotIn("/app/content?key=SAFE-02", html)
         self.assertIn("Đọc nguyên tắc An Toàn", html)
         self.assertNotIn("Đọc nguyên tắc An Toàn (SAFE-02)", html)
         self.assertNotIn("href.replace('/app/content?key=','')", html)

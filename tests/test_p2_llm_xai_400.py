@@ -38,9 +38,13 @@ class TestP2LlmXai400(unittest.TestCase):
         self.assertFalse(invoked)
         self.assertEqual(tag, "llm_error")
         self.assertNotIn("HTTPError", reply)
-        self.assertIn("HTTP 400", reply)
-        self.assertIn("bad_request_demo", reply)
+        self.assertNotIn("HTTP 400", reply)
+        self.assertNotIn("bad_request_demo", reply)
         self.assertIn("mô hình tư vấn", reply)
+        self.assertEqual(
+            reply,
+            "Không gọi được mô hình tư vấn lúc này. Bạn thử lại sau nhé.",
+        )
         self.assertLessEqual(len(reply), 280)
 
     def test_deny_all_in_etf_no_llm(self):

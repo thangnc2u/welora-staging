@@ -70,7 +70,7 @@ a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;marg
     </div>
     <button id="btnSave">Lưu số dư</button>
   </div>
-  <div class="goal-card" id="debtCard">
+  <div class="goal-card" id="debtCard" hidden>
     <div class="meta" id="debtTitle">Trả nợ</div>
     <div class="bar"><i id="debtBarFill" style="width:0%"></i></div>
     <div class="meta" id="debtMeta">Chưa có mục tiêu trả nợ</div>
@@ -169,13 +169,13 @@ function renderGateChecklist(passed){
     ctaHref:'#goalCard',
     ctaText: state.goal ? 'Cập nhật số dư quỹ' : 'Tạo quỹ khẩn cấp 3 tháng'
   });
-  if(reasons.has('dangerous_debt_unhandled') || state.debt){
+  if(reasons.has('dangerous_debt_unhandled') || !!(state.gate&&state.gate.has_dangerous_debt) || state.debt){
     addCheckItem(box,{
       key:'dangerous_debt',
       label:'Nợ nguy hiểm đã xử lý',
       ok:passed || !reasons.has('dangerous_debt_unhandled'),
       ctaHref:'/app/goals?focus=debt',
-      ctaText:'Tạo mục tiêu trả nợ'
+      ctaText: state.debt ? 'Mở Mục tiêu · Trả nợ' : 'Tạo mục tiêu trả nợ'
     });
   }
   addCheckItem(box,{
@@ -214,24 +214,34 @@ function render(){
     document.getElementById("amount").value=WeloraMoney.formatVnd(cur);
     document.getElementById("amount").setAttribute("data-vnd", String(cur));
   }
-  const dt=document.getElementById("debtTitle");
-  const dm=document.getElementById("debtMeta");
-  const db=document.getElementById("debtBarFill");
-  const link=document.getElementById("ctaGoalsDebt");
-  if(link) link.href="/app/goals?focus=debt";
-  if(state.debt){
-    dt.textContent=state.debt.title||"Trả nợ nguy hiểm";
-    const paid=state.debt.current&&state.debt.current.amount||0;
-    const tgt=state.debt.target&&state.debt.target.amount||0;
-    const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
-    dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+WeloraMoney.formatPct(pct);
-    db.style.width=pct+"%";
-    link.textContent="Mở Mục tiêu · Trả nợ";
-  }else{
-    dt.textContent="Trả nợ";
-    dm.textContent="Chưa có mục tiêu trả nợ";
-    db.style.width="0%";
-    link.textContent="Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ";
+  // Compact debt block — Home #177 showDebt parity; hide when EF-only / no debt signal
+  const debtCard=document.getElementById("debtCard");
+  const gate=state.gate||{};
+  const gateReasons=gate.reasons||[];
+  const showDebt=!!(gate.has_dangerous_debt || gateReasons.indexOf('dangerous_debt_unhandled')>=0 || state.debt);
+  if(debtCard){
+    debtCard.hidden=!showDebt;
+    if(showDebt){
+      const dt=document.getElementById("debtTitle");
+      const dm=document.getElementById("debtMeta");
+      const db=document.getElementById("debtBarFill");
+      const link=document.getElementById("ctaGoalsDebt");
+      if(link) link.href="/app/goals?focus=debt";
+      if(state.debt){
+        dt.textContent=state.debt.title||"Trả nợ nguy hiểm";
+        const paid=state.debt.current&&state.debt.current.amount||0;
+        const tgt=state.debt.target&&state.debt.target.amount||0;
+        const pct=Math.min(100,Number(state.debt.current&&state.debt.current.percent||0));
+        dm.textContent=WeloraMoney.formatVnd(paid)+" / "+WeloraMoney.formatVnd(tgt)+" · "+WeloraMoney.formatPct(pct);
+        db.style.width=pct+"%";
+        link.textContent="Mở Mục tiêu · Trả nợ";
+      }else{
+        dt.textContent="Trả nợ";
+        dm.textContent="Chưa có mục tiêu trả nợ";
+        db.style.width="0%";
+        link.textContent="Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ";
+      }
+    }
   }
 }
 document.getElementById("masteryState").onchange=async e=>{

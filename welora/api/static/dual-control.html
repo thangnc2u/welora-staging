@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Đồng kiểm</title>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;margin:0;background:#f6f7f9;color:#1a1d21}
+body.welora-shell{background:#f6f7f9;color:#1a1d21;max-width:none;padding:0;margin:0}
+.shell{max-width:430px;margin:0 auto;background:#fff;min-height:100dvh;padding:16px 16px 88px}
+.card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #e5e7eb}
+.card.warn{background:#fff7ed;border-color:#fed7aa}
+.card.ok{background:#ecfdf5;border-color:#a7f3d0}
+.card.pending{background:#eff6ff;border-color:#bfdbfe}
+.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
+.meta{color:#6b7280;font-size:14px}
+input,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid #e5e7eb;box-sizing:border-box}
+button{background:#0f766e;color:#fff;border:0;font-weight:600}
+button.secondary{background:#134e4a}
+button.danger{background:#b91c1c}
+a{color:#0f766e}
+.row-btns{display:flex;gap:8px}
+.row-btns button{margin-top:8px}
+#msg{font-size:14px;margin-top:8px;color:#374151;white-space:pre-wrap}
+.item{border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin:8px 0;background:#fff}
+.item h3{margin:0 0 6px;font-size:15px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:#0f766e;color:#fff}
+</style></head><body>
+<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/safety">An Toàn</a> · <a href="/app/chat">Chat</a></p>
+<div class="shell">
+  <h1>Đồng kiểm · 2 người</h1>
+  <p class="meta">L-DUAL-CONTROL — khóa / đổi trần phong bì và checklist di sản cần người đồng hành xác nhận trong app.</p>
+
+  <div class="section-title">Người dùng hiện tại</div>
+  <div class="card">
+    <div class="meta" id="uidMeta">Đang tải…</div>
+  </div>
+
+  <div class="section-title">Người đồng hành (companion)</div>
+  <div class="card" id="companionCard">
+    <div class="meta" id="companionMeta">Chưa gắn companion — Act đồng kiểm sẽ bị từ chối.</div>
+    <label for="companionInput">companion_user_id (thiết bị / user thứ 2)</label>
+    <input id="companionInput" type="text" placeholder="vd. user_companion_01" autocomplete="off"/>
+    <button id="btnAttach" type="button">Gắn người đồng hành</button>
+    <div id="msg"></div>
+  </div>
+
+  <div class="section-title">Đề xuất đang chờ (pending_dual)</div>
+  <div id="pendingList" class="card pending">
+    <div class="meta">Chưa có đề xuất chờ đồng kiểm.</div>
+  </div>
+
+  <div class="section-title">Gợi ý Mode C</div>
+  <div class="card">
+    <p class="meta">Trong Chat (Mode C), thử: «Khóa phong bì», «Đổi trần phong bì 20000000», «Mở checklist di sản». Thiếu companion → DENY; có companion → chờ xác nhận tại đây.</p>
+    <p><a href="/app/chat">Mở Chat với Agent</a></p>
+  </div>
+</div>
+<script>
+const KEY="welora_device_id";
+let uid="";
+let asCompanionUid="";
+
+async function api(url, opts){
+  const r=await fetch(url,Object.assign({headers:{"Content-Type":"application/json"}},opts||{}));
+  const d=await r.json().catch(()=>({}));
+  return {ok:r.ok, status:r.status, body:d};
+}
+
+async function ensureUser(){
+  let d=localStorage.getItem(KEY);
+  if(!d){ d="dev-"+Math.random().toString(36).slice(2,10); localStorage.setItem(KEY,d); }
+  const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:d})});
+  uid=auth.body.user_id||"";
+  document.getElementById("uidMeta").textContent=uid?("user_id: "+uid):"Không lấy được user";
+  const q=new URLSearchParams(location.search);
+  asCompanionUid=(q.get("as")||"").trim();
+  if(asCompanionUid){
+    document.getElementById("uidMeta").textContent=
+      "user_id (thiết bị): "+uid+" · đang xem với tư cách companion: "+asCompanionUid;
+  }
+}
+
+function setMsg(t, ok){
+  const el=document.getElementById("msg");
+  el.textContent=t||"";
+  el.style.color=ok?"#065f46":"#9a3412";
+}
+
+async function loadCompanion(){
+  if(!uid) return;
+  const r=await api("/os/companion?user_id="+encodeURIComponent(uid));
+  const cid=r.body.companion_user_id;
+  const meta=document.getElementById("companionMeta");
+  const card=document.getElementById("companionCard");
+  if(cid){
+    meta.textContent="Đã gắn companion: "+cid;
+    card.className="card ok";
+    document.getElementById("companionInput").value=cid;
+  }else{
+    meta.textContent="Chưa gắn companion — Act đồng kiểm sẽ bị từ chối (L-DUAL-CONTROL).";
+    card.className="card warn";
+  }
+}
+
+function renderPending(items){
+  const box=document.getElementById("pendingList");
+  box.innerHTML="";
+  if(!items || !items.length){
+    const m=document.createElement("div");
+    m.className="meta";
+    m.textContent="Chưa có đề xuất chờ đồng kiểm.";
+    box.appendChild(m);
+    return;
+  }
+  items.forEach(function(p){
+    const div=document.createElement("div");
+    div.className="item";
+    const h=document.createElement("h3");
+    h.textContent=p.summary||p.act_kind||"Đề xuất";
+    div.appendChild(h);
+    const pill=document.createElement("span");
+    pill.className="pill";
+    pill.textContent="pending_dual · L-DUAL-CONTROL";
+    div.appendChild(pill);
+    const meta=document.createElement("div");
+    meta.className="meta";
+    meta.textContent="primary: "+(p.user_id||"—")+" · companion: "+(p.companion_user_id||"—");
+    div.appendChild(meta);
+    const btns=document.createElement("div");
+    btns.className="row-btns";
+    const isPrimary=p.user_id===uid;
+    const isComp=p.companion_user_id===uid || (asCompanionUid && p.companion_user_id===asCompanionUid);
+    if(isComp){
+      const c=document.createElement("button");
+      c.type="button";
+      c.textContent="Companion xác nhận";
+      c.onclick=async function(){
+        const who=asCompanionUid||uid;
+        const res=await api("/agent/mode-c/companion-confirm",{
+          method:"POST",
+          body:JSON.stringify({companion_user_id:who, proposal_id:p.proposal_id, confirm:true})
+        });
+        setMsg((res.body.reply||res.body.error||JSON.stringify(res.body)), res.ok && res.body.ok);
+        await loadPending();
+      };
+      btns.appendChild(c);
+    }
+    if(isPrimary){
+      const x=document.createElement("button");
+      x.type="button";
+      x.className="danger";
+      x.textContent="Hủy đề xuất";
+      x.onclick=async function(){
+        const res=await api("/agent/mode-c/cancel-pending",{
+          method:"POST",
+          body:JSON.stringify({user_id:uid, proposal_id:p.proposal_id})
+        });
+        setMsg((res.body.reply||res.body.error||""), res.ok && res.body.ok);
+        await loadPending();
+      };
+      btns.appendChild(x);
+    }
+    div.appendChild(btns);
+    box.appendChild(div);
+  });
+}
+
+async function loadPending(){
+  if(!uid) return;
+  const viewId=asCompanionUid||uid;
+  const r=await api("/os/dual-control/pending?user_id="+encodeURIComponent(viewId));
+  // Also merge primary's pending if viewing as companion via ?as=
+  let items=r.body.items||[];
+  if(asCompanionUid && asCompanionUid!==uid){
+    const r2=await api("/os/dual-control/pending?user_id="+encodeURIComponent(uid));
+    const seen={};
+    items.forEach(function(i){seen[i.proposal_id]=1;});
+    (r2.body.items||[]).forEach(function(i){ if(!seen[i.proposal_id]) items.push(i); });
+  }
+  renderPending(items);
+}
+
+document.getElementById("btnAttach").onclick=async function(){
+  const cid=document.getElementById("companionInput").value.trim();
+  if(!uid||!cid){ setMsg("Cần user_id và companion_user_id.", false); return; }
+  const res=await api("/os/companion",{method:"POST",body:JSON.stringify({user_id:uid, companion_user_id:cid})});
+  setMsg(res.body.reply||res.body.error||"", res.ok && res.body.ok);
+  await loadCompanion();
+};
+
+(async function(){
+  await ensureUser();
+  await loadCompanion();
+  await loadPending();
+})();
+</script>
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+</body></html>

@@ -26,11 +26,13 @@ from welora.mode_c_act import (
     MODE_C_DISCLAIMER,
     POLICY_VERSION,
     UNDO_HOURS,
+    companion_confirm_act,
     confirm_act,
     detect_external_deny,
     list_envelopes,
     propose_act,
     reset_mode_c_store,
+    set_companion,
     undo_act,
 )
 from welora.pre_rule_service import context_from_seed
@@ -256,48 +258,57 @@ class TestP2AgentModeCActOs(unittest.TestCase):
         self.assertEqual(len(got.json()["items"]), 1)
 
     def test_estate_checklist_no_legal_will(self):
+        # L-DUAL-CONTROL: estate requires companion + companion confirm.
+        uid = self.passed["user_id"]
+        set_companion(user_id=uid, companion_user_id="u-est-companion")
         code, prop = propose_act(
-            user_id="u-est",
+            user_id=uid,
             message="Mở checklist di sản",
             gate_status="passed",
             answer_confidence=0.90,
         )
         self.assertTrue(prop["ok"])
-        _, done = confirm_act(
-            user_id="u-est",
+        self.assertEqual(prop["act_proposal"]["status"], "pending_dual")
+        _, done = companion_confirm_act(
+            companion_user_id="u-est-companion",
             proposal_id=prop["act_proposal"]["proposal_id"],
             confirm=True,
         )
         self.assertTrue(done["result"]["checklist_only"])
         self.assertTrue(done["result"]["no_legal_will"])
-        got = self.client.get("/os/estate-checklist", params={"user_id": "u-est"})
+        got = self.client.get("/os/estate-checklist", params={"user_id": uid})
         self.assertTrue(got.json()["no_legal_will"])
         self.assertIsNotNone(got.json()["checklist"])
 
     def test_lock_envelope_cross_take(self):
-        # create then lock
+        # create then lock (lock is dual-control — companion confirm)
+        uid = self.passed["user_id"]
+        set_companion(user_id=uid, companion_user_id="u-lock-companion")
         _, p1 = propose_act(
-            user_id="u-lock",
+            user_id=uid,
             message="Tạo phong bì sống",
             gate_status="passed",
             answer_confidence=0.95,
         )
         _, c1 = confirm_act(
-            user_id="u-lock",
+            user_id=uid,
             proposal_id=p1["act_proposal"]["proposal_id"],
             confirm=True,
+            gate_status="passed",
+            answer_confidence=0.95,
         )
         eid = c1["result"]["envelope_id"]
         _, p2 = propose_act(
-            user_id="u-lock",
+            user_id=uid,
             message="Khóa phong bì cấm lấy chéo",
             gate_status="passed",
             answer_confidence=0.95,
             params={"envelope_id": eid},
         )
         self.assertEqual(p2["act_proposal"]["act_kind"], "lock_envelope")
-        _, c2 = confirm_act(
-            user_id="u-lock",
+        self.assertEqual(p2["act_proposal"]["status"], "pending_dual")
+        _, c2 = companion_confirm_act(
+            companion_user_id="u-lock-companion",
             proposal_id=p2["act_proposal"]["proposal_id"],
             confirm=True,
         )
@@ -307,20 +318,22 @@ class TestP2AgentModeCActOs(unittest.TestCase):
 
         # second envelope + cross-take deny
         _, p3 = propose_act(
-            user_id="u-lock",
+            user_id=uid,
             message="Tạo phong bì con",
             gate_status="passed",
             answer_confidence=0.95,
         )
         _, c3 = confirm_act(
-            user_id="u-lock",
+            user_id=uid,
             proposal_id=p3["act_proposal"]["proposal_id"],
             confirm=True,
+            gate_status="passed",
+            answer_confidence=0.95,
         )
         ct = self.client.post(
             "/os/envelopes/cross-take",
             json={
-                "user_id": "u-lock",
+                "user_id": uid,
                 "from_envelope_id": eid,
                 "to_envelope_id": c3["result"]["envelope_id"],
                 "amount": 1000,

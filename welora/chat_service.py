@@ -206,8 +206,14 @@ def service_chat(
             "mode": mode_c_overlay.get("mode"),
             "policy_version": mode_c_overlay.get("policy_version"),
             "mode_chip": mode_c_overlay.get("mode_chip"),
-            "act_kind": (mode_c_overlay.get("act_proposal") or {}).get("act_kind"),
+            "act_kind": (mode_c_overlay.get("act_proposal") or {}).get("act_kind")
+            or mode_c_overlay.get("act_kind"),
             "needs_confirm": bool(mode_c_overlay.get("needs_confirm")),
+            "needs_companion_confirm": bool(mode_c_overlay.get("needs_companion_confirm")),
+            "status": mode_c_overlay.get("status")
+            or (mode_c_overlay.get("act_proposal") or {}).get("status"),
+            "companion_user_id": mode_c_overlay.get("companion_user_id"),
+            "dual_control_required": bool(mode_c_overlay.get("dual_control_required")),
         }
 
     log_id = write_decision_log({
@@ -266,9 +272,16 @@ def service_chat(
         out["disclaimer"] = mode_c_overlay.get("disclaimer")
         out["policy_version"] = mode_c_overlay.get("policy_version")
         out["needs_confirm"] = bool(mode_c_overlay.get("needs_confirm"))
+        out["needs_companion_confirm"] = bool(mode_c_overlay.get("needs_companion_confirm"))
         out["act_proposal"] = mode_c_overlay.get("act_proposal")
+        out["status"] = mode_c_overlay.get("status") or (
+            (mode_c_overlay.get("act_proposal") or {}).get("status")
+        )
+        out["companion_user_id"] = mode_c_overlay.get("companion_user_id")
+        out["dual_control_required"] = bool(mode_c_overlay.get("dual_control_required"))
         if mode_c_overlay.get("rule"):
             out["mode_c_rule"] = mode_c_overlay.get("rule")
+            out["rule"] = mode_c_overlay.get("rule")
     return 200, out
 
 

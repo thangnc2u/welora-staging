@@ -386,6 +386,35 @@ class TestP2OsCoolingOff(unittest.TestCase):
         self.assertEqual(done.status_code, 200)
         self.assertTrue(done.json().get("ok"))
 
+    def test_chat_http_withdraw_ge_20pct_surfaces_needs_reason(self):
+        """POST /agent/chat: EF withdraw ≥20% → reason panel fields on payload."""
+        goal = goals_api.STORE.get_active_for_user(self.uid)
+        amount = int(goal.current_amount * 0.30)
+        r = self.client.post(
+            "/agent/chat",
+            json={
+                "user_id": self.uid,
+                "message": f"Rút quỹ khẩn cấp {amount}",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body.get("needs_reason"))
+        self.assertEqual(body.get("rule"), POLICY_COOL_OFF)
+        self.assertIn("L-COOL-OFF", body.get("rule") or "")
+        self.assertEqual(body.get("warning_level"), "red")
+        self.assertEqual(body.get("status"), "pending_cool_off")
+        self.assertTrue(body.get("needs_cool_off_wait"))
+        self.assertEqual(body.get("mode"), MODE_C)
+        self.assertEqual(body.get("mode_chip"), "L-COOL-OFF · Cảnh báo đỏ")
+        self.assertIsNotNone(body.get("warning_vi"))
+        self.assertIsNotNone(body.get("cool_off"))
+        self.assertIsNotNone(body.get("ui"))
+        # no EF mutation on propose-without-reason
+        g2 = goals_api.STORE.get_active_for_user(self.uid)
+        self.assertEqual(g2.current_amount, goal.current_amount)
+
+
 
 if __name__ == "__main__":
     unittest.main()

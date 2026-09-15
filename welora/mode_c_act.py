@@ -764,7 +764,7 @@ def propose_act(
             return 200, {
                 "ok": False,
                 "mode": MODE_C,
-                "mode_chip": MODE_C_CHIP,
+                "mode_chip": "L-COOL-OFF · Cảnh báo đỏ",
                 "disclaimer": MODE_C_DISCLAIMER,
                 "policy_version": POLICY_COOL_OFF,
                 "guardrail_result": "pass",

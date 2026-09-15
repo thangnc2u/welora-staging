@@ -143,6 +143,7 @@ def service_chat(
         except (TypeError, ValueError):
             pass
 
+    mode_c_overlay = None
     if guardrail == "deny":
         reply = pre.get("reply") or "Không thể hỗ trợ theo nguyên tắc Welora."
         model_used = "rule_only"
@@ -172,11 +173,42 @@ def service_chat(
             reply = advisory_stub(message, gate_status)
             model_used = "rule_only"
 
+    # Mode C Act nội bộ OS — only after Hard Deny pass + confidence path intact.
+    # Additive; does not replace R01–R09. G1 confirm ≠ L2 Action Tools.
+    if guardrail != "deny" and not low_conf:
+        try:
+            from welora.mode_c_act import try_mode_c_from_chat
+
+            mode_c_overlay = try_mode_c_from_chat(
+                user_id=user_id,
+                message=message,
+                gate_status=gate_status,
+                answer_confidence=answer_confidence,
+            )
+            if mode_c_overlay and mode_c_overlay.get("reply"):
+                reply = mode_c_overlay["reply"]
+                model_used = "rule_only"
+                llm_called = False
+                if mode_c_overlay.get("guardrail_result") == "deny":
+                    guardrail = "deny"
+        except Exception:
+            mode_c_overlay = None
+
     try:
         from welora.metrics import record_chat
         record_chat(guardrail_result=guardrail, llm_called=bool(llm_called))
     except Exception:
         pass
+
+    mode_c_fields = {}
+    if mode_c_overlay:
+        mode_c_fields = {
+            "mode": mode_c_overlay.get("mode"),
+            "policy_version": mode_c_overlay.get("policy_version"),
+            "mode_chip": mode_c_overlay.get("mode_chip"),
+            "act_kind": (mode_c_overlay.get("act_proposal") or {}).get("act_kind"),
+            "needs_confirm": bool(mode_c_overlay.get("needs_confirm")),
+        }
 
     log_id = write_decision_log({
         "user_id": user_id,
@@ -195,6 +227,7 @@ def service_chat(
         "core_articles_count": int(pre.get("core_articles_count") or 0),
         "retrieve_ok": bool(pre.get("retrieve_ok", True)),
         "raw_response_preview": str(reply)[:300],
+        **mode_c_fields,
     })
 
     content_links = []
@@ -204,7 +237,7 @@ def service_chat(
     except Exception:
         pass
 
-    return 200, {
+    out = {
         "reply": reply,
         "guardrail_result": guardrail,
         "rule_hit": rule_hit,
@@ -227,6 +260,16 @@ def service_chat(
         "core_articles_count": int(pre.get("core_articles_count") or 0),
         "retrieve_ok": bool(pre.get("retrieve_ok", True)),
     }
+    if mode_c_overlay:
+        out["mode"] = mode_c_overlay.get("mode")
+        out["mode_chip"] = mode_c_overlay.get("mode_chip")
+        out["disclaimer"] = mode_c_overlay.get("disclaimer")
+        out["policy_version"] = mode_c_overlay.get("policy_version")
+        out["needs_confirm"] = bool(mode_c_overlay.get("needs_confirm"))
+        out["act_proposal"] = mode_c_overlay.get("act_proposal")
+        if mode_c_overlay.get("rule"):
+            out["mode_c_rule"] = mode_c_overlay.get("rule")
+    return 200, out
 
 
 def service_list_logs(user_id: str, limit: int = 20) -> tuple[int, dict]:

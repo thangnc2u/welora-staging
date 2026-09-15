@@ -32,6 +32,19 @@ button:disabled{opacity:.55}
 #typing .dots span:nth-child(2){animation-delay:.15s}
 #typing .dots span:nth-child(3){animation-delay:.3s}
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+.modeC{border-left:3px solid #eab308}
+.modeChip{display:inline-block;padding:2px 8px;border-radius:999px;background:#854d0e;color:#fef08a;font-size:11px;font-weight:700;margin-right:6px}
+.modeDisclaimer{color:#fbbf24;font-size:12px;margin:4px 0 0}
+#modeCConfirm{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#1c1917;border:1px solid #eab308}
+#modeCConfirm.show{display:block}
+#modeCConfirm .actions{display:flex;gap:8px;margin-top:10px}
+#modeCConfirm .actions button{flex:1}
+#modeCConfirm #mcConfirmBtn{background:#eab308;color:#1c1917}
+#modeCConfirm #mcCancelBtn{background:#243041;color:#e8eef7}
+#modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:#14532d;border:1px solid #3dd68c;font-size:13px}
+#modeCUndo.show{display:block}
+#modeCUndo button{margin-top:8px;background:#3dd68c;color:#0b0f14;width:100%}
 </style></head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
@@ -55,6 +68,20 @@ button:disabled{opacity:.55}
 <div id="typing" aria-live="polite" aria-busy="false">
   <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
   <span id="typingText">Đang soạn…</span>
+</div>
+
+<div id="modeCConfirm" aria-live="polite">
+  <span class="modeChip">Mode C · Hành động</span>
+  <p class="modeDisclaimer">Hành động trên OS — có thể hoàn tác trong 24 giờ</p>
+  <p id="mcSummary" style="margin:8px 0 0;font-size:14px"></p>
+  <div class="actions">
+    <button type="button" id="mcConfirmBtn">Xác nhận</button>
+    <button type="button" id="mcCancelBtn">Hủy</button>
+  </div>
+</div>
+<div id="modeCUndo">
+  <span>Đã ghi OS. Hoàn tác trong 24 giờ?</span>
+  <button type="button" id="mcUndoBtn">Hoàn tác</button>
 </div>
 <form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script>
@@ -177,10 +204,20 @@ document.getElementById('f').onsubmit=async(e)=>{
   try{
     const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
     const d=await r.json();
-    const cls='bot '+(d.guardrail_result==='deny'?'deny':'pass');
-    let bubble=d.reply||'Không có phản hồi';
-    if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';
-    add(bubble, cls);
+    hideModeC(); hideUndo();
+    if(d.mode==='C' && d.act_proposal && d.needs_confirm){
+      addModeCBubble(d);
+      showModeCPropose(d);
+    }else{
+      const cls='bot '+(d.guardrail_result==='deny'?'deny':(d.mode==='C'?'modeC':'pass'));
+      let bubble=d.reply||'Không có phản hồi';
+      if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';
+      if(d.mode==='C' && d.mode_chip){
+        addModeCBubble(d);
+      }else{
+        add(bubble, cls);
+      }
+    }
     setGate(d.safety_gate_status||'not_passed');
     if(d.guardrail_result==='deny') showDenyCta(d); else hideDenyCta();
   }catch(err){
@@ -189,6 +226,68 @@ document.getElementById('f').onsubmit=async(e)=>{
     setLoading(false);
   }
 };
+
+let pendingProposal=null;
+let lastUndo=null;
+const mcBox=document.getElementById('modeCConfirm');
+const mcUndo=document.getElementById('modeCUndo');
+const mcSummary=document.getElementById('mcSummary');
+function hideModeC(){ if(mcBox) mcBox.classList.remove('show'); pendingProposal=null; }
+function hideUndo(){ if(mcUndo) mcUndo.classList.remove('show'); lastUndo=null; }
+function showModeCPropose(d){
+  const p=d.act_proposal; if(!p||!mcBox) return;
+  pendingProposal=p;
+  if(mcSummary) mcSummary.textContent=p.summary||'Xác nhận hành động Mode C';
+  mcBox.classList.add('show');
+}
+function addModeCBubble(d){
+  const chip=d.mode_chip||'Mode C · Hành động';
+  const disc=d.disclaimer||'Hành động trên OS — có thể hoàn tác trong 24 giờ';
+  const d2=document.createElement('div');
+  d2.className='msg bot modeC';
+  const chipEl=document.createElement('span'); chipEl.className='modeChip'; chipEl.textContent=chip;
+  d2.appendChild(chipEl);
+  const t=document.createElement('div'); t.textContent=stripMdMarkers(d.reply||'');
+  d2.appendChild(t);
+  const discEl=document.createElement('div'); discEl.className='modeDisclaimer'; discEl.textContent=disc;
+  d2.appendChild(discEl);
+  log.appendChild(d2); log.scrollTop=log.scrollHeight;
+}
+if(document.getElementById('mcCancelBtn')){
+  document.getElementById('mcCancelBtn').onclick=()=>{ hideModeC(); add('Đã hủy Mode C.','bot muted'); };
+}
+if(document.getElementById('mcConfirmBtn')){
+  document.getElementById('mcConfirmBtn').onclick=async()=>{
+    if(!pendingProposal||!uid) return;
+    setLoading(true);
+    try{
+      const r=await fetch('/agent/mode-c/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,proposal_id:pendingProposal.proposal_id,confirm:true,gate_status:'passed',answer_confidence:0.90})});
+      const d=await r.json();
+      hideModeC();
+      if(d.ok){
+        add('Đã xác nhận Mode C — OS đã cập nhật.\n'+((d.result&&d.result.title)||(d.result&&d.result.reminder_kind)||(d.act_kind)||''),'bot modeC');
+        if(d.undo){ lastUndo={act_id:d.act_id,undo_token:d.undo.token}; if(mcUndo) mcUndo.classList.add('show'); }
+      }else{
+        add(d.error||d.detail||'Không xác nhận được.','bot deny');
+      }
+    }catch(e){ add('Không xác nhận được. Thử lại.','bot deny'); }
+    finally{ setLoading(false); }
+  };
+}
+if(document.getElementById('mcUndoBtn')){
+  document.getElementById('mcUndoBtn').onclick=async()=>{
+    if(!lastUndo||!uid) return;
+    setLoading(true);
+    try{
+      const r=await fetch('/agent/mode-c/undo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,act_id:lastUndo.act_id,undo_token:lastUndo.undo_token})});
+      const d=await r.json();
+      hideUndo();
+      if(d.ok) add('Đã hoàn tác Mode C trong 24 giờ.','bot muted');
+      else add(d.error||d.detail||'Không hoàn tác được.','bot deny');
+    }catch(e){ add('Không hoàn tác được.','bot deny'); }
+    finally{ setLoading(false); }
+  };
+}
 </script>
 <script src="/static/shell.js" data-shell-tab="chat"></script>
 </body></html>

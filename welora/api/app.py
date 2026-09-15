@@ -97,8 +97,9 @@ class ModeCConfirmBody(BaseModel):
     user_id: str
     proposal_id: str
     confirm: bool = False
-    gate_status: Optional[str] = "passed"
-    answer_confidence: Optional[float] = 0.90
+    # Deprecated: ignored — resolved server-side (anti-spoof).
+    gate_status: Optional[str] = None
+    answer_confidence: Optional[float] = None
 
 class ModeCUndoBody(BaseModel):
     user_id: str
@@ -401,19 +402,8 @@ def create_app() -> FastAPI:
 
     @app.post("/agent/mode-c/propose", tags=["agent", "mode-c"])
     def mode_c_propose(body: ModeCProposeBody) -> dict:
-        gate = body.gate_status
-        conf = body.answer_confidence
-        if gate is None or conf is None:
-            try:
-                from welora.pre_rule_service import context_from_user
-                ctx = context_from_user(body.user_id)
-                if gate is None:
-                    gate = ctx.safety_gate.status
-                if conf is None:
-                    conf = ctx.answer_confidence
-            except Exception:
-                gate = gate or "not_passed"
-                conf = conf if conf is not None else 0.0
+        # Always resolve gate + confidence server-side; ignore client spoof fields.
+        gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
         return _respond(*mode_c_svc.propose_act(
             user_id=body.user_id,
             message=body.message,
@@ -424,12 +414,14 @@ def create_app() -> FastAPI:
 
     @app.post("/agent/mode-c/confirm", tags=["agent", "mode-c"])
     def mode_c_confirm(body: ModeCConfirmBody) -> dict:
+        # Re-check gate + confidence on confirm (client fields ignored).
+        gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
         return _respond(*mode_c_svc.confirm_act(
             user_id=body.user_id,
             proposal_id=body.proposal_id,
             confirm=bool(body.confirm),
-            gate_status=str(body.gate_status or "passed"),
-            answer_confidence=float(body.answer_confidence if body.answer_confidence is not None else 0.90),
+            gate_status=str(gate),
+            answer_confidence=float(conf),
         ))
 
     @app.post("/agent/mode-c/undo", tags=["agent", "mode-c"])

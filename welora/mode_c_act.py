@@ -11,7 +11,10 @@ Source: phụ lục PRD trụ 4 §3.3 Mode C.
 - Confirm before write · undo 24h · log mode + policy_version (L-* stub additive).
 - L-DUAL-CONTROL (Founder 15/09 B): lock / ceiling / estate need companion;
   missing companion → DENY; has companion → pending_dual → companion confirm.
+- L-COOL-OFF (Founder 15/09): rút/chuyển quỹ KH dưới sàn persona HOẶC ≥20% quỹ
+  → pending_cool_off + lý do + chờ 24h (P1–P5). P6 → dual-control, không tự cool-off.
 - Does NOT replace Hard Deny R01–R09 / Pre-Rule order / TARGET_MONTHS / CORE-*.
+  Undo Act 24h remains separate from cooling-off wait.
 """
 
 from __future__ import annotations
@@ -21,20 +24,25 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from welora.agent import CONFIDENCE_THRESHOLD
+from welora.safety_gate import TARGET_MONTHS, compute_months_covered
 
 # Additive L-* stub — never replaces Hard Deny R01–R09.
 POLICY_VERSION = "L-stub-1.0"
 POLICY_DUAL_CONTROL = "L-DUAL-CONTROL"
+POLICY_COOL_OFF = "L-COOL-OFF"
 MODE_C = "C"
 MODE_C_CHIP = "Mode C · Hành động"
 MODE_C_DISCLAIMER = "Hành động trên OS — có thể hoàn tác trong 24 giờ"
 UNDO_HOURS = 24
+COOL_OFF_HOURS = 24
+TRANSFER_PCT_THRESHOLD = 0.20  # ≥20% quỹ KH → cool-off (take-home productization out of MVP)
 
 ACT_CREATE_ENVELOPE = "create_envelope"
 ACT_LOCK_ENVELOPE = "lock_envelope"
 ACT_CHANGE_CEILING = "change_envelope_ceiling"
 ACT_BH_REMINDER = "schedule_bh_reminder"
 ACT_ESTATE_CHECKLIST = "open_estate_checklist"
+ACT_WITHDRAW_EFUND = "withdraw_emergency_fund"
 
 ALLOWED_ACTS = frozenset(
     {
@@ -43,6 +51,7 @@ ALLOWED_ACTS = frozenset(
         ACT_CHANGE_CEILING,
         ACT_BH_REMINDER,
         ACT_ESTATE_CHECKLIST,
+        ACT_WITHDRAW_EFUND,
     }
 )
 
@@ -65,6 +74,35 @@ PENDING_DUAL_VI = (
     "Đã đề xuất — chờ người đồng hành xác nhận trong app (đồng kiểm 2 người). "
     "Chưa ghi vào OS cho đến khi companion xác nhận. Bạn có thể hủy đề xuất đang chờ."
 )
+
+COOL_OFF_WARN_VI = (
+    "CẢNH BÁO ĐỎ — L-COOL-OFF: hành động chạm quỹ khẩn cấp (dưới sàn persona "
+    "hoặc ≥20% quỹ). Bắt buộc nhập lý do + chờ 24 giờ trước khi xác nhận ghi OS. "
+    "Không ghi ngay. Hoàn tác Act 24h là cơ chế khác — không thay cooling-off."
+)
+PENDING_COOL_OFF_VI = (
+    "Đã ghi nhận đề xuất cooling-off — chờ đủ 24 giờ rồi xác nhận. "
+    "Xác nhận sớm vẫn ở trạng thái pending_cool_off (chưa ghi OS)."
+)
+COOL_OFF_NEED_REASON_VI = (
+    "Cần nhập lý do không rỗng trước khi vào hàng chờ cooling-off (L-COOL-OFF)."
+)
+P6_COOL_OFF_ESCALATE_VI = (
+    "P6 — không cho tự override bằng cooling-off một mình. "
+    "Cần người đồng hành (L-DUAL-CONTROL). Cooling-off không đủ."
+)
+
+# Persona floor months (MVP stub — full P1–P6 router out of MVP).
+# TARGET_MONTHS (=3) stays HARD for Safety Gate; cool-off floor may use persona months.
+PERSONA_FLOOR_MONTHS: dict[str, int] = {
+    "P1": TARGET_MONTHS,  # PRD 3–6 → MVP uses TARGET_MONTHS
+    "P2": 6,
+    "P3": 6,
+    "P4": 6,
+    "P5": 6,
+    "P6": 6,  # cool-off self-override forbidden; dual instead
+}
+DEFAULT_PERSONA = "P1"
 
 # External / L2 — always DENY in Mode C (G1≠L2).
 EXTERNAL_DENY: dict[str, dict[str, str]] = {
@@ -98,9 +136,12 @@ _PROPOSALS: dict[str, dict[str, Any]] = {}
 _ACT_LOGS: list[dict[str, Any]] = []
 _UNDO: dict[str, dict[str, Any]] = {}  # act_id -> undo token
 _COMPANIONS: dict[str, dict[str, Any]] = {}  # primary_user_id -> link
+_PERSONAS: dict[str, str] = {}  # user_id -> P1..P6 (MVP stub, no full router)
+_CLOCK_OFFSET: timedelta = timedelta(0)  # UAT clock inject
 
 
 def reset_mode_c_store() -> None:
+    global _CLOCK_OFFSET
     _ENVELOPES.clear()
     _ENVELOPES_BY_USER.clear()
     _REMINDERS.clear()
@@ -110,10 +151,18 @@ def reset_mode_c_store() -> None:
     _ACT_LOGS.clear()
     _UNDO.clear()
     _COMPANIONS.clear()
+    _PERSONAS.clear()
+    _CLOCK_OFFSET = timedelta(0)
+
+
+def inject_clock_advance(*, hours: float = 0, seconds: float = 0) -> None:
+    """UAT / pytest: advance Mode C wall clock without sleeping."""
+    global _CLOCK_OFFSET
+    _CLOCK_OFFSET = _CLOCK_OFFSET + timedelta(hours=float(hours), seconds=float(seconds))
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc) + _CLOCK_OFFSET
 
 
 def _now_iso() -> str:
@@ -215,11 +264,29 @@ def detect_mode_c_act(message: str) -> Optional[str]:
         "checklist ủy quyền",
         "danh sách di sản",
     ]
+    # Internal OS withdraw/transfer from emergency fund (quỹ KH) — cool-off may apply.
+    # Not bank_transfer (still EXTERNAL_DENY). Not Hard Deny invest path (Agent R01).
+    withdraw_keys = [
+        "rút quỹ khẩn cấp",
+        "rút quỹ kh",
+        "lấy quỹ khẩn cấp",
+        "lấy quỹ kh",
+        "chuyển từ quỹ khẩn cấp",
+        "chuyển từ quỹ kh",
+        "rút khỏi quỹ khẩn cấp",
+        "giảm quỹ khẩn cấp",
+        "withdraw emergency fund",
+        "transfer from emergency fund",
+        "chuyển ≥20% quỹ",
+        "chuyển 20% quỹ",
+    ]
 
     if any(k in n for k in lock_keys):
         return ACT_LOCK_ENVELOPE
     if any(k in n for k in ceiling_keys):
         return ACT_CHANGE_CEILING
+    if any(k in n for k in withdraw_keys):
+        return ACT_WITHDRAW_EFUND
     if any(k in n for k in envelope_keys):
         return ACT_CREATE_ENVELOPE
     if any(k in n for k in bh_keys):
@@ -307,6 +374,102 @@ def requires_dual_control(act_kind: str) -> bool:
     return act_kind in DUAL_CONTROL_ACTS
 
 
+def get_persona(user_id: str) -> str:
+    """MVP persona stub (no full P1–P6 router). Default P1."""
+    if not user_id:
+        return DEFAULT_PERSONA
+    p = (_PERSONAS.get(str(user_id)) or DEFAULT_PERSONA).upper().strip()
+    if p not in PERSONA_FLOOR_MONTHS:
+        return DEFAULT_PERSONA
+    return p
+
+
+def set_persona(*, user_id: str, persona: str) -> tuple[int, dict[str, Any]]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    p = (persona or "").upper().strip()
+    if p not in PERSONA_FLOOR_MONTHS:
+        return 400, {
+            "error": "invalid persona",
+            "allowed": sorted(PERSONA_FLOOR_MONTHS.keys()),
+        }
+    _PERSONAS[str(user_id)] = p
+    return 200, {
+        "ok": True,
+        "user_id": user_id,
+        "persona": p,
+        "floor_months": PERSONA_FLOOR_MONTHS[p],
+        "policy_version": POLICY_COOL_OFF,
+        "note": "Full P1–P6 router out of MVP — staging stub only.",
+    }
+
+
+def is_p6_persona(user_id: str) -> bool:
+    return get_persona(user_id) == "P6"
+
+
+def persona_floor_months(user_id: str) -> int:
+    return int(PERSONA_FLOOR_MONTHS.get(get_persona(user_id), TARGET_MONTHS))
+
+
+def _get_efund_goal(user_id: str):
+    """Load active emergency fund goal from shared goals store (may be None)."""
+    try:
+        from welora import goals_api
+
+        return goals_api.STORE.get_active_for_user(str(user_id))
+    except Exception:
+        return None
+
+
+def evaluate_cool_off_trigger(
+    *,
+    user_id: str,
+    amount: float,
+    current_amount: Optional[float] = None,
+    essential_expense_monthly: Optional[float] = None,
+) -> dict[str, Any]:
+    """Return whether withdraw/transfer triggers L-COOL-OFF.
+
+    (a) remaining < persona floor amount, OR
+    (b) amount ≥ 20% of current emergency fund.
+    """
+    goal = _get_efund_goal(user_id)
+    cur = float(current_amount) if current_amount is not None else float(
+        (goal.current_amount if goal else 0.0) or 0.0
+    )
+    essential = float(essential_expense_monthly) if essential_expense_monthly is not None else float(
+        (goal.essential_expense_monthly if goal else 0.0) or 0.0
+    )
+    amt = max(0.0, float(amount or 0))
+    floor_m = persona_floor_months(user_id)
+    floor_amount = essential * floor_m if essential > 0 else 0.0
+    remaining = max(0.0, cur - amt)
+    pct = (amt / cur) if cur > 0 else (1.0 if amt > 0 else 0.0)
+    below_floor = essential > 0 and remaining < floor_amount
+    large_transfer = cur > 0 and pct >= TRANSFER_PCT_THRESHOLD
+    # If no EF model / zero balance but amount requested — treat as cool-off when amount>0
+    # only if we can evaluate; without goal+essential, still cool-off on ≥20% when cur known.
+    triggered = bool(amt > 0 and (below_floor or large_transfer))
+    return {
+        "triggered": triggered,
+        "below_floor": below_floor,
+        "large_transfer": large_transfer,
+        "amount": amt,
+        "current_amount": cur,
+        "remaining": remaining,
+        "floor_months": floor_m,
+        "floor_amount": floor_amount,
+        "transfer_pct": round(pct, 4),
+        "threshold_pct": TRANSFER_PCT_THRESHOLD,
+        "persona": get_persona(user_id),
+        "goal_id": getattr(goal, "goal_id", None),
+        "months_covered_after": (
+            compute_months_covered(remaining, essential) if essential > 0 else None
+        ),
+    }
+
+
 def _deny_missing_companion(*, user_id: str, act_kind: str) -> dict[str, Any]:
     return {
         "ok": False,
@@ -337,10 +500,27 @@ def _proposal_payload(
     status: str = "proposed",
     companion_user_id: Optional[str] = None,
     policy_version: Optional[str] = None,
+    reason: Optional[str] = None,
+    cool_off_until: Optional[str] = None,
+    cool_off_meta: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    dual = requires_dual_control(act_kind)
-    pv = policy_version or (POLICY_DUAL_CONTROL if dual and companion_user_id else POLICY_VERSION)
-    needs_companion = dual and bool(companion_user_id) and status == "pending_dual"
+    dual = requires_dual_control(act_kind) or status == "pending_dual"
+    cool = status == "pending_cool_off"
+    if policy_version:
+        pv = policy_version
+    elif cool:
+        pv = POLICY_COOL_OFF
+    elif dual and companion_user_id:
+        pv = POLICY_DUAL_CONTROL
+    else:
+        pv = POLICY_VERSION
+    needs_companion = bool(companion_user_id) and status == "pending_dual"
+    if cool:
+        hint = PENDING_COOL_OFF_VI
+    elif needs_companion:
+        hint = PENDING_DUAL_VI
+    else:
+        hint = "Xác nhận để ghi vào WeloraOS. Có thể hoàn tác trong 24 giờ."
     return {
         "proposal_id": proposal_id,
         "user_id": user_id,
@@ -354,13 +534,16 @@ def _proposal_payload(
         "params": params,
         "needs_confirm": (not needs_companion) and status == "proposed",
         "needs_companion_confirm": needs_companion,
-        "confirm_hint": (
-            PENDING_DUAL_VI
-            if needs_companion
-            else "Xác nhận để ghi vào WeloraOS. Có thể hoàn tác trong 24 giờ."
-        ),
+        "needs_cool_off_wait": cool,
+        "confirm_hint": hint,
         "status": status,
-        "dual_control_required": dual,
+        "dual_control_required": dual and not cool,
+        "cool_off_required": cool,
+        "reason": reason,
+        "cool_off_until": cool_off_until,
+        "cool_off": cool_off_meta,
+        "warning_level": "red" if cool else None,
+        "warning_vi": COOL_OFF_WARN_VI if cool else None,
         "created_at": _now_iso(),
     }
 
@@ -372,8 +555,13 @@ def propose_act(
     gate_status: str,
     answer_confidence: float,
     params: Optional[dict[str, Any]] = None,
+    reason: Optional[str] = None,
 ) -> tuple[int, dict[str, Any]]:
-    """Propose a Mode C act (no write). External intents → DENY."""
+    """Propose a Mode C act (no write). External intents → DENY.
+
+    Cool-off: withdraw/transfer quỹ KH below floor or ≥20% → pending_cool_off
+    (reason required). P6 on same trigger → dual-control escalate, not self cool-off.
+    """
     if not user_id:
         return 400, {"error": "user_id is required"}
 
@@ -406,7 +594,7 @@ def propose_act(
             "policy_version": POLICY_VERSION,
         }
 
-    ok, reason = _gate_ok(gate_status, answer_confidence)
+    ok, gate_reason = _gate_ok(gate_status, answer_confidence)
     if not ok:
         return 200, {
             "ok": False,
@@ -415,7 +603,7 @@ def propose_act(
             "disclaimer": MODE_C_DISCLAIMER,
             "policy_version": POLICY_VERSION,
             "guardrail_result": "deny",
-            "reply": reason,
+            "reply": gate_reason,
             "needs_confirm": False,
             "act_proposal": None,
             "gate_blocked": True,
@@ -428,6 +616,11 @@ def propose_act(
             return 200, _deny_missing_companion(user_id=user_id, act_kind=act_kind)
 
     params = dict(params or {})
+    reason_text = (reason if reason is not None else params.pop("reason", None)) or ""
+    reason_text = str(reason_text).strip()
+
+    cool_meta: Optional[dict[str, Any]] = None
+
     if act_kind == ACT_CREATE_ENVELOPE:
         title = params.get("title") or _extract_envelope_title(message) or "Phong bì tiết kiệm"
         target = float(params.get("target_amount") or 0)
@@ -457,6 +650,41 @@ def propose_act(
             "no_forge_signature": True,
         }
         summary = f"Đặt nhắc {kind} (chỉ lịch — không nộp hồ sơ / không giả chữ ký)"
+    elif act_kind == ACT_WITHDRAW_EFUND:
+        amount = float(params.get("amount") or 0)
+        if amount <= 0:
+            amount = _extract_ceiling_amount(message) or 0.0
+        # Optional overrides for tests / staging when EF goal absent
+        cur_override = params.get("current_amount")
+        ess_override = params.get("essential_expense_monthly")
+        cool_meta = evaluate_cool_off_trigger(
+            user_id=user_id,
+            amount=amount,
+            current_amount=float(cur_override) if cur_override is not None else None,
+            essential_expense_monthly=float(ess_override) if ess_override is not None else None,
+        )
+        if amount <= 0:
+            return 400, {
+                "error": "amount required for withdraw_emergency_fund",
+                "mode": MODE_C,
+                "policy_version": POLICY_COOL_OFF,
+                "reply": "Cần số tiền rút/chuyển từ quỹ khẩn cấp.",
+            }
+        params = {
+            "amount": amount,
+            "goal_id": cool_meta.get("goal_id"),
+            "current_amount": cool_meta.get("current_amount"),
+            "remaining": cool_meta.get("remaining"),
+            "floor_amount": cool_meta.get("floor_amount"),
+            "floor_months": cool_meta.get("floor_months"),
+            "transfer_pct": cool_meta.get("transfer_pct"),
+            "to_envelope_id": params.get("to_envelope_id"),
+            "internal_only": True,
+            "no_bank_transfer": True,
+        }
+        summary = (
+            f"Rút/chuyển {int(amount):,} ₫ từ quỹ khẩn cấp (nội bộ OS)".replace(",", ".")
+        )
     else:  # estate
         params = {
             "checklist_only": True,
@@ -471,6 +699,139 @@ def propose_act(
             ),
         }
         summary = "Mở checklist di sản (không soạn di chúc pháp lý)"
+
+    # --- Cool-off vs dual precedence ---
+    # If P6 applies on cool-off-triggering act → ESCALATE dual, never self cool-off alone.
+    # If act already dual-control → existing dual path (checked above) wins.
+    if act_kind == ACT_WITHDRAW_EFUND and cool_meta and cool_meta.get("triggered"):
+        if is_p6_persona(user_id):
+            link = get_companion(user_id)
+            if not link or not link.get("companion_user_id"):
+                deny = _deny_missing_companion(user_id=user_id, act_kind=act_kind)
+                deny["reply"] = P6_COOL_OFF_ESCALATE_VI + " " + DENY_MISSING_COMPANION_VI
+                deny["cool_off_escalated_to_dual"] = True
+                deny["cool_off"] = cool_meta
+                deny["rule"] = POLICY_DUAL_CONTROL
+                deny["policy_version"] = POLICY_DUAL_CONTROL
+                return 200, deny
+            companion_id = str(link.get("companion_user_id"))
+            pid = str(uuid.uuid4())
+            prop = _proposal_payload(
+                proposal_id=pid,
+                user_id=user_id,
+                act_kind=act_kind,
+                summary=summary,
+                params=params,
+                status="pending_dual",
+                companion_user_id=companion_id,
+                policy_version=POLICY_DUAL_CONTROL,
+                reason=reason_text or None,
+                cool_off_meta=cool_meta,
+            )
+            prop["cool_off_escalated_to_dual"] = True
+            _PROPOSALS[pid] = prop
+            reply = (
+                f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
+                f"{P6_COOL_OFF_ESCALATE_VI}\n"
+                f"Đề xuất đồng kiểm: {summary}.\n"
+                f"{PENDING_DUAL_VI}\n"
+                f"Người đồng hành: {companion_id}."
+            )
+            return 200, {
+                "ok": True,
+                "mode": MODE_C,
+                "mode_chip": MODE_C_CHIP,
+                "disclaimer": MODE_C_DISCLAIMER,
+                "policy_version": POLICY_DUAL_CONTROL,
+                "guardrail_result": "pass",
+                "rule": POLICY_DUAL_CONTROL,
+                "reply": reply,
+                "needs_confirm": False,
+                "needs_companion_confirm": True,
+                "act_proposal": prop,
+                "dual_control_required": True,
+                "cool_off_escalated_to_dual": True,
+                "status": "pending_dual",
+                "user_id": user_id,
+                "companion_user_id": companion_id,
+                "cool_off": cool_meta,
+                "warning_level": "red",
+                "warning_vi": P6_COOL_OFF_ESCALATE_VI,
+            }
+
+        # P1–P5 cool-off path — require non-empty reason
+        if not reason_text:
+            return 200, {
+                "ok": False,
+                "mode": MODE_C,
+                "mode_chip": "L-COOL-OFF · Cảnh báo đỏ",
+                "disclaimer": MODE_C_DISCLAIMER,
+                "policy_version": POLICY_COOL_OFF,
+                "guardrail_result": "pass",
+                "rule": POLICY_COOL_OFF,
+                "reply": f"{COOL_OFF_WARN_VI}\n{COOL_OFF_NEED_REASON_VI}",
+                "needs_confirm": False,
+                "needs_reason": True,
+                "needs_cool_off_wait": True,
+                "act_proposal": None,
+                "status": "pending_cool_off",
+                "warning_level": "red",
+                "warning_vi": COOL_OFF_WARN_VI,
+                "cool_off": cool_meta,
+                "ui": {
+                    "chip": "L-COOL-OFF · Chờ 24 giờ",
+                    "tone": "danger",
+                    "require_reason": True,
+                },
+            }
+
+        cool_until = (_now() + timedelta(hours=COOL_OFF_HOURS)).isoformat()
+        pid = str(uuid.uuid4())
+        prop = _proposal_payload(
+            proposal_id=pid,
+            user_id=user_id,
+            act_kind=act_kind,
+            summary=summary,
+            params=params,
+            status="pending_cool_off",
+            policy_version=POLICY_COOL_OFF,
+            reason=reason_text,
+            cool_off_until=cool_until,
+            cool_off_meta=cool_meta,
+        )
+        _PROPOSALS[pid] = prop
+        reply = (
+            f"{MODE_C_CHIP}\n{COOL_OFF_WARN_VI}\n\n"
+            f"Đề xuất: {summary}.\n"
+            f"Lý do: {reason_text}\n"
+            f"{PENDING_COOL_OFF_VI}\n"
+            f"Mở khóa xác nhận sau: {cool_until}"
+        )
+        return 200, {
+            "ok": True,
+            "mode": MODE_C,
+            "mode_chip": "L-COOL-OFF · Chờ 24 giờ",
+            "disclaimer": MODE_C_DISCLAIMER,
+            "policy_version": POLICY_COOL_OFF,
+            "guardrail_result": "pass",
+            "rule": POLICY_COOL_OFF,
+            "reply": reply,
+            "needs_confirm": False,
+            "needs_cool_off_wait": True,
+            "needs_reason": False,
+            "act_proposal": prop,
+            "status": "pending_cool_off",
+            "cool_off_until": cool_until,
+            "reason": reason_text,
+            "warning_level": "red",
+            "warning_vi": COOL_OFF_WARN_VI,
+            "cool_off": cool_meta,
+            "ui": {
+                "chip": "L-COOL-OFF · Chờ 24 giờ",
+                "tone": "danger",
+                "require_reason": False,
+            },
+        }
 
     companion_id = None
     status = "proposed"
@@ -583,6 +944,24 @@ def _latest_envelope_id(user_id: str) -> Optional[str]:
     return None
 
 
+def _cool_off_elapsed(prop: dict[str, Any], *, advance: bool = False) -> tuple[bool, Optional[str]]:
+    """Return (ready, cool_off_until_iso). advance=True skips real wait (UAT header/clock)."""
+    if advance:
+        return True, prop.get("cool_off_until")
+    until_s = prop.get("cool_off_until")
+    if not until_s:
+        # Fallback: created_at + COOL_OFF_HOURS
+        created = prop.get("created_at")
+        if not created:
+            return False, None
+        until = datetime.fromisoformat(created) + timedelta(hours=COOL_OFF_HOURS)
+    else:
+        until = datetime.fromisoformat(until_s)
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return _now() >= until, until.isoformat()
+
+
 def confirm_act(
     *,
     user_id: str,
@@ -590,6 +969,7 @@ def confirm_act(
     confirm: bool,
     gate_status: str = "passed",
     answer_confidence: float = 0.90,
+    cool_off_advance: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     if not user_id:
         return 400, {"error": "user_id is required"}
@@ -610,7 +990,11 @@ def confirm_act(
 
     # Fail-closed: dual-control pending cannot be written by primary confirm /
     # client spoof flags. Only companion_confirm_act writes OS.
-    if prop.get("status") == "pending_dual" or requires_dual_control(prop.get("act_kind") or ""):
+    # withdraw_efund is NOT in DUAL_CONTROL_ACTS unless escalated to pending_dual.
+    if prop.get("status") == "pending_dual" or (
+        requires_dual_control(prop.get("act_kind") or "")
+        and prop.get("status") != "pending_cool_off"
+    ):
         return 403, {
             "error": "dual_control_required",
             "rule": POLICY_DUAL_CONTROL,
@@ -625,12 +1009,52 @@ def confirm_act(
             "companion_user_id": prop.get("companion_user_id"),
         }
 
+    # Cool-off gate: early confirm stays pending (no OS write).
+    if prop.get("status") == "pending_cool_off":
+        reason_stored = str(prop.get("reason") or "").strip()
+        if not reason_stored:
+            return 200, {
+                "ok": False,
+                "status": "pending_cool_off",
+                "needs_reason": True,
+                "rule": POLICY_COOL_OFF,
+                "policy_version": POLICY_COOL_OFF,
+                "mode": MODE_C,
+                "reply": COOL_OFF_NEED_REASON_VI,
+                "warning_level": "red",
+                "warning_vi": COOL_OFF_WARN_VI,
+                "proposal_id": proposal_id,
+            }
+        ready, until_iso = _cool_off_elapsed(prop, advance=bool(cool_off_advance))
+        if not ready:
+            return 200, {
+                "ok": False,
+                "status": "pending_cool_off",
+                "still_pending": True,
+                "needs_cool_off_wait": True,
+                "rule": POLICY_COOL_OFF,
+                "policy_version": POLICY_COOL_OFF,
+                "mode": MODE_C,
+                "mode_chip": "L-COOL-OFF · Chờ 24 giờ",
+                "reply": (
+                    f"{PENDING_COOL_OFF_VI} Còn chờ đến {until_iso}. "
+                    "Xác nhận sớm không ghi OS."
+                ),
+                "cool_off_until": until_iso,
+                "warning_level": "red",
+                "warning_vi": COOL_OFF_WARN_VI,
+                "proposal_id": proposal_id,
+                "act_proposal": prop,
+            }
+
     ok, reason = _gate_ok(gate_status, answer_confidence)
     if not ok:
         return 403, {
             "error": reason,
             "mode": MODE_C,
-            "policy_version": POLICY_VERSION,
+            "policy_version": (
+                POLICY_COOL_OFF if prop.get("status") == "pending_cool_off" else POLICY_VERSION
+            ),
         }
 
     act_kind = prop["act_kind"]
@@ -648,6 +1072,8 @@ def confirm_act(
         applied = _write_reminder(user_id, params, act_id)
     elif act_kind == ACT_ESTATE_CHECKLIST:
         applied = _write_estate(user_id, params, act_id)
+    elif act_kind == ACT_WITHDRAW_EFUND:
+        applied = _write_withdraw_efund(user_id, params, act_id)
     else:
         return 400, {"error": f"unsupported act_kind: {act_kind}"}
 
@@ -664,19 +1090,26 @@ def confirm_act(
     }
     applied.pop("_undo_snapshot", None)
 
+    was_cool = prop.get("policy_version") == POLICY_COOL_OFF or bool(prop.get("cool_off_required"))
+    pv_out = POLICY_COOL_OFF if was_cool else POLICY_VERSION
+
     prop["status"] = "confirmed"
     prop["act_id"] = act_id
     prop["confirmed_at"] = _now_iso()
+    if cool_off_advance:
+        prop["cool_off_advanced"] = True
 
     log_entry = {
         "id": str(uuid.uuid4()),
         "act_id": act_id,
         "user_id": user_id,
         "mode": MODE_C,
-        "policy_version": POLICY_VERSION,
+        "policy_version": pv_out,
+        "rule": POLICY_COOL_OFF if was_cool else None,
         "act_kind": act_kind,
         "proposal_id": proposal_id,
         "guardrail_result": "allow",
+        "cool_off": was_cool,
         "timestamp": _now_iso(),
     }
     _ACT_LOGS.append(log_entry)
@@ -686,7 +1119,8 @@ def confirm_act(
         "mode": MODE_C,
         "mode_chip": MODE_C_CHIP,
         "disclaimer": MODE_C_DISCLAIMER,
-        "policy_version": POLICY_VERSION,
+        "policy_version": pv_out,
+        "rule": POLICY_COOL_OFF if was_cool else None,
         "act_id": act_id,
         "act_kind": act_kind,
         "result": applied,
@@ -696,6 +1130,7 @@ def confirm_act(
             "hours": UNDO_HOURS,
         },
         "log": log_entry,
+        "cool_off_completed": was_cool,
     }
 
 
@@ -811,6 +1246,80 @@ def _write_reminder(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     return out
 
 
+def _write_withdraw_efund(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
+    """Apply internal OS withdraw from emergency fund goal. No bank / L2."""
+    from welora import goals_api
+
+    amount = float(params.get("amount") or 0)
+    if amount <= 0:
+        raise ValueError("amount must be > 0")
+    goal = goals_api.STORE.get_active_for_user(user_id)
+    if not goal:
+        # Staging stub: no EF goal — record virtual withdraw on params only.
+        return {
+            "kind": "withdraw_emergency_fund",
+            "user_id": user_id,
+            "amount": amount,
+            "stub": True,
+            "note": "No emergency_fund goal — recorded without balance mutation.",
+            "created_by_act_id": act_id,
+            "mode": MODE_C,
+            "policy_version": POLICY_COOL_OFF,
+            "created_at": _now_iso(),
+            "_undo_snapshot": {"action": "noop_withdraw"},
+        }
+    prev_amount = float(goal.current_amount)
+    new_amount = max(0.0, prev_amount - amount)
+    from welora.goal_emergency_fund import EmergencyFundGoal
+
+    # apply_progress rejects status==completed — soft-reopen before set_amount.
+    soft = EmergencyFundGoal(
+        goal_id=goal.goal_id,
+        user_id=goal.user_id,
+        type=goal.type,
+        title=goal.title,
+        status="active",
+        principle_keys=list(goal.principle_keys),
+        target_amount=goal.target_amount,
+        target_unit=goal.target_unit,
+        months_of_expense=goal.months_of_expense,
+        target_date=goal.target_date,
+        current_amount=goal.current_amount,
+        percent=goal.percent,
+        last_updated_at=goal.last_updated_at,
+        safety_gate_relevant=goal.safety_gate_relevant,
+        monthly_contribution=goal.monthly_contribution,
+        plan_method=goal.plan_method,
+        linked_from_onboarding=goal.linked_from_onboarding,
+        essential_expense_monthly=goal.essential_expense_monthly,
+        created_at=goal.created_at,
+        updated_at=goal.updated_at,
+    )
+    goals_api.STORE.save(soft)
+    updated = goals_api.STORE.record_progress(goal.goal_id, set_amount=new_amount)
+
+    out = {
+        "kind": "withdraw_emergency_fund",
+        "user_id": user_id,
+        "goal_id": updated.goal_id,
+        "amount": amount,
+        "previous_amount": prev_amount,
+        "current_amount": updated.current_amount,
+        "months_covered": updated.months_covered,
+        "created_by_act_id": act_id,
+        "mode": MODE_C,
+        "policy_version": POLICY_COOL_OFF,
+        "internal_only": True,
+        "created_at": _now_iso(),
+        "_undo_snapshot": {
+            "action": "restore_efund_amount",
+            "goal_id": updated.goal_id,
+            "prev_amount": prev_amount,
+        },
+    }
+    return out
+
+
 def _write_estate(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     prev = _ESTATE.get(user_id)
     rec = {
@@ -881,6 +1390,40 @@ def undo_act(
             _ESTATE.pop(user_id, None)
         else:
             _ESTATE[user_id] = prev
+    elif action == "restore_efund_amount" and snap.get("goal_id"):
+        from welora import goals_api
+        from welora.goal_emergency_fund import EmergencyFundGoal
+
+        gid = snap["goal_id"]
+        prev_amt = float(snap.get("prev_amount") or 0)
+        goal = goals_api.STORE.get(gid)
+        if goal:
+            soft = EmergencyFundGoal(
+                goal_id=goal.goal_id,
+                user_id=goal.user_id,
+                type=goal.type,
+                title=goal.title,
+                status="active" if prev_amt < goal.target_amount else goal.status,
+                principle_keys=list(goal.principle_keys),
+                target_amount=goal.target_amount,
+                target_unit=goal.target_unit,
+                months_of_expense=goal.months_of_expense,
+                target_date=goal.target_date,
+                current_amount=goal.current_amount,
+                percent=goal.percent,
+                last_updated_at=goal.last_updated_at,
+                safety_gate_relevant=goal.safety_gate_relevant,
+                monthly_contribution=goal.monthly_contribution,
+                plan_method=goal.plan_method,
+                linked_from_onboarding=goal.linked_from_onboarding,
+                essential_expense_monthly=goal.essential_expense_monthly,
+                created_at=goal.created_at,
+                updated_at=goal.updated_at,
+            )
+            goals_api.STORE.save(soft)
+            goals_api.STORE.record_progress(gid, set_amount=prev_amt)
+    elif action == "noop_withdraw":
+        pass
     else:
         return 400, {
             "error": "undo not supported for this act",
@@ -984,6 +1527,8 @@ def _apply_act_write(
         return _write_reminder(user_id, params, act_id)
     if act_kind == ACT_ESTATE_CHECKLIST:
         return _write_estate(user_id, params, act_id)
+    if act_kind == ACT_WITHDRAW_EFUND:
+        return _write_withdraw_efund(user_id, params, act_id)
     raise ValueError(f"unsupported act_kind: {act_kind}")
 
 

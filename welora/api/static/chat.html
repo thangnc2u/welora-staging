@@ -45,6 +45,19 @@ button:disabled{opacity:.55}
 #modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:#14532d;border:1px solid #3dd68c;font-size:13px}
 #modeCUndo.show{display:block}
 #modeCUndo button{margin-top:8px;background:#3dd68c;color:#0b0f14;width:100%}
+.modeC.coolOff,.coolOff{border-left:3px solid #ef4444}
+.modeChip.coolOffChip{background:#7f1d1d;color:#fecaca}
+#modeCCoolOff{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#2a1518;border:1px solid #ef4444}
+#modeCCoolOff.show{display:block}
+#modeCCoolOff .warn{color:#fecaca;font-size:13px;font-weight:600;margin:0 0 8px;line-height:1.4}
+#modeCCoolOff label{display:block;font-size:12px;color:#fca5a5;margin:0 0 4px}
+#modeCCoolOff textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px;border-radius:8px;border:1px solid #7f1d1d;background:#0b0f14;color:#fee2e2;resize:vertical}
+#modeCCoolOff .actions{display:flex;gap:8px;margin-top:10px}
+#modeCCoolOff .actions button{flex:1}
+#modeCCoolOff #mcCoolSubmit{background:#ef4444;color:#fff}
+#modeCCoolOff #mcCoolCancel{background:#243041;color:#e8eef7}
+#modeCCoolPending{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#2a1518;border:1px solid #f87171;font-size:13px;color:#fecaca}
+#modeCCoolPending.show{display:block}
 </style></head>
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
@@ -82,6 +95,23 @@ button:disabled{opacity:.55}
 <div id="modeCUndo">
   <span>Đã ghi OS. Hoàn tác trong 24 giờ?</span>
   <button type="button" id="mcUndoBtn">Hoàn tác</button>
+</div>
+<div id="modeCCoolOff" aria-live="polite">
+  <span class="modeChip coolOffChip">L-COOL-OFF · Cảnh báo đỏ</span>
+  <p class="warn" id="mcCoolWarn">CẢNH BÁO ĐỎ — chạm quỹ khẩn cấp. Nhập lý do và chờ 24 giờ.</p>
+  <label for="mcCoolReason">Lý do (bắt buộc)</label>
+  <textarea id="mcCoolReason" placeholder="Nhập lý do không rỗng…"></textarea>
+  <div class="actions">
+    <button type="button" id="mcCoolSubmit">Gửi lý do · chờ 24h</button>
+    <button type="button" id="mcCoolCancel">Hủy</button>
+  </div>
+</div>
+<div id="modeCCoolPending" aria-live="polite">
+  <span class="modeChip coolOffChip">L-COOL-OFF · Chờ 24 giờ</span>
+  <p id="mcCoolPendingText" style="margin:8px 0 0">Đang chờ đủ 24 giờ trước khi xác nhận ghi OS.</p>
+  <div class="actions" style="display:flex;gap:8px;margin-top:10px">
+    <button type="button" id="mcCoolConfirmEarly" style="flex:1;background:#7f1d1d;color:#fecaca">Thử xác nhận</button>
+  </div>
 </div>
 <form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script>
@@ -204,8 +234,14 @@ document.getElementById('f').onsubmit=async(e)=>{
   try{
     const r=await fetch('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:q})});
     const d=await r.json();
-    hideModeC(); hideUndo();
-    if(d.mode==='C' && d.act_proposal && d.needs_confirm){
+    hideModeC(); hideUndo(); hideCoolOff(); hideCoolPending();
+    if(d.mode==='C' && (d.needs_reason || (d.status==='pending_cool_off' && d.needs_reason) || (d.rule==='L-COOL-OFF' && d.needs_reason))){
+      addCoolOffBubble(d);
+      showCoolOffReason(d);
+    }else if(d.mode==='C' && (d.status==='pending_cool_off' || d.needs_cool_off_wait) && d.act_proposal){
+      addCoolOffBubble(d);
+      showCoolPending(d);
+    }else if(d.mode==='C' && d.act_proposal && d.needs_confirm){
       addModeCBubble(d);
       showModeCPropose(d);
     }else if(d.mode==='C' && (d.needs_companion_confirm || (d.act_proposal&&d.act_proposal.status==='pending_dual') || d.status==='pending_dual')){
@@ -293,6 +329,85 @@ if(document.getElementById('mcUndoBtn')){
       if(d.ok) add('Đã hoàn tác Mode C trong 24 giờ.','bot muted');
       else add(d.error||d.detail||'Không hoàn tác được.','bot deny');
     }catch(e){ add('Không hoàn tác được.','bot deny'); }
+    finally{ setLoading(false); }
+  };
+}
+let coolOffContext=null;
+let coolPendingProposal=null;
+const coolBox=document.getElementById('modeCCoolOff');
+const coolPending=document.getElementById('modeCCoolPending');
+function hideCoolOff(){ if(coolBox) coolBox.classList.remove('show'); coolOffContext=null; }
+function hideCoolPending(){ if(coolPending) coolPending.classList.remove('show'); coolPendingProposal=null; }
+function addCoolOffBubble(d){
+  const chip=(d.ui&&d.ui.chip)||d.mode_chip||'L-COOL-OFF · Cảnh báo đỏ';
+  const d2=document.createElement('div');
+  d2.className='msg bot modeC coolOff';
+  const chipEl=document.createElement('span'); chipEl.className='modeChip coolOffChip'; chipEl.textContent=chip;
+  d2.appendChild(chipEl);
+  const t=document.createElement('div'); t.textContent=stripMdMarkers(d.reply||d.warning_vi||'');
+  d2.appendChild(t);
+  log.appendChild(d2); log.scrollTop=log.scrollHeight;
+}
+function showCoolOffReason(d){
+  coolOffContext=d;
+  const w=document.getElementById('mcCoolWarn');
+  if(w) w.textContent=d.warning_vi||d.reply||'CẢNH BÁO ĐỎ — L-COOL-OFF';
+  const ta=document.getElementById('mcCoolReason'); if(ta) ta.value='';
+  if(coolBox) coolBox.classList.add('show');
+}
+function showCoolPending(d){
+  coolPendingProposal=d.act_proposal||null;
+  const t=document.getElementById('mcCoolPendingText');
+  if(t) t.textContent=(d.reply||'Đang chờ đủ 24 giờ.')+(d.cool_off_until?('\nMở khóa: '+d.cool_off_until):'');
+  if(coolPending) coolPending.classList.add('show');
+}
+if(document.getElementById('mcCoolCancel')){
+  document.getElementById('mcCoolCancel').onclick=()=>{ hideCoolOff(); add('Đã hủy cooling-off.','bot muted'); };
+}
+if(document.getElementById('mcCoolSubmit')){
+  document.getElementById('mcCoolSubmit').onclick=async()=>{
+    if(!coolOffContext||!uid) return;
+    const reason=(document.getElementById('mcCoolReason').value||'').trim();
+    if(!reason){ add('Lý do không được để trống.','bot deny'); return; }
+    const msg=(coolOffContext._last_user_message)||'Rút quỹ khẩn cấp';
+    // Prefer amount from cool_off meta if present — reconstruct via last message in log
+    let lastUser='';
+    const users=log.querySelectorAll('.msg.user');
+    if(users.length) lastUser=users[users.length-1].textContent||'';
+    setLoading(true);
+    try{
+      const r=await fetch('/agent/mode-c/propose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:lastUser||'Rút quỹ khẩn cấp',reason:reason,gate_status:'passed',answer_confidence:0.90,params:(coolOffContext.cool_off?{amount:coolOffContext.cool_off.amount}:null)})});
+      const d=await r.json();
+      hideCoolOff();
+      if(d.status==='pending_cool_off' && d.act_proposal){
+        addCoolOffBubble(d); showCoolPending(d);
+      }else if(d.needs_reason){
+        addCoolOffBubble(d); showCoolOffReason(d);
+      }else{
+        add(d.reply||d.error||'Không tạo được cooling-off.','bot deny');
+      }
+    }catch(e){ add('Không gửi lý do được.','bot deny'); }
+    finally{ setLoading(false); }
+  };
+}
+if(document.getElementById('mcCoolConfirmEarly')){
+  document.getElementById('mcCoolConfirmEarly').onclick=async()=>{
+    if(!coolPendingProposal||!uid) return;
+    setLoading(true);
+    try{
+      const r=await fetch('/agent/mode-c/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,proposal_id:coolPendingProposal.proposal_id,confirm:true})});
+      const d=await r.json();
+      if(d.ok){
+        hideCoolPending();
+        add('Đã xác nhận sau cooling-off — OS đã cập nhật.','bot modeC');
+        if(d.undo){ lastUndo={act_id:d.act_id,undo_token:d.undo.token}; if(mcUndo) mcUndo.classList.add('show'); }
+      }else if(d.still_pending || d.status==='pending_cool_off'){
+        add(d.reply||'Vẫn đang chờ 24 giờ — chưa ghi OS.','bot deny');
+        showCoolPending(Object.assign({},d,{act_proposal:coolPendingProposal}));
+      }else{
+        add(d.error||d.detail||d.reply||'Không xác nhận được.','bot deny');
+      }
+    }catch(e){ add('Không xác nhận được.','bot deny'); }
     finally{ setLoading(false); }
   };
 }

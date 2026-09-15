@@ -202,14 +202,25 @@ def service_chat(
 
     mode_c_fields = {}
     if mode_c_overlay:
+        mode_chip = mode_c_overlay.get("mode_chip")
+        if mode_c_overlay.get("needs_reason"):
+            mode_chip = "L-COOL-OFF · Cảnh báo đỏ"
         mode_c_fields = {
             "mode": mode_c_overlay.get("mode"),
             "policy_version": mode_c_overlay.get("policy_version"),
-            "mode_chip": mode_c_overlay.get("mode_chip"),
+            "mode_chip": mode_chip,
             "act_kind": (mode_c_overlay.get("act_proposal") or {}).get("act_kind")
             or mode_c_overlay.get("act_kind"),
             "needs_confirm": bool(mode_c_overlay.get("needs_confirm")),
             "needs_companion_confirm": bool(mode_c_overlay.get("needs_companion_confirm")),
+            "needs_reason": bool(mode_c_overlay.get("needs_reason")),
+            "needs_cool_off_wait": bool(mode_c_overlay.get("needs_cool_off_wait")),
+            "warning_vi": mode_c_overlay.get("warning_vi"),
+            "warning_level": mode_c_overlay.get("warning_level"),
+            "cool_off": mode_c_overlay.get("cool_off"),
+            "cool_off_until": mode_c_overlay.get("cool_off_until"),
+            "ui": mode_c_overlay.get("ui"),
+            "still_pending": bool(mode_c_overlay.get("still_pending")),
             "status": mode_c_overlay.get("status")
             or (mode_c_overlay.get("act_proposal") or {}).get("status"),
             "companion_user_id": mode_c_overlay.get("companion_user_id"),
@@ -268,11 +279,22 @@ def service_chat(
     }
     if mode_c_overlay:
         out["mode"] = mode_c_overlay.get("mode")
-        out["mode_chip"] = mode_c_overlay.get("mode_chip")
+        mode_chip = mode_c_overlay.get("mode_chip")
+        if mode_c_overlay.get("needs_reason"):
+            mode_chip = "L-COOL-OFF · Cảnh báo đỏ"
+        out["mode_chip"] = mode_chip
         out["disclaimer"] = mode_c_overlay.get("disclaimer")
         out["policy_version"] = mode_c_overlay.get("policy_version")
         out["needs_confirm"] = bool(mode_c_overlay.get("needs_confirm"))
         out["needs_companion_confirm"] = bool(mode_c_overlay.get("needs_companion_confirm"))
+        out["needs_reason"] = bool(mode_c_overlay.get("needs_reason"))
+        out["needs_cool_off_wait"] = bool(mode_c_overlay.get("needs_cool_off_wait"))
+        out["warning_vi"] = mode_c_overlay.get("warning_vi")
+        out["warning_level"] = mode_c_overlay.get("warning_level")
+        out["cool_off"] = mode_c_overlay.get("cool_off")
+        out["cool_off_until"] = mode_c_overlay.get("cool_off_until")
+        out["ui"] = mode_c_overlay.get("ui")
+        out["still_pending"] = bool(mode_c_overlay.get("still_pending"))
         out["act_proposal"] = mode_c_overlay.get("act_proposal")
         out["status"] = mode_c_overlay.get("status") or (
             (mode_c_overlay.get("act_proposal") or {}).get("status")

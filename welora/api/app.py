@@ -92,6 +92,8 @@ class ModeCProposeBody(BaseModel):
     gate_status: Optional[str] = None
     answer_confidence: Optional[float] = None
     params: Optional[dict[str, Any]] = None
+    reason: Optional[str] = None  # required non-empty when L-COOL-OFF triggers
+    persona: Optional[str] = None  # staging stub P1–P6 (no full router)
 
 class ModeCConfirmBody(BaseModel):
     user_id: str
@@ -427,6 +429,8 @@ def create_app() -> FastAPI:
     @app.post("/agent/mode-c/propose", tags=["agent", "mode-c"])
     def mode_c_propose(body: ModeCProposeBody) -> dict:
         # Always resolve gate + confidence server-side; ignore client spoof fields.
+        if body.persona:
+            mode_c_svc.set_persona(user_id=body.user_id, persona=str(body.persona))
         gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
         return _respond(*mode_c_svc.propose_act(
             user_id=body.user_id,
@@ -434,19 +438,46 @@ def create_app() -> FastAPI:
             gate_status=str(gate),
             answer_confidence=float(conf),
             params=body.params,
+            reason=body.reason,
         ))
 
     @app.post("/agent/mode-c/confirm", tags=["agent", "mode-c"])
-    def mode_c_confirm(body: ModeCConfirmBody) -> dict:
+    def mode_c_confirm(
+        body: ModeCConfirmBody,
+        x_test_cool_off_advance: Optional[str] = Header(None, alias="X-Test-Cool-Off-Advance"),
+    ) -> dict:
         # Re-check gate + confidence on confirm (client fields ignored).
         gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
-        return _respond(*mode_c_svc.confirm_act(
+        advance = str(x_test_cool_off_advance or "").strip().lower() in (
+            "1", "true", "yes", "y", "on",
+        )
+        code, out = mode_c_svc.confirm_act(
             user_id=body.user_id,
             proposal_id=body.proposal_id,
             confirm=bool(body.confirm),
             gate_status=str(gate),
             answer_confidence=float(conf),
+            cool_off_advance=advance,
+        )
+        # Early cool-off confirm stays pending (200) — not an HTTP error.
+        return _respond(code, out)
+
+    @app.post("/os/persona", tags=["os", "cool-off"])
+    def os_persona_set(body: dict[str, Any]) -> dict:
+        return _respond(*mode_c_svc.set_persona(
+            user_id=str(body.get("user_id") or ""),
+            persona=str(body.get("persona") or ""),
         ))
+
+    @app.get("/os/persona", tags=["os", "cool-off"])
+    def os_persona_get(user_id: str = Query(...)) -> dict:
+        p = mode_c_svc.get_persona(user_id)
+        return {
+            "user_id": user_id,
+            "persona": p,
+            "floor_months": mode_c_svc.PERSONA_FLOOR_MONTHS.get(p),
+            "policy_version": mode_c_svc.POLICY_COOL_OFF,
+        }
 
     @app.post("/agent/mode-c/undo", tags=["agent", "mode-c"])
     def mode_c_undo(body: ModeCUndoBody) -> dict:

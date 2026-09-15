@@ -19,6 +19,7 @@ from welora import pre_rule_service as pre_svc
 from welora import health_score as hs_svc
 from welora import csv_parser as csv_svc
 from welora import budget as budget_svc
+from welora import mode_c_act as mode_c_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
@@ -83,6 +84,32 @@ class BudgetApplyBody(BaseModel):
 class AcademyReadBody(BaseModel):
     user_id: str
     node_id: str
+
+
+class ModeCProposeBody(BaseModel):
+    user_id: str
+    message: str
+    gate_status: Optional[str] = None
+    answer_confidence: Optional[float] = None
+    params: Optional[dict[str, Any]] = None
+
+class ModeCConfirmBody(BaseModel):
+    user_id: str
+    proposal_id: str
+    confirm: bool = False
+    gate_status: Optional[str] = "passed"
+    answer_confidence: Optional[float] = 0.90
+
+class ModeCUndoBody(BaseModel):
+    user_id: str
+    act_id: str
+    undo_token: str
+
+class ModeCCrossTakeBody(BaseModel):
+    user_id: str
+    from_envelope_id: str
+    to_envelope_id: str
+    amount: float = 0
 
 class AcademyKuatBody(BaseModel):
     user_id: str
@@ -370,6 +397,69 @@ def create_app() -> FastAPI:
     @app.get("/content/{key}", tags=["content"])
     def content_by_key(key: str) -> dict:
         return _respond(*content_svc.service_get_content(key))
+
+
+    @app.post("/agent/mode-c/propose", tags=["agent", "mode-c"])
+    def mode_c_propose(body: ModeCProposeBody) -> dict:
+        gate = body.gate_status
+        conf = body.answer_confidence
+        if gate is None or conf is None:
+            try:
+                from welora.pre_rule_service import context_from_user
+                ctx = context_from_user(body.user_id)
+                if gate is None:
+                    gate = ctx.safety_gate.status
+                if conf is None:
+                    conf = ctx.answer_confidence
+            except Exception:
+                gate = gate or "not_passed"
+                conf = conf if conf is not None else 0.0
+        return _respond(*mode_c_svc.propose_act(
+            user_id=body.user_id,
+            message=body.message,
+            gate_status=str(gate),
+            answer_confidence=float(conf),
+            params=body.params,
+        ))
+
+    @app.post("/agent/mode-c/confirm", tags=["agent", "mode-c"])
+    def mode_c_confirm(body: ModeCConfirmBody) -> dict:
+        return _respond(*mode_c_svc.confirm_act(
+            user_id=body.user_id,
+            proposal_id=body.proposal_id,
+            confirm=bool(body.confirm),
+            gate_status=str(body.gate_status or "passed"),
+            answer_confidence=float(body.answer_confidence if body.answer_confidence is not None else 0.90),
+        ))
+
+    @app.post("/agent/mode-c/undo", tags=["agent", "mode-c"])
+    def mode_c_undo(body: ModeCUndoBody) -> dict:
+        return _respond(*mode_c_svc.undo_act(
+            user_id=body.user_id,
+            act_id=body.act_id,
+            undo_token=body.undo_token,
+        ))
+
+    @app.get("/os/envelopes", tags=["os", "mode-c"])
+    def os_envelopes(user_id: str = Query(...)) -> dict:
+        return _respond(*mode_c_svc.list_envelopes(user_id))
+
+    @app.get("/os/reminders", tags=["os", "mode-c"])
+    def os_reminders(user_id: str = Query(...)) -> dict:
+        return _respond(*mode_c_svc.list_reminders(user_id))
+
+    @app.get("/os/estate-checklist", tags=["os", "mode-c"])
+    def os_estate(user_id: str = Query(...)) -> dict:
+        return _respond(*mode_c_svc.get_estate_checklist(user_id))
+
+    @app.post("/os/envelopes/cross-take", tags=["os", "mode-c"])
+    def os_cross_take(body: ModeCCrossTakeBody) -> dict:
+        return _respond(*mode_c_svc.deny_cross_take(
+            user_id=body.user_id,
+            from_envelope_id=body.from_envelope_id,
+            to_envelope_id=body.to_envelope_id,
+            amount=float(body.amount or 0),
+        ))
 
     return app
 

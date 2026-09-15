@@ -26,9 +26,16 @@ def reset_all_stores(goal_store: Optional[InMemoryEmergencyFundStore] = None) ->
     if hasattr(store, "_by_id"):
         store._by_id.clear()
         store._active_by_user.clear()
+        if hasattr(store, "_debt_by_user"):
+            store._debt_by_user.clear()
     elif hasattr(store, "clear"):
         store.clear()
     USER_FLAGS.clear()
+    try:
+        from welora.mode_c_act import reset_mode_c_store
+        reset_mode_c_store()
+    except Exception:
+        pass
 
 
 def _run_onboarding(

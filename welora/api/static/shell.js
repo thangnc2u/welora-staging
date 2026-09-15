@@ -1,27 +1,29 @@
-/* Welora App shell — inject 4-tab bottom nav. No innerHTML. */
+/* Welora App shell — inject bottom nav (4 always-on + gated Chat). No innerHTML. */
 (function () {
   var tabs = [
     { id: "tabHome", href: "/app", label: "Trang chủ", ico: "○", key: "home" },
     { id: "tabPedia", href: "/app/content", label: "Từ điển", ico: "□", key: "pedia" },
-    { id: "tabChat", href: "/app/chat", label: "Chat với Agent", ico: "✉", key: "chat", gate: true },
-    { id: "tabAcademy", href: "/app/academy", label: "Học viện", ico: "◈", key: "academy" }
+    { id: "tabAcademy", href: "/app/academy", label: "Học viện", ico: "◈", key: "academy" },
+    { id: "tabOps", href: "/app/safety", label: "Điều hành", ico: "▣", key: "ops" },
+    { id: "tabChat", href: "/app/chat", label: "Chat với Agent", ico: "✉", key: "chat", gate: true }
   ];
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";
   var active = "home";
   var forced = document.currentScript && document.currentScript.getAttribute("data-shell-tab");
-  /* goals / safety are not bottom tabs — map to home so no ghost "on" */
-  if (forced === "goals") active = "home";
-  else if (forced) active = forced;
+  /* Điều hành cluster — not home (#173 goals→home fixed) */
+  if (forced) active = forced;
   else if (path.indexOf("/app/content") === 0) active = "pedia";
   else if (path.indexOf("/app/chat") === 0) active = "chat";
   else if (path.indexOf("/app/academy") === 0 || path.indexOf("/app/learn") === 0) active = "academy";
   else if (
-    path === "/app" ||
-    path === "/app/home" ||
-    path.indexOf("/app/health-score") === 0 ||
+    path.indexOf("/app/safety") === 0 ||
     path.indexOf("/app/goals") === 0 ||
-    path.indexOf("/app/safety") === 0
-  ) active = "home";
+    path.indexOf("/app/dna") === 0 ||
+    path.indexOf("/app/constitution") === 0 ||
+    path.indexOf("/app/health-score") === 0 ||
+    path.indexOf("/app/onboarding") === 0
+  ) active = "ops";
+  else if (path === "/app" || path === "/app/home") active = "home";
 
   document.body.classList.add("welora-shell");
   var nav = document.createElement("nav");

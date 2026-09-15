@@ -19,7 +19,7 @@ class TestP2UxNavTudien(unittest.TestCase):
         self.client = TestClient(create_app())
 
     def test_four_labels_in_shell_js(self):
-        for label in ("Trang chủ", "Từ điển", "Chat với Agent", "Học viện"):
+        for label in ("Trang chủ", "Từ điển", "Học viện", "Điều hành", "Chat với Agent"):
             self.assertIn(label, JS)
         self.assertIn('href: "/app/content"', JS)
         self.assertNotIn('label: "Mục tiêu"', JS)

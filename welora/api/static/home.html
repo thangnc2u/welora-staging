@@ -28,11 +28,31 @@ a.more{color:#7dd3fc;text-decoration:none;display:block;margin-top:8px;font-weig
 .tools.open{display:flex}
 a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10px;padding:10px 12px;color:#e8eef7;text-decoration:none;font-weight:600;font-size:14px}
 .tools:not(.dev) .dev-only{display:none}
+.pillars{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
+a.pillar{display:block;background:#141b24;border:1px solid #243041;border-radius:14px;padding:14px 16px;color:#e8eef7;text-decoration:none}
+a.pillar:active{background:#1a2330}
+.pillar-title{display:block;font-weight:700;font-size:15px}
+.pillar-desc{display:block;margin-top:4px;color:#8b9bb4;font-size:12px;font-weight:500}
 </style>
 </head>
 <body class="welora-shell">
 <h1>Trang chủ</h1>
 <p class="muted">An Toàn trước · điểm không bỏ qua Cổng</p>
+
+<nav class="pillars" id="homePillars" aria-label="Ba trụ Welora">
+  <a class="pillar" id="pillarPedia" href="/app/content">
+    <span class="pillar-title">Từ điển</span>
+    <span class="pillar-desc">Kiến thức tài chính ngắn gọn</span>
+  </a>
+  <a class="pillar" id="pillarAcademy" href="/app/academy">
+    <span class="pillar-title">Học viện</span>
+    <span class="pillar-desc">Học theo lộ trình, áp dụng ngay</span>
+  </a>
+  <a class="pillar" id="pillarOps" href="/app/safety">
+    <span class="pillar-title">Điều hành</span>
+    <span class="pillar-desc">Cổng An Toàn · mục tiêu · điểm</span>
+  </a>
+</nav>
 
 <div class="card" id="hsCard">
   <div class="muted">Điểm sức khỏe 0–1000</div>

@@ -35,7 +35,7 @@ class TestP2UxAppShell(unittest.TestCase):
     def test_shell_assets_and_four_tabs(self):
         self.assertTrue((STATIC / "shell.css").is_file())
         js = (STATIC / "shell.js").read_text(encoding="utf-8")
-        for label in ("Trang chủ", "Từ điển", "Chat với Agent", "Học viện"):
+        for label in ("Trang chủ", "Từ điển", "Học viện", "Điều hành", "Chat với Agent"):
             self.assertIn(label, js)
         self.assertNotIn('label: "Mục tiêu"', js)
         self.assertNotIn("Trợ lý AI", js)
@@ -43,7 +43,15 @@ class TestP2UxAppShell(unittest.TestCase):
         self.assertIn("/app/content", js)
         self.assertIn("/app/chat", js)
         self.assertIn("/app/academy", js)
+        self.assertIn('href: "/app/safety"', js)  # Điều hành default
         self.assertNotIn("Welora Academy", js)
+        # order: home → pedia → academy → ops → gated chat
+        i_home = js.index('label: "Trang chủ"')
+        i_pedia = js.index('label: "Từ điển"')
+        i_acad = js.index('label: "Học viện"')
+        i_ops = js.index('label: "Điều hành"')
+        i_chat = js.index('label: "Chat với Agent"')
+        self.assertTrue(i_home < i_pedia < i_acad < i_ops < i_chat)
 
     def test_tab_pages_load_shell(self):
         for path, tab in (("/app/content", "pedia"), ("/app/chat", "chat"), ("/app/academy", "academy")):

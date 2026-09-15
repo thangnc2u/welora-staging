@@ -112,6 +112,25 @@ class ModeCCrossTakeBody(BaseModel):
     to_envelope_id: str
     amount: float = 0
 
+class CompanionLinkBody(BaseModel):
+    user_id: str
+    companion_user_id: str
+
+class ModeCCompanionConfirmBody(BaseModel):
+    companion_user_id: str
+    proposal_id: str
+    confirm: bool = True
+    # Spoof / client flags — ignored server-side (anti-bypass).
+    dual_ok: Optional[bool] = None
+    skip_dual: Optional[bool] = None
+    is_companion: Optional[bool] = None
+    gate_status: Optional[str] = None
+    answer_confidence: Optional[float] = None
+
+class ModeCCancelPendingBody(BaseModel):
+    user_id: str
+    proposal_id: str
+
 class AcademyKuatBody(BaseModel):
     user_id: str
     node_id: str
@@ -216,6 +235,11 @@ def create_app() -> FastAPI:
     @app.get("/app/health-score/", include_in_schema=False)
     def health_score_ui() -> FileResponse:
         return FileResponse(static_dir / "healthscore.html")
+
+    @app.get("/app/dual-control", include_in_schema=False)
+    @app.get("/app/dual-control/", include_in_schema=False)
+    def dual_control_ui() -> FileResponse:
+        return FileResponse(static_dir / "dual-control.html")
 
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
@@ -451,6 +475,37 @@ def create_app() -> FastAPI:
             from_envelope_id=body.from_envelope_id,
             to_envelope_id=body.to_envelope_id,
             amount=float(body.amount or 0),
+        ))
+
+    @app.post("/os/companion", tags=["os", "dual-control"])
+    def os_companion_create(body: CompanionLinkBody) -> dict:
+        return _respond(*mode_c_svc.set_companion(
+            user_id=body.user_id,
+            companion_user_id=body.companion_user_id,
+        ))
+
+    @app.get("/os/companion", tags=["os", "dual-control"])
+    def os_companion_list(user_id: str = Query(...)) -> dict:
+        return _respond(*mode_c_svc.list_companions(user_id))
+
+    @app.get("/os/dual-control/pending", tags=["os", "dual-control"])
+    def os_dual_pending(user_id: str = Query(...)) -> dict:
+        return _respond(*mode_c_svc.list_pending_dual(user_id))
+
+    @app.post("/agent/mode-c/companion-confirm", tags=["agent", "mode-c", "dual-control"])
+    def mode_c_companion_confirm(body: ModeCCompanionConfirmBody) -> dict:
+        # Ignore client spoof flags (dual_ok / skip_dual / is_companion / gate).
+        return _respond(*mode_c_svc.companion_confirm_act(
+            companion_user_id=body.companion_user_id,
+            proposal_id=body.proposal_id,
+            confirm=bool(body.confirm),
+        ))
+
+    @app.post("/agent/mode-c/cancel-pending", tags=["agent", "mode-c", "dual-control"])
+    def mode_c_cancel_pending(body: ModeCCancelPendingBody) -> dict:
+        return _respond(*mode_c_svc.cancel_pending_dual(
+            user_id=body.user_id,
+            proposal_id=body.proposal_id,
         ))
 
     return app

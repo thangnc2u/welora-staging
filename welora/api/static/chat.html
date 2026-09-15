@@ -208,10 +208,18 @@ document.getElementById('f').onsubmit=async(e)=>{
     if(d.mode==='C' && d.act_proposal && d.needs_confirm){
       addModeCBubble(d);
       showModeCPropose(d);
+    }else if(d.mode==='C' && (d.needs_companion_confirm || (d.act_proposal&&d.act_proposal.status==='pending_dual') || d.status==='pending_dual')){
+      addModeCBubble(d);
+      add('Chờ đồng kiểm 2 người — mở Điều hành · Đồng kiểm để companion xác nhận.\n→ /app/dual-control','bot muted');
     }else{
       const cls='bot '+(d.guardrail_result==='deny'?'deny':(d.mode==='C'?'modeC':'pass'));
       let bubble=d.reply||'Không có phản hồi';
-      if(d.guardrail_result==='deny') bubble=bubble+'\nTừ chối cứng';
+      if(d.guardrail_result==='deny'){
+        bubble=bubble+'\nTừ chối cứng';
+        if(d.rule==='L-DUAL-CONTROL' || d.mode_c_rule==='L-DUAL-CONTROL' || (d.policy_version||'').indexOf('L-DUAL')>=0){
+          bubble=bubble+'\n→ Gắn companion tại /app/dual-control';
+        }
+      }
       if(d.mode==='C' && d.mode_chip){
         addModeCBubble(d);
       }else{

@@ -44,8 +44,8 @@ class TestP2UatBShellChromePolish(unittest.TestCase):
             ("/app/content", "pedia"),
             ("/app/chat", "chat"),
             ("/app/academy", "academy"),
-            ("/app/goals", "home"),  # goals maps to home active
-            ("/app/safety", "home"),
+            ("/app/goals", "ops"),  # goals → Điều hành (ops)
+            ("/app/safety", "ops"),
         ):
             r = client.get(path)
             self.assertEqual(r.status_code, 200, path)
@@ -108,15 +108,17 @@ class TestP2UatBShellChromePolish(unittest.TestCase):
         self.assertIn("elBody.textContent='Vui lòng thử lại.'", CONTENT)
         self.assertNotIn("elTitle.textContent='Lỗi'", CONTENT)
 
-    def test_goals_tab_active_maps_home(self):
-        self.assertIn('data-shell-tab="home"', GOALS)
+    def test_goals_tab_active_maps_ops(self):
+        self.assertIn('data-shell-tab="ops"', GOALS)
         self.assertNotIn('data-shell-tab="goals"', GOALS)
-        self.assertIn('forced === "goals"', SHELL_JS)
-        self.assertIn('active = "home"', SHELL_JS)
+        self.assertNotIn('data-shell-tab="home"', GOALS)
+        self.assertNotIn('forced === "goals"', SHELL_JS)
+        self.assertIn('active = "ops"', SHELL_JS)
+        self.assertIn('path.indexOf("/app/goals")', SHELL_JS)
 
     def test_shell_on_safety(self):
         self.assertIn("/static/shell.js", SAFETY)
-        self.assertIn('data-shell-tab="home"', SAFETY)
+        self.assertIn('data-shell-tab="ops"', SAFETY)
         self.assertIn("/static/shell.css", SAFETY)
         r = TestClient(create_app()).get("/app/safety")
         self.assertEqual(r.status_code, 200)

@@ -197,6 +197,25 @@ def _gate_ok(gate_status: str, answer_confidence: float) -> tuple[bool, Optional
     return True, None
 
 
+def resolve_server_gate_confidence(user_id: str) -> tuple[str, float]:
+    """Resolve gate + answer_confidence from live server state.
+
+    Client-supplied gate_status / answer_confidence MUST be ignored at HTTP
+    boundaries (propose/confirm). Fail closed → not_passed / 0.0.
+    """
+    if not user_id:
+        return "not_passed", 0.0
+    try:
+        from welora.pre_rule_service import context_from_user
+
+        ctx = context_from_user(str(user_id))
+        status = str(ctx.safety_gate.status or "not_passed")
+        conf = float(ctx.answer_confidence if ctx.answer_confidence is not None else 0.0)
+        return status, conf
+    except Exception:
+        return "not_passed", 0.0
+
+
 def _proposal_payload(
     *,
     proposal_id: str,

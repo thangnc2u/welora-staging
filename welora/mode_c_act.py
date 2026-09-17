@@ -14,8 +14,11 @@ Source: phụ lục PRD trụ 4 §3.3 Mode C.
   missing companion → DENY; has companion → pending_dual → companion confirm.
 - L-COOL-OFF (Founder 15/09): rút/chuyển quỹ KH dưới sàn persona HOẶC ≥20% quỹ
   → pending_cool_off + lý do + chờ 24h (P1–P5). P6 → dual-control, không tự cool-off.
+- Persist Mode C state to SQLite (proposals / pending_* / confirmed / undone +
+  companion by user_id) when WELORA_STORE=sqlite or WELORA_MODE_C_DB is set.
 - Does NOT replace Hard Deny R01–R09 / Pre-Rule order / TARGET_MONTHS / CORE-*.
   Undo Act 24h remains separate from cooling-off wait.
+  No bank aggregator · no new Postgres.
 """
 
 from __future__ import annotations
@@ -148,7 +151,32 @@ _PERSONAS: dict[str, str] = {}  # user_id -> P1..P6 (MVP stub, no full router)
 _CLOCK_OFFSET: timedelta = timedelta(0)  # UAT clock inject
 
 
-def reset_mode_c_store() -> None:
+# --- SQLite persist (optional; memory remains API source of truth) ---
+def _persist_mod():
+    from welora import mode_c_persist as mcp
+    return mcp
+
+
+def _persist_enabled() -> bool:
+    try:
+        return _persist_mod().is_enabled()
+    except Exception:
+        return False
+
+
+def enable_mode_c_persist(path: str | None = None) -> str:
+    """Enable SQLite write-through + migrate schema. Returns DB path."""
+    mcp = _persist_mod()
+    p = mcp.configure(path)
+    return str(p)
+
+
+def disable_mode_c_persist() -> None:
+    _persist_mod().disable()
+
+
+def clear_mode_c_memory() -> None:
+    """Drop in-memory Mode C dicts without touching SQLite (restart sim)."""
     global _CLOCK_OFFSET
     _ENVELOPES.clear()
     _ENVELOPES_BY_USER.clear()
@@ -161,6 +189,115 @@ def reset_mode_c_store() -> None:
     _COMPANIONS.clear()
     _PERSONAS.clear()
     _CLOCK_OFFSET = timedelta(0)
+
+
+def reload_mode_c_from_sqlite() -> dict:
+    """Load Mode C state from SQLite into memory (after clear_mode_c_memory)."""
+    mcp = _persist_mod()
+    if not mcp.is_enabled():
+        mcp.maybe_autoconfigure()
+    data = mcp.load_all()
+    clear_mode_c_memory()
+    _COMPANIONS.update(data.get("companions") or {})
+    _PROPOSALS.update(data.get("proposals") or {})
+    _UNDO.update(data.get("undos") or {})
+    _ENVELOPES.update(data.get("envelopes") or {})
+    _ENVELOPES_BY_USER.update(data.get("envelopes_by_user") or {})
+    _REMINDERS.update(data.get("reminders") or {})
+    _REMINDERS_BY_USER.update(data.get("reminders_by_user") or {})
+    _ESTATE.update(data.get("estates") or {})
+    _PERSONAS.update(data.get("personas") or {})
+    _ACT_LOGS.extend(data.get("act_logs") or [])
+    return {
+        "proposals": len(_PROPOSALS),
+        "companions": len(_COMPANIONS),
+        "undos": len(_UNDO),
+        "envelopes": len(_ENVELOPES),
+        "schema_version": mcp.schema_version(),
+        "path": str(mcp.get_path()) if mcp.get_path() else None,
+    }
+
+
+def _persist_proposal(prop: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().save_proposal(prop)
+
+
+def _persist_companion(rec: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().save_companion(rec)
+
+
+def _persist_undo(meta: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().save_undo(meta)
+
+
+def _persist_envelope(rec: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().save_envelope(rec)
+
+
+def _persist_delete_envelope(envelope_id: str, user_id: str) -> None:
+    if _persist_enabled():
+        _persist_mod().delete_envelope(envelope_id, user_id)
+
+
+def _persist_reminder(rec: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().save_reminder(rec)
+
+
+def _persist_delete_reminder(reminder_id: str, user_id: str) -> None:
+    if _persist_enabled():
+        _persist_mod().delete_reminder(reminder_id, user_id)
+
+
+def _persist_estate(user_id: str, rec) -> None:
+    if _persist_enabled():
+        _persist_mod().save_estate(user_id, rec)
+
+
+def _persist_persona(user_id: str, persona: str) -> None:
+    if _persist_enabled():
+        _persist_mod().save_persona(user_id, persona)
+
+
+def _persist_act_log(entry: dict) -> None:
+    if _persist_enabled():
+        _persist_mod().append_act_log(entry)
+
+
+# Autoconfigure when staging uses sqlite store (idempotent; tests stay memory).
+# On process start with persist enabled, hydrate memory from SQLite (survive restart).
+try:
+    if _persist_mod().maybe_autoconfigure():
+        data = _persist_mod().load_all()
+        _COMPANIONS.update(data.get("companions") or {})
+        _PROPOSALS.update(data.get("proposals") or {})
+        _UNDO.update(data.get("undos") or {})
+        _ENVELOPES.update(data.get("envelopes") or {})
+        _ENVELOPES_BY_USER.update(data.get("envelopes_by_user") or {})
+        _REMINDERS.update(data.get("reminders") or {})
+        _REMINDERS_BY_USER.update(data.get("reminders_by_user") or {})
+        _ESTATE.update(data.get("estates") or {})
+        _PERSONAS.update(data.get("personas") or {})
+        if data.get("act_logs"):
+            _ACT_LOGS.extend(data["act_logs"])
+except Exception:
+    pass
+
+
+
+def reset_mode_c_store() -> None:
+    """Clear Mode C memory; if SQLite persist is on, wipe DB tables too."""
+    clear_mode_c_memory()
+    try:
+        mcp = _persist_mod()
+        if mcp.is_enabled():
+            mcp.clear_all()
+    except Exception:
+        pass
 
 
 def inject_clock_advance(*, hours: float = 0, seconds: float = 0) -> None:
@@ -357,6 +494,7 @@ def set_companion(*, user_id: str, companion_user_id: str) -> tuple[int, dict[st
         "policy_version": POLICY_DUAL_CONTROL,
     }
     _COMPANIONS[user_id] = rec
+    _persist_companion(rec)
     return 200, {
         "ok": True,
         "link": rec,
@@ -402,6 +540,7 @@ def set_persona(*, user_id: str, persona: str) -> tuple[int, dict[str, Any]]:
             "allowed": sorted(PERSONA_FLOOR_MONTHS.keys()),
         }
     _PERSONAS[str(user_id)] = p
+    _persist_persona(str(user_id), p)
     return 200, {
         "ok": True,
         "user_id": user_id,
@@ -704,6 +843,7 @@ def _append_policy_log(
     if extra:
         entry.update(extra)
     _ACT_LOGS.append(entry)
+    _persist_act_log(entry)
     return entry
 
 
@@ -1007,6 +1147,7 @@ def propose_act(
             ):
                 prop["cool_off_escalated_to_dual"] = True
             _PROPOSALS[pid] = prop
+            _persist_proposal(prop)
             if prop.get("cool_off_escalated_to_dual"):
                 reply = (
                     f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
@@ -1115,6 +1256,7 @@ def propose_act(
                 cool_off_meta=cool_meta,
             )
             _PROPOSALS[pid] = prop
+            _persist_proposal(prop)
             reply = (
                 f"{MODE_C_CHIP}\n{COOL_OFF_WARN_VI}\n\n"
                 f"Đề xuất: {summary}.\n"
@@ -1169,6 +1311,7 @@ def propose_act(
         companion_user_id=companion_id,
     )
     _PROPOSALS[pid] = prop
+    _persist_proposal(prop)
 
     reply = (
         f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
@@ -1443,6 +1586,7 @@ def confirm_act(
         "snapshot": applied.get("_undo_snapshot"),
         "created_at": _now_iso(),
     }
+    _persist_undo(_UNDO[act_id])
     applied.pop("_undo_snapshot", None)
 
     was_cool = prop.get("policy_version") == POLICY_COOL_OFF or bool(prop.get("cool_off_required"))
@@ -1453,6 +1597,7 @@ def confirm_act(
     prop["confirmed_at"] = _now_iso()
     if cool_off_advance:
         prop["cool_off_advanced"] = True
+    _persist_proposal(prop)
 
     log_entry = {
         "id": str(uuid.uuid4()),
@@ -1472,6 +1617,7 @@ def confirm_act(
         "timestamp": _now_iso(),
     }
     _ACT_LOGS.append(log_entry)
+    _persist_act_log(log_entry)
 
     return 200, {
         "ok": True,
@@ -1517,6 +1663,7 @@ def _write_envelope(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     }
     _ENVELOPES[eid] = rec
     _ENVELOPES_BY_USER.setdefault(user_id, []).append(eid)
+    _persist_envelope(rec)
     out = dict(rec)
     out["_undo_snapshot"] = {"envelope_id": eid, "action": "delete"}
     return out
@@ -1549,6 +1696,7 @@ def _write_lock(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     _ENVELOPES[eid]["cross_take_forbidden"] = True
     _ENVELOPES[eid]["updated_at"] = _now_iso()
     _ENVELOPES[eid]["locked_by_act_id"] = act_id
+    _persist_envelope(_ENVELOPES[eid])
     out = dict(_ENVELOPES[eid])
     out["note"] = CROSS_TAKE_NOTE
     out["cross_take_supported"] = CROSS_TAKE_SUPPORTED
@@ -1577,6 +1725,7 @@ def _write_ceiling(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     _ENVELOPES[eid]["target_amount"] = new_ceil
     _ENVELOPES[eid]["updated_at"] = _now_iso()
     _ENVELOPES[eid]["ceiling_by_act_id"] = act_id
+    _persist_envelope(_ENVELOPES[eid])
     out = dict(_ENVELOPES[eid])
     out["_undo_snapshot"] = {
         "envelope_id": eid,
@@ -1604,6 +1753,7 @@ def _write_reminder(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
     }
     _REMINDERS[rid] = rec
     _REMINDERS_BY_USER.setdefault(user_id, []).append(rid)
+    _persist_reminder(rec)
     out = dict(rec)
     out["_undo_snapshot"] = {"reminder_id": rid, "action": "delete"}
     return out
@@ -1699,6 +1849,7 @@ def _write_estate(user_id: str, params: dict, act_id: str) -> dict[str, Any]:
         "updated_at": _now_iso(),
     }
     _ESTATE[user_id] = rec
+    _persist_estate(user_id, rec)
     out = dict(rec)
     out["_undo_snapshot"] = {"action": "restore_estate", "prev": prev}
     return out
@@ -1729,6 +1880,7 @@ def undo_act(
         _ENVELOPES.pop(eid, None)
         ids = _ENVELOPES_BY_USER.get(user_id) or []
         _ENVELOPES_BY_USER[user_id] = [x for x in ids if x != eid]
+        _persist_delete_envelope(eid, user_id)
     elif action == "restore_lock" and snap.get("envelope_id"):
         eid = snap["envelope_id"]
         if eid in _ENVELOPES:
@@ -1736,23 +1888,28 @@ def undo_act(
             _ENVELOPES[eid]["locked"] = bool(prev.get("locked"))
             _ENVELOPES[eid]["cross_take_forbidden"] = bool(prev.get("cross_take_forbidden"))
             _ENVELOPES[eid]["updated_at"] = _now_iso()
+            _persist_envelope(_ENVELOPES[eid])
     elif action == "delete" and snap.get("reminder_id"):
         rid = snap["reminder_id"]
         _REMINDERS.pop(rid, None)
         ids = _REMINDERS_BY_USER.get(user_id) or []
         _REMINDERS_BY_USER[user_id] = [x for x in ids if x != rid]
+        _persist_delete_reminder(rid, user_id)
     elif action == "restore_ceiling" and snap.get("envelope_id"):
         eid = snap["envelope_id"]
         if eid in _ENVELOPES:
             prev = snap.get("prev") or {}
             _ENVELOPES[eid]["target_amount"] = float(prev.get("target_amount") or 0)
             _ENVELOPES[eid]["updated_at"] = _now_iso()
+            _persist_envelope(_ENVELOPES[eid])
     elif action == "restore_estate":
         prev = snap.get("prev")
         if prev is None:
             _ESTATE.pop(user_id, None)
+            _persist_estate(user_id, None)
         else:
             _ESTATE[user_id] = prev
+            _persist_estate(user_id, prev)
     elif action == "restore_efund_amount" and snap.get("goal_id"):
         from welora import goals_api
         from welora.goal_emergency_fund import EmergencyFundGoal
@@ -1794,17 +1951,25 @@ def undo_act(
         }
 
     meta["undone_at"] = _now_iso()
-    _ACT_LOGS.append(
-        {
-            "id": str(uuid.uuid4()),
-            "act_id": act_id,
-            "user_id": user_id,
-            "mode": MODE_C,
-            "policy_version": POLICY_VERSION,
-            "event": "undo",
-            "timestamp": _now_iso(),
-        }
-    )
+    _persist_undo(meta)
+    # Mark linked proposal as undone (DoD state) when present.
+    for _p in _PROPOSALS.values():
+        if _p.get("act_id") == act_id:
+            _p["status"] = "undone"
+            _p["undone_at"] = meta["undone_at"]
+            _persist_proposal(_p)
+            break
+    undo_log = {
+        "id": str(uuid.uuid4()),
+        "act_id": act_id,
+        "user_id": user_id,
+        "mode": MODE_C,
+        "policy_version": POLICY_VERSION,
+        "event": "undo",
+        "timestamp": _now_iso(),
+    }
+    _ACT_LOGS.append(undo_log)
+    _persist_act_log(undo_log)
     return 200, {
         "ok": True,
         "undone": True,
@@ -2040,12 +2205,14 @@ def companion_confirm_act(
         "snapshot": applied.get("_undo_snapshot"),
         "created_at": _now_iso(),
     }
+    _persist_undo(_UNDO[act_id])
     applied.pop("_undo_snapshot", None)
 
     prop["status"] = "confirmed"
     prop["act_id"] = act_id
     prop["confirmed_at"] = _now_iso()
     prop["confirmed_by_companion"] = companion_user_id
+    _persist_proposal(prop)
 
     log_entry = {
         "id": str(uuid.uuid4()),
@@ -2066,6 +2233,7 @@ def companion_confirm_act(
         "timestamp": _now_iso(),
     }
     _ACT_LOGS.append(log_entry)
+    _persist_act_log(log_entry)
 
     return 200, {
         "ok": True,
@@ -2107,18 +2275,19 @@ def cancel_pending_dual(
         }
     prop["status"] = "cancelled"
     prop["cancelled_at"] = _now_iso()
-    _ACT_LOGS.append(
-        {
-            "id": str(uuid.uuid4()),
-            "proposal_id": proposal_id,
-            "user_id": user_id,
-            "companion_user_id": prop.get("companion_user_id"),
-            "mode": MODE_C,
-            "policy_version": POLICY_DUAL_CONTROL,
-            "event": "cancel_pending_dual",
-            "timestamp": _now_iso(),
-        }
-    )
+    _persist_proposal(prop)
+    cancel_log = {
+        "id": str(uuid.uuid4()),
+        "proposal_id": proposal_id,
+        "user_id": user_id,
+        "companion_user_id": prop.get("companion_user_id"),
+        "mode": MODE_C,
+        "policy_version": POLICY_DUAL_CONTROL,
+        "event": "cancel_pending_dual",
+        "timestamp": _now_iso(),
+    }
+    _ACT_LOGS.append(cancel_log)
+    _persist_act_log(cancel_log)
     return 200, {
         "ok": True,
         "cancelled": True,

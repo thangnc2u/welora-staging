@@ -4,31 +4,34 @@
 <title>Welora · An Toàn</title>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;margin:0;background:#f6f7f9;color:#1a1d21}
-body.welora-shell{background:#f6f7f9;color:#1a1d21;max-width:none;padding:0;margin:0}
-.shell{max-width:430px;margin:0 auto;background:#fff;min-height:100dvh;padding:16px 16px 88px}
-.badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #e5e7eb}
-.badge-card.ok{background:#ecfdf5}.badge-card.fail{background:#fff7ed}
-.status{font-weight:700;font-size:18px}.meta{color:#6b7280;font-size:14px}
-.bar{height:8px;background:#eef2f0;border-radius:99px;overflow:hidden;margin:8px 0}
-.bar>i{display:block;height:100%;background:#0f766e}
-input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid #e5e7eb;box-sizing:border-box}
-button{background:#0f766e;color:#fff;border:0;font-weight:600}
+body{font-family:system-ui;margin:0;background:var(--bg-app);color:var(--text-primary)}
+body.welora-shell{background:var(--bg-app);color:var(--text-primary);max-width:none;padding:0;margin:0}
+.shell{max-width:430px;margin:0 auto;background:var(--bg-app);min-height:100dvh;padding:16px 16px 88px}
+.badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary)}
+.badge-card.ok{background:#143028;border-color:var(--color-success)}.badge-card.fail{background:#2a2410;border-color:var(--color-warning)}
+.status{font-weight:700;font-size:18px;color:var(--text-primary)}.meta{color:var(--text-secondary);font-size:14px}
+.bar{height:8px;background:var(--bg-subtle);border-radius:99px;overflow:hidden;margin:8px 0;border:1px solid var(--border-default)}
+.bar>i{display:block;height:100%;background:var(--cta-primary)}
+input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid var(--border-default);box-sizing:border-box;background:var(--bg-subtle);color:var(--text-primary)}
+input:focus-visible,select:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button{background:var(--cta-primary);color:var(--cta-primary-text);border:0;font-weight:600}
+button:hover{background:var(--cta-primary-hover)}button:active{background:var(--cta-primary-pressed)}
 .chips{display:flex;gap:8px;margin-top:8px}
-.chips button{margin:0;padding:8px 10px;width:auto;background:#134e4a}
-a{color:#0f766e}.section-title{font-size:13px;font-weight:700;color:#6b7280;margin:8px 0}
-.hs-note{font-size:11px;color:#c2410c;background:#fff7ed;border-radius:8px;padding:8px;margin-top:8px}
-.hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:#374151}
-.check-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;margin:8px 0;background:#fff}
-.check-item.ok{background:#ecfdf5;border-color:#a7f3d0}
-.check-item.fail{background:#fff7ed;border-color:#fed7aa}
+.chips button{margin:0;padding:8px 10px;width:auto;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+a{color:var(--link)}.section-title{font-size:13px;font-weight:700;color:var(--text-muted);margin:8px 0}
+.hs-note{font-size:11px;color:var(--gold-300);background:#2a2410;border:1px solid var(--color-warning);border-radius:8px;padding:8px;margin-top:8px}
+.hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:var(--text-secondary)}
+.check-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--border-default);border-radius:12px;margin:8px 0;background:var(--bg-surface);color:var(--text-primary)}
+.check-item.ok{background:#143028;border-color:var(--color-success)}
+.check-item.fail{background:#2a2410;border-color:var(--color-warning)}
 .check-row{display:flex;justify-content:space-between;gap:8px;align-items:center}
-.check-label{font-weight:600;font-size:14px}
-.check-state{font-size:12px;color:#6b7280}
-.check-item a.cta{display:inline-block;margin-top:4px;font-weight:600}
-#ctaGateChat{display:block;margin:10px 0 14px;padding:12px;border-radius:12px;background:#0f766e;color:#fff;text-align:center;text-decoration:none;font-weight:700}
+.check-label{font-weight:600;font-size:14px;color:var(--text-primary)}
+.check-state{font-size:12px;color:var(--text-secondary)}
+.check-item a.cta{display:inline-block;margin-top:4px;font-weight:600;color:var(--link)}
+#ctaGateChat{display:block;margin:10px 0 14px;padding:12px;border-radius:12px;background:var(--cta-primary);color:var(--cta-primary-text);text-align:center;text-decoration:none;font-weight:700}
 #ctaGateChat[hidden]{display:none}
 #masteryState[hidden]{display:none}
+h1{color:var(--text-primary)}
 </style></head><body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <div class="shell">

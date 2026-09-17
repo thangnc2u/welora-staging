@@ -6,21 +6,22 @@
 <title>Welora · Bắt đầu</title>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
-.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:16px;margin:12px 0}
-label{display:block;margin:8px 0 4px;color:#8b9bb4;font-size:13px}
-input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7;box-sizing:border-box}
-button,a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
-button.secondary,a.btn.secondary{background:#243041}
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+.card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:12px;padding:16px;margin:12px 0;color:var(--text-primary)}
+label{display:block;margin:8px 0 4px;color:var(--text-secondary);font-size:13px}
+input,select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);box-sizing:border-box}
+input:focus-visible,select:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button,a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
+button.secondary,a.btn.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
 button:disabled{opacity:.55}
-.muted{color:#8b9bb4;font-size:13px}
+.muted{color:var(--text-secondary);font-size:13px}
 .hidden{display:none}
-.err{color:#ff6b6b;font-size:13px;margin-top:8px}
+.err{color:var(--color-danger);font-size:13px;margin-top:8px}
 .chips{display:flex;gap:8px;margin-top:8px}
-.chips button{margin:0;padding:8px 10px;background:#243041}
+.chips button{margin:0;padding:8px 10px;background:var(--bg-elevated);color:var(--text-primary)}
 .dots{display:flex;gap:6px;margin:8px 0 4px}
-.dots i{width:8px;height:8px;border-radius:99px;background:#243041;display:block}
-.dots i.on{background:#3b82f6}
+.dots i{width:8px;height:8px;border-radius:99px;background:var(--border-default);display:block}
+.dots i.on{background:var(--cta-primary)}
 </style>
 </head>
 <body>

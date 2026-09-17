@@ -3,60 +3,66 @@
 <title>Welora · Chat với Agent</title>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
-#log{flex:1;overflow:auto;background:#141b24;border-radius:12px;padding:12px;border:1px solid #243041}
-.msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%}.user{background:#1e3a5f;margin-left:auto}.bot{background:#1a2332}
-.deny{border-left:3px solid #ff6b6b}.pass{border-left:3px solid #3dd68c}
-form{display:flex;gap:8px;margin-top:12px}form#f[hidden]{display:none}input{flex:1;padding:12px;border-radius:10px;border:1px solid #243041;background:#0b0f14;color:#e8eef7}
-button{padding:12px 16px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600}
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
+#log{flex:1;overflow:auto;background:var(--bg-surface);border-radius:12px;padding:12px;border:1px solid var(--border-default);color:var(--text-primary)}
+.msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%;color:var(--text-primary)}.user{background:var(--bg-elevated);margin-left:auto;border:1px solid var(--border-default)}.bot{background:var(--navy-800)}
+.deny{border-left:3px solid var(--color-danger)}.pass{border-left:3px solid var(--color-success)}
+form{display:flex;gap:8px;margin-top:12px}form#f[hidden]{display:none}input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary)}
+input:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button{padding:12px 16px;border:0;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button:hover{background:var(--cta-primary-hover)}button:active{background:var(--cta-primary-pressed)}
 button:disabled{opacity:.55}
-.muted{color:#8b9bb4;font-size:12px}
+.muted{color:var(--text-secondary);font-size:12px}
+a#navHome{color:var(--link)}
 #suggestChips{display:none;flex-wrap:wrap;gap:8px;margin:8px 0 0}
 #suggestChips.show{display:flex}
-#suggestChips button{margin:0;padding:8px 10px;width:auto;background:#243041;color:#e8eef7;border:1px solid #334155;border-radius:999px;font-size:12px}
-#denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#2a1518;border:1px solid #ff6b6b;color:#ffb4b4;text-decoration:none;font-weight:600}
+#suggestChips button{margin:0;padding:8px 10px;width:auto;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:999px;font-size:12px}
+/* Hard Deny CTA — red only, never gold */
+#denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-text);text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
-#unlockWall{display:none;margin:0 0 12px;padding:14px;border-radius:12px;background:#141b24;border:1px solid #ffb020;color:#e8eef7}
+#unlockWall{display:none;margin:0 0 12px;padding:14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--color-warning);color:var(--text-primary)}
 #unlockWall.show{display:block}
-#unlockWall h2{font-size:16px;margin:0 0 8px}
-#unlockWall p{margin:0 0 12px;color:#8b9bb4;font-size:14px;line-height:1.45}
+#unlockWall h2{font-size:16px;margin:0 0 8px;color:var(--text-primary)}
+#unlockWall p{margin:0 0 12px;color:var(--text-secondary);font-size:14px;line-height:1.45}
 #unlockWall .ctas{display:flex;flex-direction:column;gap:8px}
-#unlockCtaSafety{display:block;padding:12px;border-radius:10px;background:#3b82f6;color:#fff;text-align:center;text-decoration:none;font-weight:600}
-#unlockCtaOnboard{display:block;padding:12px;border-radius:10px;background:#243041;color:#e8eef7;border:1px solid #334155;text-align:center;text-decoration:none;font-weight:600}
+#unlockCtaSafety{display:block;padding:12px;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);text-align:center;text-decoration:none;font-weight:600}
+#unlockCtaOnboard{display:block;padding:12px;border-radius:10px;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong);text-align:center;text-decoration:none;font-weight:600}
 #prePassChips{display:none;flex-wrap:wrap;gap:8px;margin:8px 0 0}
 #prePassChips.show{display:flex}
-#prePassChips a{display:inline-block;padding:8px 10px;background:#243041;color:#e8eef7;border:1px solid #334155;border-radius:999px;font-size:12px;text-decoration:none;font-weight:600}
-#typing{display:none;align-items:center;gap:8px;margin:8px 0;color:#8b9bb4;font-size:13px}
+#prePassChips a{display:inline-block;padding:8px 10px;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:999px;font-size:12px;text-decoration:none;font-weight:600}
+#typing{display:none;align-items:center;gap:8px;margin:8px 0;color:var(--text-secondary);font-size:13px}
 #typing.show{display:flex}
-#typing .dots span{display:inline-block;width:6px;height:6px;margin-right:3px;border-radius:99px;background:#8b9bb4;animation:blink 1s infinite}
+#typing .dots span{display:inline-block;width:6px;height:6px;margin-right:3px;border-radius:99px;background:var(--text-secondary);animation:blink 1s infinite}
 #typing .dots span:nth-child(2){animation-delay:.15s}
 #typing .dots span:nth-child(3){animation-delay:.3s}
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 
-.modeC{border-left:3px solid #eab308}
-.modeChip{display:inline-block;padding:2px 8px;border-radius:999px;background:#854d0e;color:#fef08a;font-size:11px;font-weight:700;margin-right:6px}
-.modeDisclaimer{color:#fbbf24;font-size:12px;margin:4px 0 0}
-#modeCConfirm{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#1c1917;border:1px solid #eab308}
+/* Mode C chrome — warning/gold family only (logic untouched) */
+.modeC{border-left:3px solid var(--color-warning)}
+.modeChip{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--gold-800);color:var(--gold-300);font-size:11px;font-weight:700;margin-right:6px}
+.modeDisclaimer{color:var(--gold-400);font-size:12px;margin:4px 0 0}
+#modeCConfirm{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:var(--bg-subtle);border:1px solid var(--color-warning);color:var(--text-primary)}
 #modeCConfirm.show{display:block}
 #modeCConfirm .actions{display:flex;gap:8px;margin-top:10px}
 #modeCConfirm .actions button{flex:1}
-#modeCConfirm #mcConfirmBtn{background:#eab308;color:#1c1917}
-#modeCConfirm #mcCancelBtn{background:#243041;color:#e8eef7}
-#modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:#14532d;border:1px solid #3dd68c;font-size:13px}
+#modeCConfirm #mcConfirmBtn{background:var(--cta-primary);color:var(--cta-primary-text)}
+#modeCConfirm #mcCancelBtn{background:var(--bg-elevated);color:var(--text-primary)}
+#modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:#14532d;border:1px solid var(--color-success);font-size:13px;color:var(--text-primary)}
 #modeCUndo.show{display:block}
-#modeCUndo button{margin-top:8px;background:#3dd68c;color:#0b0f14;width:100%}
-.modeC.coolOff,.coolOff{border-left:3px solid #ef4444}
+#modeCUndo button{margin-top:8px;background:var(--color-success);color:var(--text-on-gold);width:100%}
+/* Cool-off / danger — red only, never gold */
+.modeC.coolOff,.coolOff{border-left:3px solid var(--color-danger)}
 .modeChip.coolOffChip{background:#7f1d1d;color:#fecaca}
-#modeCCoolOff{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#2a1518;border:1px solid #ef4444}
+#modeCCoolOff{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:var(--danger-bg);border:1px solid var(--color-danger)}
 #modeCCoolOff.show{display:block}
-#modeCCoolOff .warn{color:#fecaca;font-size:13px;font-weight:600;margin:0 0 8px;line-height:1.4}
+#modeCCoolOff .warn{color:var(--danger-text);font-size:13px;font-weight:600;margin:0 0 8px;line-height:1.4}
 #modeCCoolOff label{display:block;font-size:12px;color:#fca5a5;margin:0 0 4px}
-#modeCCoolOff textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px;border-radius:8px;border:1px solid #7f1d1d;background:#0b0f14;color:#fee2e2;resize:vertical}
+#modeCCoolOff textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px;border-radius:8px;border:1px solid #7f1d1d;background:var(--bg-subtle);color:#fee2e2;resize:vertical}
 #modeCCoolOff .actions{display:flex;gap:8px;margin-top:10px}
 #modeCCoolOff .actions button{flex:1}
-#modeCCoolOff #mcCoolSubmit{background:#ef4444;color:#fff}
-#modeCCoolOff #mcCoolCancel{background:#243041;color:#e8eef7}
-#modeCCoolPending{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:#2a1518;border:1px solid #f87171;font-size:13px;color:#fecaca}
+#modeCCoolOff #mcCoolSubmit{background:var(--color-danger);color:#fff}
+#modeCCoolOff #mcCoolCancel{background:var(--bg-elevated);color:var(--text-primary)}
+#modeCCoolPending{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:var(--danger-bg);border:1px solid var(--color-danger);font-size:13px;color:var(--danger-text)}
 #modeCCoolPending.show{display:block}
 </style></head>
 <body>

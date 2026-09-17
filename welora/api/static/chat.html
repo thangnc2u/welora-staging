@@ -1,19 +1,20 @@
 <!DOCTYPE html>
-<html lang="vi"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<html lang="vi" data-theme="dark"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · Chat với Agent</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
-#log{flex:1;overflow:auto;background:var(--bg-surface);border-radius:12px;padding:12px;border:1px solid var(--border-default);color:var(--text-primary)}
-.msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%;color:var(--text-primary)}.user{background:var(--bg-elevated);margin-left:auto;border:1px solid var(--border-default)}.bot{background:var(--navy-800)}
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto;display:flex;flex-direction:column;height:100vh;box-sizing:border-box}
+#log{flex:1;overflow:auto;background:var(--bg-surface,#1A2536);border-radius:12px;padding:12px;border:1px solid var(--border-default,#2F3D54);color:var(--text-primary,#F4F1E8)}
+.msg{margin:8px 0;padding:10px;border-radius:10px;max-width:90%;color:var(--text-primary,#F4F1E8)}.user{background:var(--bg-elevated,#243044);margin-left:auto;border:1px solid var(--border-default,#2F3D54)}.bot{background:var(--navy-800,#1A2536)}
 .deny{border-left:3px solid var(--color-danger)}.pass{border-left:3px solid var(--color-success)}
 form{display:flex;gap:8px;margin-top:12px}form#f[hidden]{display:none}input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary)}
 input:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
-button{padding:12px 16px;border:0;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button{padding:12px 16px;border:0;border-radius:10px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);font-weight:600}
 button:hover{background:var(--cta-primary-hover)}button:active{background:var(--cta-primary-pressed)}
 button:disabled{opacity:.55}
-.muted{color:var(--text-secondary);font-size:12px}
-a#navHome{color:var(--link)}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:12px}
+a#navHome{color:var(--link,#E8C86A)}
 #suggestChips{display:none;flex-wrap:wrap;gap:8px;margin:8px 0 0}
 #suggestChips.show{display:flex}
 #suggestChips button{margin:0;padding:8px 10px;width:auto;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:999px;font-size:12px}

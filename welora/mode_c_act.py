@@ -8,7 +8,8 @@ Source: phụ lục PRD trụ 4 §3.3 Mode C.
   nhắc BHYT/BHTN/đóng bù (schedule only), checklist di sản (no legal will).
 - DENY: ticker / ILP mới / chuyển tiền ngân hàng / L2 external money.
 - Gate: safety-gate passed + answer_confidence ≥ CONFIDENCE_THRESHOLD (0.80).
-- Confirm before write · undo 24h · log mode + policy_version (L-* stub additive).
+- Confirm before write · undo 24h · log mode + policy_version + persona + rule_id.
+- Full L-* policy_engine.evaluate() choke-point before any OS write (P2 OS router).
 - L-DUAL-CONTROL (Founder 15/09 B): lock / ceiling / estate need companion;
   missing companion → DENY; has companion → pending_dual → companion confirm.
 - L-COOL-OFF (Founder 15/09): rút/chuyển quỹ KH dưới sàn persona HOẶC ≥20% quỹ
@@ -25,9 +26,16 @@ from typing import Any, Optional
 
 from welora.agent import CONFIDENCE_THRESHOLD
 from welora.safety_gate import TARGET_MONTHS, compute_months_covered
+from welora import policy_engine
+from welora.policy_engine import (
+    POLICY_VERSION as ROUTER_POLICY_VERSION,
+    SIDE_PENDING_COOL_OFF,
+    SIDE_PENDING_DUAL,
+    evaluate as policy_evaluate,
+)
 
-# Additive L-* stub — never replaces Hard Deny R01–R09.
-POLICY_VERSION = "L-stub-1.0"
+# Additive L-* router — never replaces Hard Deny R01–R09.
+POLICY_VERSION = ROUTER_POLICY_VERSION  # L-router-1.0
 POLICY_DUAL_CONTROL = "L-DUAL-CONTROL"
 POLICY_COOL_OFF = "L-COOL-OFF"
 MODE_C = "C"
@@ -548,6 +556,158 @@ def _proposal_payload(
     }
 
 
+
+def build_policy_act(
+    *,
+    act_kind: Optional[str],
+    message: str = "",
+    params: Optional[dict[str, Any]] = None,
+    phase: str = "propose",
+    status: Optional[str] = None,
+    cool_off: Optional[dict[str, Any]] = None,
+    cool_off_ready: bool = False,
+    cool_off_escalated_to_dual: bool = False,
+    dual_control_required: bool = False,
+    intent: Optional[str] = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    act: dict[str, Any] = {
+        "kind": act_kind,
+        "act_kind": act_kind,
+        "message": message or "",
+        "params": dict(params or {}),
+        "phase": phase,
+        "mode": MODE_C,
+    }
+    if status:
+        act["status"] = status
+    if cool_off is not None:
+        act["cool_off"] = cool_off
+    if cool_off_ready:
+        act["cool_off_ready"] = True
+    if cool_off_escalated_to_dual:
+        act["cool_off_escalated_to_dual"] = True
+    if dual_control_required:
+        act["dual_control_required"] = True
+    if intent:
+        act["intent"] = intent
+        act["external_intent"] = intent
+    if extra:
+        act.update(extra)
+    return act
+
+
+def build_policy_os_state(
+    *,
+    user_id: str,
+    gate_status: str = "passed",
+    answer_confidence: float = 0.90,
+    companion: Optional[dict[str, Any]] = None,
+    cool_off: Optional[dict[str, Any]] = None,
+    proposal_status: Optional[str] = None,
+    cool_off_ready: bool = False,
+    companion_confirming: bool = False,
+    companion_verified: bool = False,
+    extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    persona = get_persona(user_id)
+    link = companion if companion is not None else get_companion(user_id)
+    state: dict[str, Any] = {
+        "user_id": user_id,
+        "persona": persona,
+        "gate_status": gate_status,
+        "answer_confidence": float(answer_confidence),
+        "companion": link,
+        "mode": MODE_C,
+        "phase": "propose",
+    }
+    if cool_off is not None:
+        state["cool_off"] = cool_off
+    if proposal_status:
+        state["proposal_status"] = proposal_status
+    if cool_off_ready:
+        state["cool_off_ready"] = True
+    if companion_confirming:
+        state["companion_confirming"] = True
+    if companion_verified:
+        state["companion_verified"] = True
+    if extra:
+        state.update(extra)
+    return state
+
+
+def run_os_policy(
+    *,
+    user_id: str,
+    act: dict[str, Any],
+    os_state: Optional[dict[str, Any]] = None,
+) -> Any:
+    """Single choke-point: policy_engine.evaluate before OS mutate."""
+    persona = get_persona(user_id)
+    state = os_state or build_policy_os_state(user_id=user_id)
+    state.setdefault("persona", persona)
+    decision = policy_evaluate(act, persona, state)
+    return decision
+
+
+def _policy_deny_payload(
+    *,
+    user_id: str,
+    act_kind: Optional[str],
+    decision: Any,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "mode": MODE_C,
+        "mode_chip": MODE_C_CHIP,
+        "disclaimer": MODE_C_DISCLAIMER,
+        "policy_version": decision.policy_version,
+        "guardrail_result": "deny",
+        "rule": decision.rule_id,
+        "rule_id": decision.rule_id,
+        "reply": (
+            f"Từ chối Mode C ({decision.rule_id}): {decision.message_vi}\n"
+            "Mode C chỉ hành động nội bộ OS (G1 confirm) — không phải L2 Action Tools."
+        ),
+        "needs_confirm": False,
+        "act_proposal": None,
+        "act_kind": act_kind,
+        "user_id": user_id,
+        "persona": decision.persona,
+        "escalate_flag": bool(decision.escalate_flag),
+        "policy_log": decision.to_log(),
+    }
+
+
+def _append_policy_log(
+    *,
+    user_id: str,
+    decision: Any,
+    act_kind: Optional[str] = None,
+    event: str = "policy_evaluate",
+    extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    entry = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "mode": MODE_C,
+        "policy_version": decision.policy_version,
+        "persona": decision.persona or get_persona(user_id),
+        "rule_id": decision.rule_id,
+        "tools_called": list(decision.tools_called or []),
+        "escalate_flag": bool(decision.escalate_flag),
+        "verdict": decision.verdict,
+        "act_kind": act_kind,
+        "event": event,
+        "timestamp": _now_iso(),
+    }
+    if extra:
+        entry.update(extra)
+    _ACT_LOGS.append(entry)
+    return entry
+
+
+
 def propose_act(
     *,
     user_id: str,
@@ -565,8 +725,43 @@ def propose_act(
     if not user_id:
         return 400, {"error": "user_id is required"}
 
+    # --- External / L2 shapes → policy router DENY (no OS write) ---
     ext = detect_external_deny(message)
     if ext:
+        intent_map = {
+            "L-NO-TICKER": "buy_ticker",
+            "L-NO-ILP-NEW": "ilp_new",
+            "L-FIDUCIARY": "bank_transfer",
+        }
+        intent = intent_map.get(ext["rule"])
+        decision = run_os_policy(
+            user_id=user_id,
+            act=build_policy_act(
+                act_kind=intent,
+                message=message,
+                intent=intent,
+                phase="propose",
+            ),
+            os_state=build_policy_os_state(
+                user_id=user_id,
+                gate_status=gate_status,
+                answer_confidence=answer_confidence,
+            ),
+        )
+        _append_policy_log(
+            user_id=user_id, decision=decision, act_kind=intent, event="propose_deny_external"
+        )
+        if decision.verdict == "DENY":
+            out = _policy_deny_payload(user_id=user_id, act_kind=intent, decision=decision)
+            # keep legacy reply shape for Mode C external deny tests
+            out["reply"] = (
+                f"Từ chối Mode C: {ext['reason']}\n"
+                "Mode C chỉ hành động nội bộ OS (G1 confirm) — không phải L2 Action Tools."
+            )
+            out["rule"] = ext["rule"]
+            out["policy_version"] = POLICY_VERSION
+            return 200, out
+        # fall through only if router unexpectedly ALLOWs — still DENY fail-closed
         return 200, {
             "ok": False,
             "mode": MODE_C,
@@ -582,6 +777,45 @@ def propose_act(
             "needs_confirm": False,
             "act_proposal": None,
         }
+
+    # Speculative intent (L-NO-SPEC) even when not in EXTERNAL_DENY map
+    spec_decision = run_os_policy(
+        user_id=user_id,
+        act=build_policy_act(act_kind=None, message=message, phase="propose"),
+        os_state=build_policy_os_state(
+            user_id=user_id,
+            gate_status=gate_status,
+            answer_confidence=answer_confidence,
+        ),
+    )
+    if spec_decision.verdict == "DENY" and spec_decision.rule_id in {
+        "L-NO-SPEC",
+        "L-EMERGENCY",
+        "L-ESTATE",
+        "L-NO-TICKER",
+        "L-NO-ILP-NEW",
+        "L-FIDUCIARY",
+    }:
+        # Only short-circuit message-only denies when no Mode C act would match;
+        # estate checklist messages must still reach act detection.
+        maybe_act = detect_mode_c_act(message)
+        if maybe_act is None or spec_decision.rule_id in {
+            "L-NO-SPEC",
+            "L-NO-TICKER",
+            "L-NO-ILP-NEW",
+            "L-FIDUCIARY",
+            "L-EMERGENCY",
+        }:
+            if maybe_act is None or spec_decision.rule_id != "L-ESTATE":
+                _append_policy_log(
+                    user_id=user_id,
+                    decision=spec_decision,
+                    act_kind=None,
+                    event="propose_deny_message",
+                )
+                return 200, _policy_deny_payload(
+                    user_id=user_id, act_kind=None, decision=spec_decision
+                )
 
     act_kind = detect_mode_c_act(message)
     if not act_kind:
@@ -608,12 +842,6 @@ def propose_act(
             "act_proposal": None,
             "gate_blocked": True,
         }
-
-    # Dual-control fail-closed: missing companion → DENY, no OS write / no proposal.
-    if requires_dual_control(act_kind):
-        link = get_companion(user_id)
-        if not link or not link.get("companion_user_id"):
-            return 200, _deny_missing_companion(user_id=user_id, act_kind=act_kind)
 
     params = dict(params or {})
     reason_text = (reason if reason is not None else params.pop("reason", None)) or ""
@@ -654,7 +882,6 @@ def propose_act(
         amount = float(params.get("amount") or 0)
         if amount <= 0:
             amount = _extract_ceiling_amount(message) or 0.0
-        # Optional overrides for tests / staging when EF goal absent
         cur_override = params.get("current_amount")
         ess_override = params.get("essential_expense_monthly")
         cool_meta = evaluate_cool_off_trigger(
@@ -700,20 +927,67 @@ def propose_act(
         }
         summary = "Mở checklist di sản (không soạn di chúc pháp lý)"
 
-    # --- Cool-off vs dual precedence ---
-    # If P6 applies on cool-off-triggering act → ESCALATE dual, never self cool-off alone.
-    # If act already dual-control → existing dual path (checked above) wins.
-    if act_kind == ACT_WITHDRAW_EFUND and cool_meta and cool_meta.get("triggered"):
-        if is_p6_persona(user_id):
-            link = get_companion(user_id)
-            if not link or not link.get("companion_user_id"):
-                deny = _deny_missing_companion(user_id=user_id, act_kind=act_kind)
+    # --- Policy router choke-point (before any OS write / pending create) ---
+    decision = run_os_policy(
+        user_id=user_id,
+        act=build_policy_act(
+            act_kind=act_kind,
+            message=message,
+            params=params,
+            phase="propose",
+            cool_off=cool_meta,
+            dual_control_required=requires_dual_control(act_kind),
+        ),
+        os_state=build_policy_os_state(
+            user_id=user_id,
+            gate_status=gate_status,
+            answer_confidence=answer_confidence,
+            cool_off=cool_meta,
+        ),
+    )
+    _append_policy_log(
+        user_id=user_id,
+        decision=decision,
+        act_kind=act_kind,
+        event="propose_evaluate",
+    )
+
+    if decision.verdict == "DENY":
+        out = _policy_deny_payload(user_id=user_id, act_kind=act_kind, decision=decision)
+        if decision.rule_id == POLICY_DUAL_CONTROL:
+            # Preserve #186 missing-companion shape
+            deny = _deny_missing_companion(user_id=user_id, act_kind=act_kind)
+            deny["rule_id"] = decision.rule_id
+            deny["persona"] = decision.persona
+            deny["policy_log"] = decision.to_log()
+            if decision.meta.get("cool_off_escalated_to_dual") or (
+                cool_meta and cool_meta.get("triggered") and is_p6_persona(user_id)
+            ):
                 deny["reply"] = P6_COOL_OFF_ESCALATE_VI + " " + DENY_MISSING_COMPANION_VI
                 deny["cool_off_escalated_to_dual"] = True
                 deny["cool_off"] = cool_meta
-                deny["rule"] = POLICY_DUAL_CONTROL
-                deny["policy_version"] = POLICY_DUAL_CONTROL
+            return 200, deny
+        return 200, out
+
+    if decision.verdict == "ESCALATE":
+        side = decision.side_effect
+        # P6 cool-off → dual: need companion or DENY
+        if side == SIDE_PENDING_DUAL:
+            link = get_companion(user_id)
+            if not link or not link.get("companion_user_id"):
+                deny = _deny_missing_companion(user_id=user_id, act_kind=act_kind)
+                if decision.meta.get("cool_off_escalated_to_dual") or (
+                    cool_meta and cool_meta.get("triggered") and is_p6_persona(user_id)
+                ):
+                    deny["reply"] = P6_COOL_OFF_ESCALATE_VI + " " + DENY_MISSING_COMPANION_VI
+                    deny["cool_off_escalated_to_dual"] = True
+                    deny["cool_off"] = cool_meta
+                deny["rule_id"] = POLICY_DUAL_CONTROL
+                deny["persona"] = decision.persona
+                deny["policy_log"] = decision.to_log()
+                deny["escalate_flag"] = True
                 return 200, deny
+
             companion_id = str(link.get("companion_user_id"))
             pid = str(uuid.uuid4())
             prop = _proposal_payload(
@@ -728,11 +1002,47 @@ def propose_act(
                 reason=reason_text or None,
                 cool_off_meta=cool_meta,
             )
-            prop["cool_off_escalated_to_dual"] = True
+            if decision.meta.get("cool_off_escalated_to_dual") or (
+                cool_meta and cool_meta.get("triggered") and is_p6_persona(user_id)
+            ):
+                prop["cool_off_escalated_to_dual"] = True
             _PROPOSALS[pid] = prop
+            if prop.get("cool_off_escalated_to_dual"):
+                reply = (
+                    f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
+                    f"{P6_COOL_OFF_ESCALATE_VI}\n"
+                    f"Đề xuất đồng kiểm: {summary}.\n"
+                    f"{PENDING_DUAL_VI}\n"
+                    f"Người đồng hành: {companion_id}."
+                )
+                return 200, {
+                    "ok": True,
+                    "mode": MODE_C,
+                    "mode_chip": MODE_C_CHIP,
+                    "disclaimer": MODE_C_DISCLAIMER,
+                    "policy_version": POLICY_DUAL_CONTROL,
+                    "guardrail_result": "pass",
+                    "rule": POLICY_DUAL_CONTROL,
+                    "rule_id": POLICY_DUAL_CONTROL,
+                    "reply": reply,
+                    "needs_confirm": False,
+                    "needs_companion_confirm": True,
+                    "act_proposal": prop,
+                    "dual_control_required": True,
+                    "cool_off_escalated_to_dual": True,
+                    "status": "pending_dual",
+                    "user_id": user_id,
+                    "companion_user_id": companion_id,
+                    "cool_off": cool_meta,
+                    "warning_level": "red",
+                    "warning_vi": P6_COOL_OFF_ESCALATE_VI,
+                    "persona": decision.persona,
+                    "escalate_flag": True,
+                    "policy_log": decision.to_log(),
+                }
+
             reply = (
                 f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
-                f"{P6_COOL_OFF_ESCALATE_VI}\n"
                 f"Đề xuất đồng kiểm: {summary}.\n"
                 f"{PENDING_DUAL_VI}\n"
                 f"Người đồng hành: {companion_id}."
@@ -745,100 +1055,109 @@ def propose_act(
                 "policy_version": POLICY_DUAL_CONTROL,
                 "guardrail_result": "pass",
                 "rule": POLICY_DUAL_CONTROL,
+                "rule_id": POLICY_DUAL_CONTROL,
                 "reply": reply,
                 "needs_confirm": False,
                 "needs_companion_confirm": True,
                 "act_proposal": prop,
                 "dual_control_required": True,
-                "cool_off_escalated_to_dual": True,
                 "status": "pending_dual",
                 "user_id": user_id,
                 "companion_user_id": companion_id,
-                "cool_off": cool_meta,
-                "warning_level": "red",
-                "warning_vi": P6_COOL_OFF_ESCALATE_VI,
+                "persona": decision.persona,
+                "escalate_flag": True,
+                "policy_log": decision.to_log(),
             }
 
-        # P1–P5 cool-off path — require non-empty reason
-        if not reason_text:
+        if side == SIDE_PENDING_COOL_OFF:
+            # P1–P5 cool-off path — require non-empty reason (#187)
+            if not reason_text:
+                return 200, {
+                    "ok": False,
+                    "mode": MODE_C,
+                    "mode_chip": "L-COOL-OFF · Cảnh báo đỏ",
+                    "disclaimer": MODE_C_DISCLAIMER,
+                    "policy_version": POLICY_COOL_OFF,
+                    "guardrail_result": "pass",
+                    "rule": POLICY_COOL_OFF,
+                    "rule_id": POLICY_COOL_OFF,
+                    "reply": f"{COOL_OFF_WARN_VI}\n{COOL_OFF_NEED_REASON_VI}",
+                    "needs_confirm": False,
+                    "needs_reason": True,
+                    "needs_cool_off_wait": True,
+                    "act_proposal": None,
+                    "status": "pending_cool_off",
+                    "warning_level": "red",
+                    "warning_vi": COOL_OFF_WARN_VI,
+                    "cool_off": cool_meta,
+                    "persona": decision.persona,
+                    "escalate_flag": True,
+                    "policy_log": decision.to_log(),
+                    "ui": {
+                        "chip": "L-COOL-OFF · Chờ 24 giờ",
+                        "tone": "danger",
+                        "require_reason": True,
+                    },
+                }
+
+            cool_until = (_now() + timedelta(hours=COOL_OFF_HOURS)).isoformat()
+            pid = str(uuid.uuid4())
+            prop = _proposal_payload(
+                proposal_id=pid,
+                user_id=user_id,
+                act_kind=act_kind,
+                summary=summary,
+                params=params,
+                status="pending_cool_off",
+                policy_version=POLICY_COOL_OFF,
+                reason=reason_text,
+                cool_off_until=cool_until,
+                cool_off_meta=cool_meta,
+            )
+            _PROPOSALS[pid] = prop
+            reply = (
+                f"{MODE_C_CHIP}\n{COOL_OFF_WARN_VI}\n\n"
+                f"Đề xuất: {summary}.\n"
+                f"Lý do: {reason_text}\n"
+                f"{PENDING_COOL_OFF_VI}\n"
+                f"Mở khóa xác nhận sau: {cool_until}"
+            )
             return 200, {
-                "ok": False,
+                "ok": True,
                 "mode": MODE_C,
-                "mode_chip": "L-COOL-OFF · Cảnh báo đỏ",
+                "mode_chip": "L-COOL-OFF · Chờ 24 giờ",
                 "disclaimer": MODE_C_DISCLAIMER,
                 "policy_version": POLICY_COOL_OFF,
                 "guardrail_result": "pass",
                 "rule": POLICY_COOL_OFF,
-                "reply": f"{COOL_OFF_WARN_VI}\n{COOL_OFF_NEED_REASON_VI}",
+                "rule_id": POLICY_COOL_OFF,
+                "reply": reply,
                 "needs_confirm": False,
-                "needs_reason": True,
                 "needs_cool_off_wait": True,
-                "act_proposal": None,
+                "needs_reason": False,
+                "act_proposal": prop,
                 "status": "pending_cool_off",
+                "cool_off_until": cool_until,
+                "reason": reason_text,
                 "warning_level": "red",
                 "warning_vi": COOL_OFF_WARN_VI,
                 "cool_off": cool_meta,
+                "persona": decision.persona,
+                "escalate_flag": True,
+                "policy_log": decision.to_log(),
                 "ui": {
                     "chip": "L-COOL-OFF · Chờ 24 giờ",
                     "tone": "danger",
-                    "require_reason": True,
+                    "require_reason": False,
                 },
             }
 
-        cool_until = (_now() + timedelta(hours=COOL_OFF_HOURS)).isoformat()
-        pid = str(uuid.uuid4())
-        prop = _proposal_payload(
-            proposal_id=pid,
-            user_id=user_id,
-            act_kind=act_kind,
-            summary=summary,
-            params=params,
-            status="pending_cool_off",
-            policy_version=POLICY_COOL_OFF,
-            reason=reason_text,
-            cool_off_until=cool_until,
-            cool_off_meta=cool_meta,
-        )
-        _PROPOSALS[pid] = prop
-        reply = (
-            f"{MODE_C_CHIP}\n{COOL_OFF_WARN_VI}\n\n"
-            f"Đề xuất: {summary}.\n"
-            f"Lý do: {reason_text}\n"
-            f"{PENDING_COOL_OFF_VI}\n"
-            f"Mở khóa xác nhận sau: {cool_until}"
-        )
-        return 200, {
-            "ok": True,
-            "mode": MODE_C,
-            "mode_chip": "L-COOL-OFF · Chờ 24 giờ",
-            "disclaimer": MODE_C_DISCLAIMER,
-            "policy_version": POLICY_COOL_OFF,
-            "guardrail_result": "pass",
-            "rule": POLICY_COOL_OFF,
-            "reply": reply,
-            "needs_confirm": False,
-            "needs_cool_off_wait": True,
-            "needs_reason": False,
-            "act_proposal": prop,
-            "status": "pending_cool_off",
-            "cool_off_until": cool_until,
-            "reason": reason_text,
-            "warning_level": "red",
-            "warning_vi": COOL_OFF_WARN_VI,
-            "cool_off": cool_meta,
-            "ui": {
-                "chip": "L-COOL-OFF · Chờ 24 giờ",
-                "tone": "danger",
-                "require_reason": False,
-            },
-        }
+        # Unknown escalate → fail closed
+        return 200, _policy_deny_payload(user_id=user_id, act_kind=act_kind, decision=decision)
 
+    # ALLOW — normal propose (no dual / no cool-off)
     companion_id = None
     status = "proposed"
-    if requires_dual_control(act_kind):
-        companion_id = str((get_companion(user_id) or {}).get("companion_user_id"))
-        status = "pending_dual"
-
     pid = str(uuid.uuid4())
     prop = _proposal_payload(
         proposal_id=pid,
@@ -850,31 +1169,6 @@ def propose_act(
         companion_user_id=companion_id,
     )
     _PROPOSALS[pid] = prop
-
-    if status == "pending_dual":
-        reply = (
-            f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
-            f"Đề xuất đồng kiểm: {summary}.\n"
-            f"{PENDING_DUAL_VI}\n"
-            f"Người đồng hành: {companion_id}."
-        )
-        return 200, {
-            "ok": True,
-            "mode": MODE_C,
-            "mode_chip": MODE_C_CHIP,
-            "disclaimer": MODE_C_DISCLAIMER,
-            "policy_version": POLICY_DUAL_CONTROL,
-            "guardrail_result": "pass",
-            "rule": POLICY_DUAL_CONTROL,
-            "reply": reply,
-            "needs_confirm": False,
-            "needs_companion_confirm": True,
-            "act_proposal": prop,
-            "dual_control_required": True,
-            "status": "pending_dual",
-            "user_id": user_id,
-            "companion_user_id": companion_id,
-        }
 
     reply = (
         f"{MODE_C_CHIP}\n{MODE_C_DISCLAIMER}\n\n"
@@ -888,10 +1182,15 @@ def propose_act(
         "disclaimer": MODE_C_DISCLAIMER,
         "policy_version": POLICY_VERSION,
         "guardrail_result": "pass",
+        "rule_id": decision.rule_id,
         "reply": reply,
         "needs_confirm": True,
         "act_proposal": prop,
+        "persona": decision.persona,
+        "escalate_flag": False,
+        "policy_log": decision.to_log(),
     }
+
 
 
 def _extract_envelope_title(message: str) -> Optional[str]:
@@ -1059,6 +1358,62 @@ def confirm_act(
 
     act_kind = prop["act_kind"]
     params = dict(prop.get("params") or {})
+
+    # --- Policy router choke-point before OS write ---
+    cool_ready = False
+    if prop.get("status") == "pending_cool_off":
+        cool_ready, _ = _cool_off_elapsed(prop, advance=bool(cool_off_advance))
+    decision = run_os_policy(
+        user_id=user_id,
+        act=build_policy_act(
+            act_kind=act_kind,
+            params=params,
+            phase="confirm",
+            status=prop.get("status"),
+            cool_off=prop.get("cool_off"),
+            cool_off_ready=cool_ready,
+            cool_off_escalated_to_dual=bool(prop.get("cool_off_escalated_to_dual")),
+            dual_control_required=requires_dual_control(act_kind),
+        ),
+        os_state=build_policy_os_state(
+            user_id=user_id,
+            gate_status=gate_status,
+            answer_confidence=answer_confidence,
+            proposal_status=prop.get("status"),
+            cool_off=prop.get("cool_off"),
+            cool_off_ready=cool_ready,
+            extra={"phase": "confirm"},
+        ),
+    )
+    _append_policy_log(
+        user_id=user_id,
+        decision=decision,
+        act_kind=act_kind,
+        event="confirm_evaluate",
+        extra={"proposal_id": proposal_id},
+    )
+    if decision.verdict in ("DENY", "ESCALATE"):
+        # DENY/ESCALATE must not write. Cool-off still-pending already handled above;
+        # dual primary confirm blocked here as fail-closed.
+        code = 403 if decision.rule_id == POLICY_DUAL_CONTROL else 200
+        return code, {
+            "ok": False,
+            "error": "policy_blocked",
+            "mode": MODE_C,
+            "mode_chip": MODE_C_CHIP,
+            "policy_version": decision.policy_version,
+            "rule": decision.rule_id,
+            "rule_id": decision.rule_id,
+            "reply": decision.message_vi,
+            "guardrail_result": "deny",
+            "escalate_flag": bool(decision.escalate_flag),
+            "persona": decision.persona,
+            "policy_log": decision.to_log(),
+            "proposal_id": proposal_id,
+            "needs_companion_confirm": decision.rule_id == POLICY_DUAL_CONTROL,
+            "status": prop.get("status"),
+        }
+
     act_id = str(uuid.uuid4())
     applied: dict[str, Any]
 
@@ -1105,7 +1460,11 @@ def confirm_act(
         "user_id": user_id,
         "mode": MODE_C,
         "policy_version": pv_out,
-        "rule": POLICY_COOL_OFF if was_cool else None,
+        "persona": get_persona(user_id),
+        "rule": POLICY_COOL_OFF if was_cool else decision.rule_id,
+        "rule_id": POLICY_COOL_OFF if was_cool else decision.rule_id,
+        "tools_called": list(decision.tools_called or []),
+        "escalate_flag": False,
         "act_kind": act_kind,
         "proposal_id": proposal_id,
         "guardrail_result": "allow",
@@ -1120,7 +1479,11 @@ def confirm_act(
         "mode_chip": MODE_C_CHIP,
         "disclaimer": MODE_C_DISCLAIMER,
         "policy_version": pv_out,
-        "rule": POLICY_COOL_OFF if was_cool else None,
+        "rule": POLICY_COOL_OFF if was_cool else decision.rule_id,
+        "rule_id": POLICY_COOL_OFF if was_cool else decision.rule_id,
+        "persona": get_persona(user_id),
+        "escalate_flag": False,
+        "policy_log": decision.to_log(),
         "act_id": act_id,
         "act_kind": act_kind,
         "result": applied,
@@ -1604,6 +1967,56 @@ def companion_confirm_act(
 
     act_kind = prop["act_kind"]
     params = dict(prop.get("params") or {})
+
+    # Policy router before OS write (companion path verified)
+    decision = run_os_policy(
+        user_id=primary_id,
+        act=build_policy_act(
+            act_kind=act_kind,
+            params=params,
+            phase="confirm",
+            status="pending_dual",
+            cool_off=prop.get("cool_off"),
+            cool_off_escalated_to_dual=bool(prop.get("cool_off_escalated_to_dual")),
+            dual_control_required=True,
+        ),
+        os_state=build_policy_os_state(
+            user_id=primary_id,
+            gate_status=gate,
+            answer_confidence=conf,
+            companion=link,
+            proposal_status="pending_dual",
+            companion_confirming=True,
+            companion_verified=True,
+            cool_off=prop.get("cool_off"),
+            extra={"phase": "confirm"},
+        ),
+    )
+    _append_policy_log(
+        user_id=primary_id,
+        decision=decision,
+        act_kind=act_kind,
+        event="companion_confirm_evaluate",
+        extra={
+            "proposal_id": proposal_id,
+            "companion_user_id": companion_user_id,
+        },
+    )
+    if decision.verdict in ("DENY", "ESCALATE"):
+        return 403, {
+            "ok": False,
+            "error": "policy_blocked",
+            "mode": MODE_C,
+            "policy_version": decision.policy_version,
+            "rule": decision.rule_id,
+            "rule_id": decision.rule_id,
+            "reply": decision.message_vi,
+            "guardrail_result": "deny",
+            "escalate_flag": bool(decision.escalate_flag),
+            "persona": decision.persona,
+            "policy_log": decision.to_log(),
+        }
+
     act_id = str(uuid.uuid4())
     try:
         applied = _apply_act_write(
@@ -1641,7 +2054,11 @@ def companion_confirm_act(
         "companion_user_id": companion_user_id,
         "mode": MODE_C,
         "policy_version": POLICY_DUAL_CONTROL,
+        "persona": get_persona(primary_id),
         "rule": POLICY_DUAL_CONTROL,
+        "rule_id": POLICY_DUAL_CONTROL,
+        "tools_called": list(decision.tools_called or []),
+        "escalate_flag": False,
         "act_kind": act_kind,
         "proposal_id": proposal_id,
         "guardrail_result": "allow",

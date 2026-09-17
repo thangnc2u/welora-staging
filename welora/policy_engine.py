@@ -11,7 +11,8 @@ Fixed registration order (first DENY/ESCALATE wins; ALLOW falls through):
 
 Does NOT replace Hard Deny R01–R09 / TARGET_MONTHS / CORE-* / Pre-Rule.
 No bank/securities L2 Action Tools · no persist DB.
-Persona floor stub OK (P1–P6 months live in Mode C / os_state).
+Persona floors: P1–P5 stub in Mode C; P6 specialized in L-EMERGENCY /
+L-DUAL-CONTROL / L-ESTATE / L-NO-ILP-NEW / L-COOL-OFF (child companion, no self cool-off).
 """
 
 from __future__ import annotations
@@ -47,6 +48,10 @@ MSG: dict[str, str] = {
     "L-EMERGENCY": (
         "L-EMERGENCY: Cấm dùng quỹ khẩn cấp để đầu tư / đầu cơ. "
         "Quỹ KH chỉ cho rủi ro bất ngờ — không ghi OS."
+    ),
+    "L-EMERGENCY-P6": (
+        "L-EMERGENCY (P6): Sàn quỹ KH 6–12 tháng (24 tháng nếu y tế). "
+        "Thiếu số dư — từ chối an toàn (fail-closed) — không ghi OS."
     ),
     "L-PILLAR-ORDER": (
         "L-PILLAR-ORDER: Sai thứ tự trụ — An Toàn trước Tăng trưởng/Tự do. "
@@ -111,6 +116,33 @@ DUAL_CONTROL_ACTS = frozenset(
         "open_estate_checklist",
     }
 )
+
+# P6: money + estate + create_envelope always dual (Mode C routes via L-DUAL-CONTROL).
+P6_DUAL_CONTROL_ACTS = frozenset(
+    {
+        "create_envelope",
+        "lock_envelope",
+        "change_envelope_ceiling",
+        "open_estate_checklist",
+        "withdraw_emergency_fund",
+    }
+)
+# Dual-bound money/estate acts for P6 (create + withdraw included).
+# "Large act missing checklist" gate uses lock/ceiling + explicit large_act flag
+# so cool-off/withdraw dual paths (#187) stay coherent.
+P6_LARGE_ACTS = frozenset(
+    {
+        "lock_envelope",
+        "change_envelope_ceiling",
+    }
+)
+
+# P6 L-EMERGENCY floors (TARGET_MONTHS=3 stays Safety Gate HARD — separate).
+P6_EMERGENCY_FLOOR_MONTHS_MIN = 6   # band 6–12 months
+P6_EMERGENCY_FLOOR_MONTHS_MAX = 12
+P6_MEDICAL_FLOOR_MONTHS = 24
+
+CHILD_COMPANION_ROLES = frozenset({"child", "con", "son", "daughter", "con_ruot"})
 
 SIDE_PENDING_COOL_OFF = "pending_cool_off"
 SIDE_PENDING_DUAL = "pending_dual"
@@ -266,6 +298,114 @@ def _intent(act: dict[str, Any], os_state: dict[str, Any]) -> Optional[str]:
     return None
 
 
+
+def _companion_record(act: dict[str, Any], os_state: dict[str, Any]) -> Any:
+    return os_state.get("companion") or act.get("companion")
+
+
+def _has_any_companion(act: dict[str, Any], os_state: dict[str, Any]) -> bool:
+    companion = _companion_record(act, os_state)
+    if not companion:
+        return False
+    if isinstance(companion, dict):
+        return bool(companion.get("companion_user_id"))
+    return bool(str(companion).strip())
+
+
+def _has_child_companion(act: dict[str, Any], os_state: dict[str, Any]) -> bool:
+    """P6 requires ≥1 child companion (role/relation = child/con)."""
+    companion = _companion_record(act, os_state)
+    if not isinstance(companion, dict) or not companion.get("companion_user_id"):
+        return False
+    role = str(
+        companion.get("role")
+        or companion.get("relation")
+        or companion.get("companion_role")
+        or ""
+    ).lower().strip()
+    return role in CHILD_COMPANION_ROLES
+
+
+def _is_medical_purpose(act: dict[str, Any], os_state: dict[str, Any]) -> bool:
+    params = dict(act.get("params") or {})
+    purpose = str(
+        params.get("purpose")
+        or act.get("purpose")
+        or os_state.get("purpose")
+        or ""
+    ).lower()
+    if purpose in ("medical", "y_te", "y tế", "healthcare", "health"):
+        return True
+    if bool(params.get("medical") or act.get("medical") or os_state.get("medical")):
+        return True
+    msg = _norm(str(act.get("message") or os_state.get("message") or ""))
+    medical_keys = (
+        "y tế",
+        "yte",
+        "viện phí",
+        "chữa bệnh",
+        "khám bệnh",
+        "medical",
+        "hospital",
+        "bệnh viện",
+    )
+    return any(k in msg for k in medical_keys)
+
+
+def _months_covered_value(act: dict[str, Any], os_state: dict[str, Any]) -> Optional[float]:
+    """Prefer post-act months; fall back to current EF coverage in os_state/params."""
+    params = dict(act.get("params") or {})
+    for key in ("months_covered_after", "efund_months_after"):
+        v = params.get(key)
+        if v is None:
+            v = act.get(key)
+        if v is None:
+            v = os_state.get(key)
+        if v is not None:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+    for key in ("efund_months_covered", "months_covered"):
+        v = os_state.get(key)
+        if v is None:
+            v = params.get(key)
+        if v is not None:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+    remaining = params.get("remaining")
+    if remaining is None:
+        remaining = os_state.get("efund_remaining") or os_state.get("remaining")
+    essential = params.get("essential_expense_monthly")
+    if essential is None:
+        essential = os_state.get("efund_essential") or os_state.get("essential_expense_monthly")
+    if remaining is not None and essential is not None:
+        try:
+            ess = float(essential)
+            if ess > 0:
+                return float(remaining) / ess
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _p6_required_efund_floor_months(act: dict[str, Any], os_state: dict[str, Any]) -> int:
+    if _is_medical_purpose(act, os_state):
+        return P6_MEDICAL_FLOOR_MONTHS
+    return P6_EMERGENCY_FLOOR_MONTHS_MIN
+
+
+def _estate_checklist_present(act: dict[str, Any], os_state: dict[str, Any]) -> bool:
+    if os_state.get("estate_checklist") or os_state.get("estate"):
+        return True
+    params = dict(act.get("params") or {})
+    if params.get("estate_checklist_present") or act.get("estate_checklist_present"):
+        return True
+    return False
+
+
 # --- Individual rules (return None = fall through / no opinion) ---
 
 RuleFn = Callable[[dict[str, Any], str, dict[str, Any]], Optional[PolicyDecision]]
@@ -274,7 +414,7 @@ RuleFn = Callable[[dict[str, Any], str, dict[str, Any]], Optional[PolicyDecision
 def rule_l_emergency(
     act: dict[str, Any], persona: str, os_state: dict[str, Any]
 ) -> Optional[PolicyDecision]:
-    """DENY using emergency fund for invest/speculate. TODO: full EF purpose matrix."""
+    """DENY invest/speculate from EF; P6 also enforces 6–12mo / 24mo medical floors."""
     params = dict(act.get("params") or {})
     flags = (
         bool(params.get("invest_from_efund"))
@@ -285,6 +425,52 @@ def rule_l_emergency(
     msg = _norm(str(act.get("message") or ""))
     if flags or ("quỹ kh" in msg and ("đầu tư" in msg or "mua ck" in msg or "all-in" in msg)):
         return _decision("DENY", "L-EMERGENCY", persona=persona, tools_called=["rule_l_emergency"])
+
+    # P6: fail-closed when EF coverage would fall below persona floor.
+    if persona == "P6":
+        kind = str(act.get("kind") or act.get("act_kind") or "")
+        touches_ef = (
+            kind == "withdraw_emergency_fund"
+            or bool(act.get("touch_efund") or params.get("touch_efund"))
+            or bool(params.get("amount") and kind == "withdraw_emergency_fund")
+        )
+        if touches_ef or bool(act.get("check_p6_efund_floor") or params.get("check_p6_efund_floor")):
+            floor_m = _p6_required_efund_floor_months(act, os_state)
+            months = _months_covered_value(act, os_state)
+            if months is None:
+                return _decision(
+                    "DENY",
+                    "L-EMERGENCY",
+                    persona=persona,
+                    tools_called=["rule_l_emergency"],
+                    message_vi=MSG["L-EMERGENCY-P6"]
+                    + " Thiếu số liệu số dư/sàn để đánh giá.",
+                    meta={
+                        "p6_floor_months": floor_m,
+                        "medical": _is_medical_purpose(act, os_state),
+                        "fail_closed": True,
+                        "reason": "insufficient_balance_data",
+                    },
+                )
+            if float(months) < float(floor_m):
+                return _decision(
+                    "DENY",
+                    "L-EMERGENCY",
+                    persona=persona,
+                    tools_called=["rule_l_emergency"],
+                    message_vi=(
+                        f"{MSG['L-EMERGENCY-P6']} "
+                        f"Còn ~{months:.1f} tháng < sàn {floor_m} tháng"
+                        f"{' (y tế)' if floor_m == P6_MEDICAL_FLOOR_MONTHS else ''}."
+                    ),
+                    meta={
+                        "p6_floor_months": floor_m,
+                        "months_covered": months,
+                        "medical": _is_medical_purpose(act, os_state),
+                        "fail_closed": True,
+                        "reason": "below_p6_efund_floor",
+                    },
+                )
     return None
 
 
@@ -443,8 +629,19 @@ def rule_l_no_ilp_new(
     act: dict[str, Any], persona: str, os_state: dict[str, Any]
 ) -> Optional[PolicyDecision]:
     if _intent(act, os_state) == "ilp_new" or str(act.get("kind") or "") == "ilp_new":
+        msg = MSG["L-NO-ILP-NEW"]
+        if persona == "P6":
+            msg = (
+                "L-NO-ILP-NEW (P6 tuyệt đối): Cấm đề xuất / tạo lead ILP mới. "
+                "Agent không nộp hồ sơ BH — không ghi OS."
+            )
         return _decision(
-            "DENY", "L-NO-ILP-NEW", persona=persona, tools_called=["rule_l_no_ilp_new"]
+            "DENY",
+            "L-NO-ILP-NEW",
+            persona=persona,
+            tools_called=["rule_l_no_ilp_new"],
+            message_vi=msg,
+            meta={"absolute_p6": persona == "P6"},
         )
     return None
 
@@ -502,12 +699,9 @@ def rule_l_bhxh_topup(
 def rule_l_estate(
     act: dict[str, Any], persona: str, os_state: dict[str, Any]
 ) -> Optional[PolicyDecision]:
-    """Checklist OK; DENY legal will drafting."""
+    """Checklist OK; legal will DENY (P1–P5) / ESCALATE (P6); P6 large missing checklist."""
     params = dict(act.get("params") or {})
     kind = str(act.get("kind") or act.get("act_kind") or "")
-    is_estate = kind == "open_estate_checklist" or bool(
-        act.get("estate") or params.get("estate") or os_state.get("estate")
-    )
     msg = _norm(str(act.get("message") or ""))
     legal = bool(
         act.get("legal_will")
@@ -516,13 +710,46 @@ def rule_l_estate(
         or "soạn di chúc" in msg
         or "di chúc pháp lý" in msg
     )
-    if legal or (is_estate and legal):
-        return _decision("DENY", "L-ESTATE", persona=persona, tools_called=["rule_l_estate"])
     if legal:
+        if persona == "P6":
+            return _decision(
+                "ESCALATE",
+                "L-ESTATE",
+                persona=persona,
+                tools_called=["rule_l_estate"],
+                message_vi=(
+                    "L-ESTATE (P6): Soạn di chúc pháp lý — escalate (không tự soạn / "
+                    "không giả chữ ký). Checklist di sản thì ALLOW qua Mode C."
+                ),
+                meta={"legal_will": True, "p6_escalate": True},
+            )
         return _decision("DENY", "L-ESTATE", persona=persona, tools_called=["rule_l_estate"])
-    # Detect legal-will shape even without estate act
-    if "soạn di chúc" in msg or "di chúc pháp lý" in msg or bool(act.get("legal_will")):
-        return _decision("DENY", "L-ESTATE", persona=persona, tools_called=["rule_l_estate"])
+
+    # P6: estate checklist act itself is ALLOW (fall through → dual may still escalate).
+    if persona == "P6" and kind == "open_estate_checklist":
+        return None
+
+    # P6: large Act without estate checklist → DENY with L-ESTATE rule code.
+    if persona == "P6":
+        large_flag = bool(
+            act.get("large_act")
+            or params.get("large_act")
+            or kind in P6_LARGE_ACTS
+        )
+        if large_flag and kind != "open_estate_checklist" and not _estate_checklist_present(
+            act, os_state
+        ):
+            return _decision(
+                "DENY",
+                "L-ESTATE",
+                persona=persona,
+                tools_called=["rule_l_estate"],
+                message_vi=(
+                    "L-ESTATE (P6): Act lớn thiếu checklist di sản — "
+                    "mở checklist trước (ALLOW) hoặc escalate. Không ghi OS."
+                ),
+                meta={"missing_estate_checklist": True, "large_act": True},
+            )
     return None
 
 
@@ -579,20 +806,14 @@ def rule_l_cool_off(
     if not triggered:
         return None
 
-    # P6: escalate to dual — never self cool-off alone
+    # P6: never self L-COOL-OFF — annotate act and fall through to L-DUAL-CONTROL
+    # so child-companion DENY/ESCALATE is enforced in one place.
     if persona == "P6":
-        return _decision(
-            "ESCALATE",
-            "L-COOL-OFF",
-            persona=persona,
-            message_vi=(
-                "P6 — không cho tự override bằng cooling-off một mình. "
-                + MSG["L-DUAL-CONTROL"]
-            ),
-            side_effect=SIDE_PENDING_DUAL,
-            tools_called=["rule_l_cool_off"],
-            meta={"cool_off_escalated_to_dual": True, "cool_off": cool_meta},
-        )
+        act["cool_off_escalated_to_dual"] = True
+        act["dual_control_required"] = True
+        if isinstance(cool_meta, dict):
+            act["cool_off"] = cool_meta
+        return None
 
     return _decision(
         "ESCALATE",
@@ -607,31 +828,51 @@ def rule_l_cool_off(
 def rule_l_dual_control(
     act: dict[str, Any], persona: str, os_state: dict[str, Any]
 ) -> Optional[PolicyDecision]:
-    """DENY missing companion; ESCALATE pending_dual when companion present. Preserve #186."""
+    """DENY missing companion; ESCALATE pending_dual when companion present. Preserve #186.
+
+    P6: money + estate + create_envelope → dual; companion must be child (con).
+    """
     kind = str(act.get("kind") or act.get("act_kind") or "")
     phase = str(act.get("phase") or os_state.get("phase") or "propose")
     status = str(act.get("status") or os_state.get("proposal_status") or "")
-    companion = os_state.get("companion") or act.get("companion")
-    has_companion = bool(
-        companion
-        and (
-            (isinstance(companion, dict) and companion.get("companion_user_id"))
-            or (isinstance(companion, str) and companion)
-        )
-    )
-    # Force dual when cool-off already escalated
+    if persona == "P6":
+        has_companion = _has_child_companion(act, os_state)
+    else:
+        has_companion = _has_any_companion(act, os_state)
     force_dual = bool(
         act.get("cool_off_escalated_to_dual")
         or os_state.get("cool_off_escalated_to_dual")
         or status == "pending_dual"
     )
     needs = kind in DUAL_CONTROL_ACTS or force_dual or bool(act.get("dual_control_required"))
+    if persona == "P6" and kind in P6_DUAL_CONTROL_ACTS:
+        needs = True
+
+    cool_meta = act.get("cool_off") or os_state.get("cool_off") or {}
+    escalated_from_cool = bool(
+        act.get("cool_off_escalated_to_dual") or os_state.get("cool_off_escalated_to_dual")
+    )
 
     if phase == "confirm":
-        # Primary confirm must not write dual-pending / dual-required acts
         if status == "pending_dual" or (needs and status != "pending_cool_off"):
-            # Companion confirm path sets os_state.companion_confirming=True
             if os_state.get("companion_confirming"):
+                if persona == "P6":
+                    if has_companion or (
+                        os_state.get("companion_verified")
+                        and _has_child_companion(act, os_state)
+                    ):
+                        return None
+                    return _decision(
+                        "DENY",
+                        "L-DUAL-CONTROL",
+                        persona=persona,
+                        tools_called=["rule_l_dual_control"],
+                        meta={"child_companion_required": True},
+                        message_vi=(
+                            "L-DUAL-CONTROL (P6): Cần ≥1 người đồng hành là con. "
+                            "Thiếu companion con — không ghi OS."
+                        ),
+                    )
                 if not has_companion and not os_state.get("companion_verified"):
                     return _decision(
                         "DENY",
@@ -639,7 +880,7 @@ def rule_l_dual_control(
                         persona=persona,
                         tools_called=["rule_l_dual_control"],
                     )
-                return None  # verified companion → allow write
+                return None
             return _decision(
                 "DENY",
                 "L-DUAL-CONTROL",
@@ -652,20 +893,51 @@ def rule_l_dual_control(
     if not needs:
         return None
     if not has_companion:
+        meta: dict[str, Any] = {"companion_missing": True}
+        msg = None
+        if persona == "P6":
+            meta["child_companion_required"] = True
+            if _has_any_companion(act, os_state):
+                meta["companion_missing"] = False
+                meta["companion_not_child"] = True
+            msg = (
+                "L-DUAL-CONTROL (P6): Cần ≥1 người đồng hành là con (child). "
+                "Thiếu companion con — không ghi OS. Không dùng self L-COOL-OFF."
+            )
+        if escalated_from_cool:
+            meta["cool_off_escalated_to_dual"] = True
+            meta["cool_off"] = cool_meta
+            meta["no_self_cool_off"] = True
         return _decision(
             "DENY",
             "L-DUAL-CONTROL",
             persona=persona,
             tools_called=["rule_l_dual_control"],
-            meta={"companion_missing": True},
+            meta=meta,
+            message_vi=msg,
         )
+    meta_ok: dict[str, Any] = {"child_companion": persona == "P6"}
+    if escalated_from_cool:
+        meta_ok["cool_off_escalated_to_dual"] = True
+        meta_ok["cool_off"] = cool_meta
+        meta_ok["no_self_cool_off"] = True
     return _decision(
         "ESCALATE",
         "L-DUAL-CONTROL",
         persona=persona,
         side_effect=SIDE_PENDING_DUAL,
         tools_called=["rule_l_dual_control"],
+        meta=meta_ok,
+        message_vi=(
+            (
+                "P6 — không cho tự override bằng cooling-off một mình. "
+                + MSG["L-DUAL-CONTROL"]
+            )
+            if escalated_from_cool
+            else None
+        ),
     )
+
 
 
 def rule_l_fiduciary(
@@ -758,6 +1030,12 @@ __all__ = [
     "SIDE_PENDING_COOL_OFF",
     "SIDE_PENDING_DUAL",
     "DUAL_CONTROL_ACTS",
+    "P6_DUAL_CONTROL_ACTS",
+    "P6_LARGE_ACTS",
+    "P6_EMERGENCY_FLOOR_MONTHS_MIN",
+    "P6_EMERGENCY_FLOOR_MONTHS_MAX",
+    "P6_MEDICAL_FLOOR_MONTHS",
+    "CHILD_COMPANION_ROLES",
     "evaluate",
     "registered_rule_ids",
     "RULE_REGISTRY",

@@ -164,8 +164,58 @@ def load_pair(essential: float = 10_000_000) -> dict[str, dict[str, Any]]:
     }
 
 
+def build_p6_fixture(
+    *,
+    user_id: Optional[str] = None,
+    companion_user_id: Optional[str] = None,
+    essential: float = 10_000_000,
+    efund_months: float = 12.0,
+    goal_store: Optional[InMemoryEmergencyFundStore] = None,
+) -> dict[str, Any]:
+    """Passed fixture + persona=P6 + child companion (con) for P6 router tests.
+
+    Tops up emergency fund to ``efund_months`` (default 12) so L-EMERGENCY P6
+    floors (6–12 / 24 medical) can be exercised without always fail-closing.
+    TARGET_MONTHS=3 Safety Gate remains unchanged.
+    """
+    from welora.mode_c_act import set_companion, set_persona
+
+    store = goal_store or goals_api.STORE
+    uid = user_id or "user_p6"
+    child_id = companion_user_id or "user_p6_child"
+    fx = build_fixture(
+        "passed",
+        user_id=uid,
+        essential=essential,
+        goal_store=store,
+    )
+    goal = store.get_active_for_user(uid)
+    if goal is not None:
+        target = float(essential) * float(efund_months)
+        try:
+            topped = store.record_progress(goal.goal_id, set_amount=target)
+        except ValueError:
+            # Goal may already be completed at 100% of 3mo target — mutate save
+            from welora.goal_emergency_fund import apply_progress
+            # Force via save of a cloned progress ignoring completed guard
+            g2 = store.get(goal.goal_id)
+            g2.current_amount = target
+            g2.percent = min(100.0, (target / max(g2.target_amount, 1.0)) * 100.0)
+            g2.status = "active" if g2.percent < 100 else "completed"
+            topped = store.save(g2)
+        fx["goal"] = topped.to_dict()
+        fx["efund_months"] = float(efund_months)
+    set_persona(user_id=uid, persona="P6")
+    set_companion(user_id=uid, companion_user_id=child_id, role="child")
+    fx["persona"] = "P6"
+    fx["companion_user_id"] = child_id
+    fx["companion_role"] = "child"
+    return fx
+
+
 if __name__ == "__main__":
     pair = load_pair()
     for k, fx in pair.items():
         g = fx["safety_gate"]
         print(f"{k}: user={fx['user_id']} gate={g['status']} months={g['months_covered']:.2f} reasons={g['reasons']}")
+

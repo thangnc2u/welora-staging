@@ -12,8 +12,10 @@ Source: phụ lục PRD trụ 4 §3.3 Mode C.
 - Full L-* policy_engine.evaluate() choke-point before any OS write (P2 OS router).
 - L-DUAL-CONTROL (Founder 15/09 B): lock / ceiling / estate need companion;
   missing companion → DENY; has companion → pending_dual → companion confirm.
+  P6: money + estate + create_envelope → dual with ≥1 child companion.
 - L-COOL-OFF (Founder 15/09): rút/chuyển quỹ KH dưới sàn persona HOẶC ≥20% quỹ
   → pending_cool_off + lý do + chờ 24h (P1–P5). P6 → dual-control, không tự cool-off.
+- P6 L-EMERGENCY floors: 6–12 months (+ 24 months medical) fail-closed DENY when short.
 - Persist Mode C state to SQLite (proposals / pending_* / confirmed / undone +
   companion by user_id) when WELORA_STORE=sqlite or WELORA_MODE_C_DB is set.
 - Does NOT replace Hard Deny R01–R09 / Pre-Rule order / TARGET_MONTHS / CORE-*.
@@ -67,12 +69,21 @@ ALLOWED_ACTS = frozenset(
 )
 
 # Dual-control MVP (Founder 15/09 B): ceiling change + lock + estate.
-# No P6 persona router → apply conservatively to these acts.
+# P6 router: also create_envelope + withdraw_emergency_fund (child companion).
 DUAL_CONTROL_ACTS = frozenset(
     {
         ACT_LOCK_ENVELOPE,
         ACT_CHANGE_CEILING,
         ACT_ESTATE_CHECKLIST,
+    }
+)
+P6_DUAL_CONTROL_ACTS = frozenset(
+    {
+        ACT_CREATE_ENVELOPE,
+        ACT_LOCK_ENVELOPE,
+        ACT_CHANGE_CEILING,
+        ACT_ESTATE_CHECKLIST,
+        ACT_WITHDRAW_EFUND,
     }
 )
 
@@ -103,17 +114,19 @@ P6_COOL_OFF_ESCALATE_VI = (
     "Cần người đồng hành (L-DUAL-CONTROL). Cooling-off không đủ."
 )
 
-# Persona floor months (MVP stub — full P1–P6 router out of MVP).
-# TARGET_MONTHS (=3) stays HARD for Safety Gate; cool-off floor may use persona months.
+# Persona floor months (cool-off / EF). TARGET_MONTHS (=3) stays HARD for Safety Gate.
+# P6 L-EMERGENCY band is 6–12 months (+ 24 medical) in policy_engine — separate.
 PERSONA_FLOOR_MONTHS: dict[str, int] = {
     "P1": TARGET_MONTHS,  # PRD 3–6 → MVP uses TARGET_MONTHS
     "P2": 6,
     "P3": 6,
     "P4": 6,
     "P5": 6,
-    "P6": 6,  # cool-off self-override forbidden; dual instead
+    "P6": 6,  # min of 6–12 band; medical floor 24 in policy_engine
 }
+P6_MEDICAL_FLOOR_MONTHS = 24
 DEFAULT_PERSONA = "P1"
+CHILD_COMPANION_ROLES = frozenset({"child", "con", "son", "daughter", "con_ruot"})
 
 # External / L2 — always DENY in Mode C (G1≠L2).
 EXTERNAL_DENY: dict[str, dict[str, str]] = {
@@ -475,8 +488,17 @@ def get_companion(user_id: str) -> Optional[dict[str, Any]]:
     return _COMPANIONS.get(str(user_id))
 
 
-def set_companion(*, user_id: str, companion_user_id: str) -> tuple[int, dict[str, Any]]:
-    """Attach one companion_user_id (2nd device/user) for dual-control."""
+def set_companion(
+    *,
+    user_id: str,
+    companion_user_id: str,
+    role: Optional[str] = None,
+    relation: Optional[str] = None,
+) -> tuple[int, dict[str, Any]]:
+    """Attach one companion_user_id (2nd device/user) for dual-control.
+
+    P6 requires role/relation in CHILD_COMPANION_ROLES (child/con).
+    """
     if not user_id:
         return 400, {"error": "user_id is required"}
     cid = (companion_user_id or "").strip()
@@ -487,18 +509,26 @@ def set_companion(*, user_id: str, companion_user_id: str) -> tuple[int, dict[st
             "error": "companion_user_id must differ from user_id",
             "reply": "Người đồng hành phải khác chính bạn.",
         }
-    rec = {
+    role_norm = (role or relation or "").strip().lower() or None
+    rec: dict[str, Any] = {
         "user_id": user_id,
         "companion_user_id": cid,
         "linked_at": _now_iso(),
         "policy_version": POLICY_DUAL_CONTROL,
     }
+    if role_norm:
+        rec["role"] = role_norm
+        rec["relation"] = role_norm
     _COMPANIONS[user_id] = rec
     _persist_companion(rec)
+    role_note = f" (vai trò: {role_norm})" if role_norm else ""
     return 200, {
         "ok": True,
         "link": rec,
-        "reply": f"Đã gắn người đồng hành «{cid}». Các Act đồng kiểm sẽ cần xác nhận 2 người.",
+        "reply": (
+            f"Đã gắn người đồng hành «{cid}»{role_note}. "
+            "Các Act đồng kiểm sẽ cần xác nhận 2 người."
+        ),
         "policy_version": POLICY_DUAL_CONTROL,
     }
 
@@ -516,12 +546,23 @@ def list_companions(user_id: str) -> tuple[int, dict[str, Any]]:
     }
 
 
-def requires_dual_control(act_kind: str) -> bool:
-    return act_kind in DUAL_CONTROL_ACTS
+def requires_dual_control(act_kind: str, user_id: Optional[str] = None) -> bool:
+    if act_kind in DUAL_CONTROL_ACTS:
+        return True
+    if user_id and is_p6_persona(user_id) and act_kind in P6_DUAL_CONTROL_ACTS:
+        return True
+    return False
+
+
+def companion_is_child(link: Optional[dict[str, Any]]) -> bool:
+    if not link or not link.get("companion_user_id"):
+        return False
+    role = str(link.get("role") or link.get("relation") or link.get("companion_role") or "")
+    return role.lower().strip() in CHILD_COMPANION_ROLES
 
 
 def get_persona(user_id: str) -> str:
-    """MVP persona stub (no full P1–P6 router). Default P1."""
+    """Persona stub P1–P6 (P6 specialized in policy_engine). Default P1."""
     if not user_id:
         return DEFAULT_PERSONA
     p = (_PERSONAS.get(str(user_id)) or DEFAULT_PERSONA).upper().strip()
@@ -547,7 +588,7 @@ def set_persona(*, user_id: str, persona: str) -> tuple[int, dict[str, Any]]:
         "persona": p,
         "floor_months": PERSONA_FLOOR_MONTHS[p],
         "policy_version": POLICY_COOL_OFF,
-        "note": "Full P1–P6 router out of MVP — staging stub only.",
+        "note": "P6 router: L-EMERGENCY floors + dual child companion + no self cool-off.",
     }
 
 
@@ -607,6 +648,7 @@ def evaluate_cool_off_trigger(
         "remaining": remaining,
         "floor_months": floor_m,
         "floor_amount": floor_amount,
+        "essential_expense_monthly": essential,
         "transfer_pct": round(pct, 4),
         "threshold_pct": TRANSFER_PCT_THRESHOLD,
         "persona": get_persona(user_id),
@@ -651,7 +693,7 @@ def _proposal_payload(
     cool_off_until: Optional[str] = None,
     cool_off_meta: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    dual = requires_dual_control(act_kind) or status == "pending_dual"
+    dual = requires_dual_control(act_kind, user_id=user_id) or status == "pending_dual"
     cool = status == "pending_cool_off"
     if policy_version:
         pv = policy_version
@@ -760,6 +802,21 @@ def build_policy_os_state(
         "mode": MODE_C,
         "phase": "propose",
     }
+    # Enrich EF + estate for P6 L-EMERGENCY / L-ESTATE specialization
+    goal = _get_efund_goal(user_id)
+    if goal is not None:
+        cur = float(getattr(goal, "current_amount", 0) or 0)
+        ess = float(getattr(goal, "essential_expense_monthly", 0) or 0)
+        state["efund_current"] = cur
+        state["efund_essential"] = ess
+        state["essential_expense_monthly"] = ess
+        if ess > 0:
+            state["efund_months_covered"] = compute_months_covered(cur, ess)
+            state["months_covered"] = state["efund_months_covered"]
+    estate = _ESTATE.get(str(user_id))
+    if estate:
+        state["estate_checklist"] = estate
+        state["estate"] = estate
     if cool_off is not None:
         state["cool_off"] = cool_off
     if proposal_status:
@@ -848,6 +905,21 @@ def _append_policy_log(
 
 
 
+def _message_is_medical(message: str) -> bool:
+    n = (message or "").lower()
+    keys = (
+        "y tế",
+        "yte",
+        "viện phí",
+        "chữa bệnh",
+        "khám bệnh",
+        "medical",
+        "hospital",
+        "bệnh viện",
+    )
+    return any(k in n for k in keys)
+
+
 def propose_act(
     *,
     user_id: str,
@@ -928,7 +1000,7 @@ def propose_act(
             answer_confidence=answer_confidence,
         ),
     )
-    if spec_decision.verdict == "DENY" and spec_decision.rule_id in {
+    if spec_decision.verdict in ("DENY", "ESCALATE") and spec_decision.rule_id in {
         "L-NO-SPEC",
         "L-EMERGENCY",
         "L-ESTATE",
@@ -936,8 +1008,9 @@ def propose_act(
         "L-NO-ILP-NEW",
         "L-FIDUCIARY",
     }:
-        # Only short-circuit message-only denies when no Mode C act would match;
+        # Short-circuit message-only DENY/ESCALATE when no Mode C act would match;
         # estate checklist messages must still reach act detection.
+        # P6 legal-will is ESCALATE (not DENY) — still surface rule code.
         maybe_act = detect_mode_c_act(message)
         if maybe_act is None or spec_decision.rule_id in {
             "L-NO-SPEC",
@@ -1037,6 +1110,10 @@ def propose_act(
                 "policy_version": POLICY_COOL_OFF,
                 "reply": "Cần số tiền rút/chuyển từ quỹ khẩn cấp.",
             }
+        medical = bool(params.get("medical")) or _message_is_medical(message)
+        essential_val = cool_meta.get("essential_expense_monthly")
+        if essential_val is None and ess_override is not None:
+            essential_val = float(ess_override)
         params = {
             "amount": amount,
             "goal_id": cool_meta.get("goal_id"),
@@ -1044,10 +1121,15 @@ def propose_act(
             "remaining": cool_meta.get("remaining"),
             "floor_amount": cool_meta.get("floor_amount"),
             "floor_months": cool_meta.get("floor_months"),
+            "months_covered_after": cool_meta.get("months_covered_after"),
+            "essential_expense_monthly": essential_val,
             "transfer_pct": cool_meta.get("transfer_pct"),
             "to_envelope_id": params.get("to_envelope_id"),
             "internal_only": True,
             "no_bank_transfer": True,
+            "medical": medical,
+            "purpose": "medical" if medical else params.get("purpose"),
+            "touch_efund": True,
         }
         summary = (
             f"Rút/chuyển {int(amount):,} ₫ từ quỹ khẩn cấp (nội bộ OS)".replace(",", ".")
@@ -1076,7 +1158,7 @@ def propose_act(
             params=params,
             phase="propose",
             cool_off=cool_meta,
-            dual_control_required=requires_dual_control(act_kind),
+            dual_control_required=requires_dual_control(act_kind, user_id=user_id),
         ),
         os_state=build_policy_os_state(
             user_id=user_id,
@@ -1434,7 +1516,7 @@ def confirm_act(
     # client spoof flags. Only companion_confirm_act writes OS.
     # withdraw_efund is NOT in DUAL_CONTROL_ACTS unless escalated to pending_dual.
     if prop.get("status") == "pending_dual" or (
-        requires_dual_control(prop.get("act_kind") or "")
+        requires_dual_control(prop.get("act_kind") or "", user_id=user_id)
         and prop.get("status") != "pending_cool_off"
     ):
         return 403, {
@@ -1516,7 +1598,7 @@ def confirm_act(
             cool_off=prop.get("cool_off"),
             cool_off_ready=cool_ready,
             cool_off_escalated_to_dual=bool(prop.get("cool_off_escalated_to_dual")),
-            dual_control_required=requires_dual_control(act_kind),
+            dual_control_required=requires_dual_control(act_kind, user_id=user_id),
         ),
         os_state=build_policy_os_state(
             user_id=user_id,

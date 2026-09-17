@@ -117,6 +117,8 @@ class ModeCCrossTakeBody(BaseModel):
 class CompanionLinkBody(BaseModel):
     user_id: str
     companion_user_id: str
+    role: Optional[str] = None  # P6: child/con
+    relation: Optional[str] = None
 
 class ModeCCompanionConfirmBody(BaseModel):
     companion_user_id: str
@@ -513,6 +515,8 @@ def create_app() -> FastAPI:
         return _respond(*mode_c_svc.set_companion(
             user_id=body.user_id,
             companion_user_id=body.companion_user_id,
+            role=body.role,
+            relation=body.relation,
         ))
 
     @app.get("/os/companion", tags=["os", "dual-control"])

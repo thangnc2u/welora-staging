@@ -232,7 +232,16 @@ class TestP2OsCoolingOff(unittest.TestCase):
     def test_p6_escalates_to_dual_not_self_cool_off(self):
         set_persona(user_id=self.uid, persona="P6")
         goal = goals_api.STORE.get_active_for_user(self.uid)
-        amount = goal.current_amount * 0.30
+        # Top up above P6 L-EMERGENCY floor (6mo) so path exercises dual, not floor DENY
+        target = goal.essential_expense_monthly * 12
+        try:
+            goals_api.STORE.record_progress(goal.goal_id, set_amount=target)
+        except ValueError:
+            goal.current_amount = target
+            goal.status = "active"
+            goals_api.STORE.save(goal)
+        goal = goals_api.STORE.get_active_for_user(self.uid) or goals_api.STORE.get(goal.goal_id)
+        amount = goal.current_amount * 0.30  # ≥20% → cool-off trigger → dual
 
         # Missing companion → DENY dual (not pending_cool_off alone)
         code, out = propose_act(
@@ -250,8 +259,8 @@ class TestP2OsCoolingOff(unittest.TestCase):
         self.assertNotEqual(out.get("status"), "pending_cool_off")
         self.assertIsNone(out.get("act_proposal"))
 
-        # With companion → pending_dual
-        set_companion(user_id=self.uid, companion_user_id=self.companion)
+        # With child companion → pending_dual
+        set_companion(user_id=self.uid, companion_user_id=self.companion, role="child")
         code2, out2 = propose_act(
             user_id=self.uid,
             message=f"Rút quỹ khẩn cấp {int(amount)}",

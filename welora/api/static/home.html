@@ -6,33 +6,34 @@
 <title>Welora · Trang chủ</title>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
-h1{font-size:1.25rem;margin:4px 0 12px}
-.muted{color:#8b9bb4;font-size:13px}
-.card{background:#141b24;border:1px solid #243041;border-radius:14px;padding:16px;margin:10px 0}
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 12px;color:var(--text-primary)}
+.muted{color:var(--text-secondary);font-size:13px}
+.card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;padding:16px;margin:10px 0}
 .ring-wrap{display:flex;align-items:center;gap:16px}
 .donut{position:relative;width:132px;height:132px;flex-shrink:0}
 .donut svg{width:132px;height:132px;display:block}
 .donut .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.score-num{font-size:1.35rem;font-weight:700;line-height:1.1}
-.score-max{font-size:11px;color:#8b9bb4}
+.score-num{font-size:1.35rem;font-weight:700;line-height:1.1;color:var(--text-primary)}
+.score-max{font-size:11px;color:var(--text-secondary)}
 .bar-wrap{margin-top:10px}
-.bar{height:14px;background:#0b0f14;border-radius:999px;overflow:hidden;border:1px solid #243041;position:relative}
-.bar>span{display:block;height:100%;width:0;background:#3b82f6}
-.bar-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
-.badge{display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid #243041}
-.badge.passed{color:#3dd68c;border-color:#3dd68c}
-.badge.not_passed{color:#ffb020;border-color:#ffb020}
-a.more{color:#7dd3fc;text-decoration:none;display:block;margin-top:8px;font-weight:600}
+.bar{height:14px;background:var(--bg-subtle);border-radius:999px;overflow:hidden;border:1px solid var(--border-default);position:relative}
+.bar>span{display:block;height:100%;width:0;background:var(--color-info)}
+.bar-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-primary)}
+.badge{display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--border-default);color:var(--text-primary)}
+.badge.passed{color:var(--color-success);border-color:var(--color-success)}
+.badge.not_passed{color:var(--color-warning);border-color:var(--color-warning)}
+a.more{color:var(--link);text-decoration:none;display:block;margin-top:8px;font-weight:600}
 .tools{display:none;flex-direction:column;gap:8px;margin-top:8px}
 .tools.open{display:flex}
-a.nav{display:block;background:#0b0f14;border:1px solid #243041;border-radius:10px;padding:10px 12px;color:#e8eef7;text-decoration:none;font-weight:600;font-size:14px}
+a.nav{display:block;background:var(--bg-subtle);border:1px solid var(--border-default);border-radius:10px;padding:10px 12px;color:var(--text-primary);text-decoration:none;font-weight:600;font-size:14px}
 .tools:not(.dev) .dev-only{display:none}
 .pillars{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
-a.pillar{display:block;background:#141b24;border:1px solid #243041;border-radius:14px;padding:14px 16px;color:#e8eef7;text-decoration:none}
-a.pillar:active{background:#1a2330}
+a.pillar{display:block;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;padding:14px 16px;color:var(--text-primary);text-decoration:none}
+a.pillar:active{background:var(--bg-elevated)}
+a.pillar:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 .pillar-title{display:block;font-weight:700;font-size:15px}
-.pillar-desc{display:block;margin-top:4px;color:#8b9bb4;font-size:12px;font-weight:500}
+.pillar-desc{display:block;margin-top:4px;color:var(--text-secondary);font-size:12px;font-weight:500}
 </style>
 </head>
 <body class="welora-shell">
@@ -59,7 +60,7 @@ a.pillar:active{background:#1a2330}
   <div class="ring-wrap">
     <div class="donut" id="hsDonut" aria-label="Biểu đồ vòng điểm sức khỏe từ 0 đến 1000">
       <svg viewBox="0 0 120 120" role="img" aria-labelledby="hsScore">
-        <circle cx="60" cy="60" r="46" fill="none" stroke="#243041" stroke-width="14"/>
+        <circle cx="60" cy="60" r="46" fill="none" stroke="var(--border-default)" stroke-width="14"/>
         <circle id="hsArc" cx="60" cy="60" r="46" fill="none" stroke="#3b82f6" stroke-width="14"
           stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="289.03" stroke-dashoffset="289.03"/>
       </svg>
@@ -131,7 +132,7 @@ a.pillar:active{background:#1a2330}
 <script>
 const KEY='welora_device_id';
 const LEVELS={critical:'Nguy cấp',low:'Thấp',moderate:'Trung bình',good:'Tốt',strong:'Vững'};
-const COLORS={critical:'#ef4444',low:'#f59e0b',moderate:'#3b82f6',good:'#22c55e',strong:'#34d399'};
+const COLORS={critical:'#E85D5D',low:'#E8C86A',moderate:'#6B8CFF',good:'#3DB88A',strong:'#3DB88A'};
 function pct(n){ return window.WeloraMoney?WeloraMoney.formatPct(n):String(n)+'%'; }
 function deviceId(){
   let d=localStorage.getItem(KEY);
@@ -146,7 +147,7 @@ function setDonut(score, level){
   const arc=document.getElementById('hsArc');
   arc.setAttribute('stroke-dasharray', String(circ));
   arc.setAttribute('stroke-dashoffset', String(off));
-  arc.setAttribute('stroke', COLORS[level]||'#3b82f6');
+  arc.setAttribute('stroke', COLORS[level]||'#6B8CFF');
   document.getElementById('hsPctLabel').textContent=pct(s/10);
 }
 (function(){

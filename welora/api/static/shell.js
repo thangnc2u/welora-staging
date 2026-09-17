@@ -26,6 +26,7 @@
   ) active = "ops";
   else if (path === "/app" || path === "/app/home") active = "home";
 
+  document.documentElement.setAttribute("data-theme", "dark");
   document.body.classList.add("welora-shell");
   var nav = document.createElement("nav");
   nav.id = "weloraBottomNav";

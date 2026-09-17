@@ -1,0 +1,60 @@
+/* Welora Design tokens — dark-first (Approved 2026-09-17)
+   Gold = money/action/selected only · Navy = structure · Hard Deny/danger = red (never gold)
+*/
+:root,
+[data-theme="dark"] {
+  /* Brand — navy */
+  --navy-950: #0B1220;
+  --navy-900: #121A28;
+  --navy-800: #1A2536;
+  --navy-700: #243044;
+  --navy-600: #2F3D54;
+
+  /* Brand — gold */
+  --gold-300: #F5E0A0;
+  --gold-400: #E8C86A;
+  --gold-500: #D4AF37;
+  --gold-600: #B8922E;
+  --gold-700: #8B6B24;
+  --gold-800: #6B521C;
+
+  /* Dark mode surfaces */
+  --bg-app: #121A28;
+  --bg-surface: #1A2536;
+  --bg-elevated: #243044;
+  --bg-subtle: #0B1220;
+
+  /* Borders */
+  --border-default: #2F3D54;
+  --border-strong: #3D4F6A;
+  --border-focus: #E8C86A;
+
+  /* Text */
+  --text-primary: #F4F1E8;
+  --text-secondary: #A8B0C0;
+  --text-muted: #6B7588;
+  --text-on-gold: #121A28;
+
+  /* Icons / link / overlay */
+  --icon-default: #C5CDD8;
+  --icon-accent: #D4AF37;
+  --link: #E8C86A;
+  --overlay: #0B1220CC;
+
+  /* Semantic — danger NEVER gold (Hard Deny / DENY) */
+  --color-success: #3DB88A;
+  --color-warning: #E8C86A;
+  --color-danger: #E85D5D;
+  --color-info: #6B8CFF;
+
+  /* CTA aliases */
+  --cta-primary: var(--gold-500);
+  --cta-primary-hover: var(--gold-400);
+  --cta-primary-pressed: var(--gold-600);
+  --cta-primary-text: var(--text-on-gold);
+
+  /* Deny / danger surfaces (red family only) */
+  --danger-border: #E85D5D;
+  --danger-text: #F5B4B4;
+  --danger-bg: #2A1518;
+}

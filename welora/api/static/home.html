@@ -1,15 +1,16 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · Trang chủ</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
-h1{font-size:1.25rem;margin:4px 0 12px;color:var(--text-primary)}
-.muted{color:var(--text-secondary);font-size:13px}
-.card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:14px;padding:16px;margin:10px 0}
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 12px;color:var(--text-primary,#F4F1E8)}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
 .ring-wrap{display:flex;align-items:center;gap:16px}
 .donut{position:relative;width:132px;height:132px;flex-shrink:0}
 .donut svg{width:132px;height:132px;display:block}
@@ -23,7 +24,7 @@ h1{font-size:1.25rem;margin:4px 0 12px;color:var(--text-primary)}
 .badge{display:inline-block;margin-top:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--border-default);color:var(--text-primary)}
 .badge.passed{color:var(--color-success);border-color:var(--color-success)}
 .badge.not_passed{color:var(--color-warning);border-color:var(--color-warning)}
-a.more{color:var(--link);text-decoration:none;display:block;margin-top:8px;font-weight:600}
+a.more{color:var(--link,#E8C86A);text-decoration:none;display:block;margin-top:8px;font-weight:600}
 .tools{display:none;flex-direction:column;gap:8px;margin-top:8px}
 .tools.open{display:flex}
 a.nav{display:block;background:var(--bg-subtle);border:1px solid var(--border-default);border-radius:10px;padding:10px 12px;color:var(--text-primary);text-decoration:none;font-weight:600;font-size:14px}
@@ -61,7 +62,7 @@ a.pillar:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
     <div class="donut" id="hsDonut" aria-label="Biểu đồ vòng điểm sức khỏe từ 0 đến 1000">
       <svg viewBox="0 0 120 120" role="img" aria-labelledby="hsScore">
         <circle cx="60" cy="60" r="46" fill="none" stroke="var(--border-default)" stroke-width="14"/>
-        <circle id="hsArc" cx="60" cy="60" r="46" fill="none" stroke="#3b82f6" stroke-width="14"
+        <circle id="hsArc" cx="60" cy="60" r="46" fill="none" stroke="var(--color-info,#6B8CFF)" stroke-width="14"
           stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="289.03" stroke-dashoffset="289.03"/>
       </svg>
       <div class="center">

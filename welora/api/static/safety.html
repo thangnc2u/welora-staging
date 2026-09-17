@@ -1,37 +1,40 @@
 <!DOCTYPE html>
-<html lang="vi"><head>
+<html lang="vi" data-theme="dark"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · An Toàn</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;margin:0;background:var(--bg-app);color:var(--text-primary)}
-body.welora-shell{background:var(--bg-app);color:var(--text-primary);max-width:none;padding:0;margin:0}
-.shell{max-width:430px;margin:0 auto;background:var(--bg-app);min-height:100dvh;padding:16px 16px 88px}
-.badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary)}
+body{font-family:system-ui;margin:0;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8)}
+body.welora-shell{background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);max-width:none;padding:0;margin:0}
+.shell{max-width:430px;margin:0 auto;background:var(--bg-app,#121A28);min-height:100dvh;padding:16px 16px 88px;color:var(--text-primary,#F4F1E8)}
+.badge-card,.hs-card,.goal-card{border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-surface,#1A2536);color:var(--text-primary,#F4F1E8)}
 .badge-card.ok{background:#143028;border-color:var(--color-success)}.badge-card.fail{background:#2a2410;border-color:var(--color-warning)}
-.status{font-weight:700;font-size:18px;color:var(--text-primary)}.meta{color:var(--text-secondary);font-size:14px}
+.status{font-weight:700;font-size:18px;color:var(--text-primary,#F4F1E8)}.meta{color:var(--text-secondary,#A8B0C0);font-size:14px}
 .bar{height:8px;background:var(--bg-subtle);border-radius:99px;overflow:hidden;margin:8px 0;border:1px solid var(--border-default)}
 .bar>i{display:block;height:100%;background:var(--cta-primary)}
-input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid var(--border-default);box-sizing:border-box;background:var(--bg-subtle);color:var(--text-primary)}
+input,select,button{width:100%;padding:12px;margin-top:8px;border-radius:12px;border:1px solid var(--border-default,#2F3D54);box-sizing:border-box;background:var(--bg-subtle,#0B1220);color:var(--text-primary,#F4F1E8)}
 input:focus-visible,select:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
-button{background:var(--cta-primary);color:var(--cta-primary-text);border:0;font-weight:600}
+button{background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);border:0;font-weight:600}
 button:hover{background:var(--cta-primary-hover)}button:active{background:var(--cta-primary-pressed)}
 .chips{display:flex;gap:8px;margin-top:8px}
 .chips button{margin:0;padding:8px 10px;width:auto;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
-a{color:var(--link)}.section-title{font-size:13px;font-weight:700;color:var(--text-muted);margin:8px 0}
+a{color:var(--link,#E8C86A)}.section-title{font-size:13px;font-weight:700;color:var(--text-muted,#6B7588);margin:8px 0}
+label{display:block;margin-top:8px;color:var(--text-secondary,#A8B0C0);font-size:13px}
 .hs-note{font-size:11px;color:var(--gold-300);background:#2a2410;border:1px solid var(--color-warning);border-radius:8px;padding:8px;margin-top:8px}
 .hs-row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0;color:var(--text-secondary)}
-.check-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--border-default);border-radius:12px;margin:8px 0;background:var(--bg-surface);color:var(--text-primary)}
+.check-item{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--border-default,#2F3D54);border-radius:12px;margin:8px 0;background:var(--bg-surface,#1A2536);color:var(--text-primary,#F4F1E8)}
 .check-item.ok{background:#143028;border-color:var(--color-success)}
 .check-item.fail{background:#2a2410;border-color:var(--color-warning)}
 .check-row{display:flex;justify-content:space-between;gap:8px;align-items:center}
-.check-label{font-weight:600;font-size:14px;color:var(--text-primary)}
-.check-state{font-size:12px;color:var(--text-secondary)}
-.check-item a.cta{display:inline-block;margin-top:4px;font-weight:600;color:var(--link)}
-#ctaGateChat{display:block;margin:10px 0 14px;padding:12px;border-radius:12px;background:var(--cta-primary);color:var(--cta-primary-text);text-align:center;text-decoration:none;font-weight:700}
+.check-label{font-weight:600;font-size:14px;color:var(--text-primary,#F4F1E8)}
+.check-state{font-size:12px;color:var(--text-secondary,#A8B0C0)}
+.check-item a.cta{display:inline-block;margin-top:4px;font-weight:600;color:var(--link,#E8C86A)}
+#ctaGateChat{display:block;margin:10px 0 14px;padding:12px;border-radius:12px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);text-align:center;text-decoration:none;font-weight:700}
 #ctaGateChat[hidden]{display:none}
 #masteryState[hidden]{display:none}
-h1{color:var(--text-primary)}
+h1{color:var(--text-primary,#F4F1E8)}
+#hsScore{color:var(--text-primary,#F4F1E8);font-weight:700}
 </style></head><body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <div class="shell">

@@ -4,10 +4,16 @@
 html{height:100%}
 html,body{color-scheme:dark}
 
+/* Hex fallbacks: if tokens.css lags/@import fails, never paint black-on-navy */
+html{
+  background:var(--bg-app, #121A28);
+  color:var(--text-primary, #F4F1E8);
+}
+
 body.welora-shell{
   font-family:system-ui,-apple-system,sans-serif;
-  background:var(--bg-app);
-  color:var(--text-primary);
+  background:var(--bg-app, #121A28);
+  color:var(--text-primary, #F4F1E8);
   margin:0;
   padding:16px 16px 88px;
   max-width:480px;
@@ -15,49 +21,61 @@ body.welora-shell{
   box-sizing:border-box;
 }
 
-/* Shared chrome helpers (pages may also use vars directly) */
+/* Shared chrome helpers — light text on navy/cards (forbid black copy) */
 .welora-shell .card,
+.welora-shell .badge-card,
+.welora-shell .hs-card,
+.welora-shell .goal-card,
+.welora-shell .check-item,
 .welora-card{
-  background:var(--bg-surface);
-  border:1px solid var(--border-default);
+  background:var(--bg-surface, #1A2536);
+  border:1px solid var(--border-default, #2F3D54);
   border-radius:14px;
-  color:var(--text-primary);
+  color:var(--text-primary, #F4F1E8);
+}
+.welora-shell h1,
+.welora-shell h2,
+.welora-shell h3{
+  color:var(--text-primary, #F4F1E8);
+}
+.welora-shell label{
+  color:var(--text-secondary, #A8B0C0);
 }
 .welora-shell .muted,
-.welora-muted{color:var(--text-secondary)}
+.welora-muted{color:var(--text-secondary, #A8B0C0)}
 .welora-shell a:not(#weloraBottomNav a):not(.pillar):not(.nav):not(.btn),
-.welora-link{color:var(--link)}
+.welora-link{color:var(--link, #E8C86A)}
 
 .btn-primary,
 .welora-btn-primary{
-  background:var(--cta-primary);
-  color:var(--cta-primary-text);
+  background:var(--cta-primary, #D4AF37);
+  color:var(--cta-primary-text, #121A28);
   border:0;
   border-radius:10px;
   font-weight:600;
 }
 .btn-primary:hover,
-.welora-btn-primary:hover{background:var(--cta-primary-hover)}
+.welora-btn-primary:hover{background:var(--cta-primary-hover, #E8C86A)}
 .btn-primary:active,
-.welora-btn-primary:active{background:var(--cta-primary-pressed)}
+.welora-btn-primary:active{background:var(--cta-primary-pressed, #B8922E)}
 
 /* Hard Deny / DENY / danger — red only, never gold */
 .danger,
 .deny,
 .welora-danger,
 button.danger{
-  --_danger: var(--color-danger);
-  color:var(--danger-text);
-  border-color:var(--danger-border);
+  --_danger: var(--color-danger, #E85D5D);
+  color:var(--danger-text, #F5B4B4);
+  border-color:var(--danger-border, #E85D5D);
 }
 button.danger{
-  background:var(--color-danger);
+  background:var(--color-danger, #E85D5D);
   color:#fff;
 }
 
 .welora-shell :focus-visible,
 #weloraBottomNav a:focus-visible{
-  outline:2px solid var(--border-focus);
+  outline:2px solid var(--border-focus, #E8C86A);
   outline-offset:2px;
 }
 
@@ -68,8 +86,8 @@ button.danger{
   display:flex;
   justify-content:space-around;
   align-items:stretch;
-  background:var(--bg-subtle);
-  border-top:1px solid var(--border-default);
+  background:var(--bg-subtle, #0B1220);
+  border-top:1px solid var(--border-default, #2F3D54);
   padding:6px 4px calc(8px + env(safe-area-inset-bottom));
   max-width:480px;
   margin-inline:auto;
@@ -77,16 +95,17 @@ button.danger{
 #weloraBottomNav a{
   flex:1;
   text-align:center;
-  color:var(--text-muted);
+  color:var(--text-muted, #6B7588);
   text-decoration:none;
   font-size:11px;
   font-weight:600;
   padding:8px 4px 6px;
   border-radius:10px;
 }
+/* Tab active = gold CTA (dark text on gold) */
 #weloraBottomNav a.on{
-  color:var(--text-on-gold);
-  background:var(--cta-primary);
+  color:var(--text-on-gold, #121A28);
+  background:var(--cta-primary, #D4AF37);
 }
 #weloraBottomNav .tab-ico{
   display:block;
@@ -95,3 +114,15 @@ button.danger{
   margin-bottom:2px;
 }
 #weloraBottomNav a[hidden]{display:none!important}
+
+/* Native controls inherit light text on navy */
+.welora-shell input,
+.welora-shell select,
+.welora-shell textarea{
+  color:var(--text-primary, #F4F1E8);
+  background:var(--bg-subtle, #0B1220);
+}
+.welora-shell option{
+  background:var(--bg-elevated, #243044);
+  color:var(--text-primary, #F4F1E8);
+}

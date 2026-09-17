@@ -46,10 +46,11 @@ class TestP2UiDarkThemeTokens(unittest.TestCase):
         self.assertNotIn("#D4AF37", TOKENS.split("--color-danger")[1][:80])
 
     def test_shell_uses_token_vars_not_legacy_hex(self):
-        self.assertIn("var(--bg-app)", SHELL_CSS)
-        self.assertIn("var(--cta-primary)", SHELL_CSS)
-        self.assertIn("var(--color-danger)", SHELL_CSS)
-        self.assertIn("var(--border-focus)", SHELL_CSS)
+        # Allow var(--token) or var(--token, #SoT-fallback) — both bind design tokens
+        self.assertIn("var(--bg-app", SHELL_CSS)
+        self.assertIn("var(--cta-primary", SHELL_CSS)
+        self.assertIn("var(--color-danger", SHELL_CSS)
+        self.assertIn("var(--border-focus", SHELL_CSS)
         self.assertNotIn("background:#0b0f14", SHELL_CSS)
         self.assertNotIn("background:#3b82f6", SHELL_CSS)
 

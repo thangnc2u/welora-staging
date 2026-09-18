@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Đăng ký</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:12px 0}
+label{display:block;margin-top:10px;font-size:13px;color:var(--text-secondary)}
+input{width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-subtle,#0B1220);color:var(--text-primary)}
+.tabs{display:flex;gap:8px;margin:12px 0}
+.tabs a{flex:1;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-weight:600;font-size:14px;background:var(--bg-subtle)}
+.tabs a.on{background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);border-color:transparent}
+button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer;font-size:15px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28)}
+.err{color:var(--danger-text,#F5B4B4);font-size:13px;margin-top:10px;min-height:1.2em}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:10px;font-weight:600}
+</style>
+</head>
+<body class="welora-shell">
+<p><a id="navHome" class="welora-link" href="/app">← Welora</a></p>
+<h1>Đăng ký</h1>
+<p class="muted">Tài khoản guest · email hoặc SĐT + mật khẩu (tối thiểu 8 ký tự)</p>
+<nav class="tabs" aria-label="Auth tabs">
+  <a id="tabLogin" href="/app/login">Đăng nhập</a>
+  <a id="tabRegister" class="on" href="/app/register">Đăng ký</a>
+</nav>
+<div class="card">
+  <label for="displayName">Tên hiển thị (tuỳ chọn)</label>
+  <input id="displayName" type="text" autocomplete="nickname"/>
+  <label for="email">Email (tuỳ chọn nếu có SĐT)</label>
+  <input id="email" type="email" autocomplete="username" placeholder="ban@email.com"/>
+  <label for="phone">Số điện thoại (tuỳ chọn nếu có email)</label>
+  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+84…"/>
+  <label for="password">Mật khẩu</label>
+  <input id="password" type="password" autocomplete="new-password"/>
+  <button type="button" id="btnRegister" class="welora-btn-primary">Tạo tài khoản</button>
+  <p class="err" id="err"></p>
+  <p class="ok" id="ok"></p>
+</div>
+<script>
+const TOKEN_KEY='welora_token';
+function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
+function showOk(m){document.getElementById('ok').textContent=m||'';document.getElementById('err').textContent='';}
+document.getElementById('btnRegister').addEventListener('click', async()=>{
+  showErr('');
+  const email=document.getElementById('email').value.trim();
+  const phone=document.getElementById('phone').value.trim();
+  const password=document.getElementById('password').value;
+  const display_name=document.getElementById('displayName').value.trim();
+  if(!email && !phone){showErr('Nhập email hoặc số điện thoại');return;}
+  if(password.length<8){showErr('Mật khẩu tối thiểu 8 ký tự');return;}
+  const body={password};
+  if(email) body.email=email;
+  if(phone) body.phone=phone;
+  if(display_name) body.display_name=display_name;
+  try{
+    const r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){showErr((d.detail&&d.detail.error)||d.error||'Đăng ký thất bại');return;}
+    const tok=d.token||'';
+    if(tok) localStorage.setItem(TOKEN_KEY,tok);
+    showOk('Tài khoản sẵn sàng · vào ứng dụng…');
+    setTimeout(()=>{location.href='/app';},400);
+  }catch(e){showErr('Không kết nối được');}
+});
+</script>
+</body>
+</html>

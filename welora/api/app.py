@@ -37,6 +37,25 @@ class OtpVerifyBody(BaseModel):
     challenge_id: str
     code: str
 
+class GuestRegisterBody(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: str = Field(..., min_length=8)
+    display_name: Optional[str] = None
+
+class GuestLoginBody(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: str = Field(..., min_length=1)
+
+class ForgotPasswordBody(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+class ResetPasswordBody(BaseModel):
+    reset_token: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8)
+
 class GoalCreateBody(BaseModel):
     user_id: str
     type: str = "emergency_fund"
@@ -230,6 +249,26 @@ def create_app() -> FastAPI:
     def otp_ui() -> FileResponse:
         return FileResponse(static_dir / "otp.html")
 
+    @app.get("/app/login", include_in_schema=False)
+    @app.get("/app/login/", include_in_schema=False)
+    def login_ui() -> FileResponse:
+        return FileResponse(static_dir / "login.html")
+
+    @app.get("/app/register", include_in_schema=False)
+    @app.get("/app/register/", include_in_schema=False)
+    def register_ui() -> FileResponse:
+        return FileResponse(static_dir / "register.html")
+
+    @app.get("/app/forgot-password", include_in_schema=False)
+    @app.get("/app/forgot-password/", include_in_schema=False)
+    def forgot_password_ui() -> FileResponse:
+        return FileResponse(static_dir / "forgot-password.html")
+
+    @app.get("/app/reset-password", include_in_schema=False)
+    @app.get("/app/reset-password/", include_in_schema=False)
+    def reset_password_ui() -> FileResponse:
+        return FileResponse(static_dir / "reset-password.html")
+
     @app.get("/app/pre-rule", include_in_schema=False)
     @app.get("/app/pre-rule/", include_in_schema=False)
     def prerule_ui() -> FileResponse:
@@ -309,6 +348,34 @@ def create_app() -> FastAPI:
         if authorization and authorization.lower().startswith("bearer "):
             token = authorization[7:].strip()
         return _respond(*auth_svc.service_me(token))
+
+    @app.post("/auth/register", tags=["auth"], status_code=201)
+    def auth_register(body: GuestRegisterBody) -> dict:
+        return _respond(*auth_svc.service_register(body.model_dump()))
+
+    @app.post("/auth/login", tags=["auth"])
+    def auth_login(body: GuestLoginBody) -> dict:
+        return _respond(*auth_svc.service_login(body.model_dump()))
+
+    @app.post("/auth/logout", tags=["auth"])
+    def auth_logout(authorization: Optional[str] = Header(None)) -> dict:
+        token = ""
+        if authorization and authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+        return _respond(*auth_svc.service_logout(token))
+
+    @app.post("/auth/forgot-password", tags=["auth"])
+    def auth_forgot_password(body: ForgotPasswordBody) -> dict:
+        return _respond(*auth_svc.service_forgot_password(body.model_dump()))
+
+    @app.post("/auth/reset-password", tags=["auth"])
+    def auth_reset_password(body: ResetPasswordBody) -> dict:
+        return _respond(*auth_svc.service_reset_password(body.model_dump()))
+
+    @app.post("/auth/demo/seed", tags=["auth"])
+    def auth_demo_seed() -> dict:
+        """Partner walkthrough seed — gated by WELORA_GUEST_DEMO (default on)."""
+        return _respond(*auth_svc.service_demo_seed())
 
     @app.post("/onboarding/session", tags=["onboarding"], status_code=201)
     def onboarding_create(body: SessionCreateBody) -> dict:

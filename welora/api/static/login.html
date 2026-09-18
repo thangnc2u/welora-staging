@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Đăng nhập</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:12px 0}
+label{display:block;margin-top:10px;font-size:13px;color:var(--text-secondary)}
+input{width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-subtle,#0B1220);color:var(--text-primary)}
+.tabs{display:flex;gap:8px;margin:12px 0}
+.tabs a{flex:1;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-weight:600;font-size:14px;background:var(--bg-subtle)}
+.tabs a.on{background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);border-color:transparent}
+button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer;font-size:15px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28)}
+.err{color:var(--danger-text,#F5B4B4);font-size:13px;margin-top:10px;min-height:1.2em}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:10px;font-weight:600}
+.links{margin-top:14px;font-size:13px}
+.links a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
+.demo{margin-top:12px;padding:10px;border-radius:10px;border:1px dashed var(--border-strong,#3D4F6A);font-size:12px;color:var(--text-secondary)}
+</style>
+</head>
+<body class="welora-shell">
+<p><a id="navHome" class="welora-link" href="/app">← Welora</a></p>
+<h1>Đăng nhập</h1>
+<p class="muted">Guest / demo · email hoặc số điện thoại + mật khẩu</p>
+<nav class="tabs" aria-label="Auth tabs">
+  <a id="tabLogin" class="on" href="/app/login">Đăng nhập</a>
+  <a id="tabRegister" href="/app/register">Đăng ký</a>
+</nav>
+<div class="card">
+  <label for="email">Email (tuỳ chọn nếu có SĐT)</label>
+  <input id="email" type="email" autocomplete="username" placeholder="ban@email.com"/>
+  <label for="phone">Số điện thoại (tuỳ chọn nếu có email)</label>
+  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+84…"/>
+  <label for="password">Mật khẩu</label>
+  <input id="password" type="password" autocomplete="current-password"/>
+  <button type="button" id="btnLogin" class="welora-btn-primary">Đăng nhập</button>
+  <p class="err" id="err"></p>
+  <p class="ok" id="ok"></p>
+  <p class="links"><a id="linkForgot" href="/app/forgot-password">Quên mật khẩu?</a></p>
+  <div class="demo" id="demoBox" hidden>
+    Demo partner (WELORA_GUEST_DEMO): <span id="demoHint"></span>
+  </div>
+</div>
+<script>
+const TOKEN_KEY='welora_token';
+function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
+function showOk(m){document.getElementById('ok').textContent=m||'';document.getElementById('err').textContent='';}
+document.getElementById('btnLogin').addEventListener('click', async()=>{
+  showErr('');
+  const email=document.getElementById('email').value.trim();
+  const phone=document.getElementById('phone').value.trim();
+  const password=document.getElementById('password').value;
+  if(!email && !phone){showErr('Nhập email hoặc số điện thoại');return;}
+  if(!password){showErr('Nhập mật khẩu');return;}
+  const body={password};
+  if(email) body.email=email;
+  if(phone) body.phone=phone;
+  try{
+    const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){showErr((d.detail&&d.detail.error)||d.error||'Đăng nhập thất bại');return;}
+    const tok=d.token||'';
+    if(tok) localStorage.setItem(TOKEN_KEY,tok);
+    showOk('Đã đăng nhập · vào ứng dụng…');
+    setTimeout(()=>{location.href='/app';},400);
+  }catch(e){showErr('Không kết nối được');}
+});
+(async()=>{
+  try{
+    const r=await fetch('/auth/demo/seed',{method:'POST'});
+    if(!r.ok) return;
+    const d=await r.json();
+    if(d.email){
+      document.getElementById('demoBox').hidden=false;
+      document.getElementById('demoHint').textContent=d.email+' / '+ (d.password_hint||'');
+    }
+  }catch(_e){}
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-"""P2 UX — 6 life_stage options (Founder 04/09)."""
+"""P2 UX — 6 household options P1–P6 (PRD v2; replaces life_stage 04/09)."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from welora.safety_gate import TARGET_MONTHS
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGES = [
-    ("young_single", "Độc thân trẻ"),
-    ("established_single", "Độc thân ổn định"),
-    ("young_couple", "Mới kết hôn / đôi"),
-    ("family", "Gia đình có con"),
-    ("pre_retire", "Trước hưu"),
-    ("retired", "Nghỉ hưu"),
+    ("solo", "Độc thân đô thị 18+"),
+    ("young_family", "25–34 Gia đình trẻ khởi đầu"),
+    ("couple_no_kids", "35–59 Nâng đỡ hai đầu"),
+    ("sandwich_3gen", "35–59 Ba đời trên một take-home"),
+    ("pre_retire", "55–64 Cửa sổ 10 năm trước hưu"),
+    ("retire_companion", "65+ Tuổi vàng và hộ đồng hành"),
 ]
 
 
@@ -28,16 +28,16 @@ class TestP2UxOnboardingLifeStages(unittest.TestCase):
         self.dna = (ROOT / "welora" / "api" / "static" / "dna.html").read_text(encoding="utf-8")
 
     def test_onboarding_select_has_six_in_order(self):
-        start = self.onboard.find('id="life_stage"')
+        start = self.onboard.find('id="household"')
         self.assertGreater(start, 0)
-        chunk = self.onboard[start : start + 900]
+        chunk = self.onboard[start : start + 1200]
         pos = 0
         for code, label in STAGES:
             i = chunk.find(f'value="{code}"')
             self.assertGreaterEqual(i, pos, code)
             self.assertIn(label, chunk)
             pos = i
-        self.assertNotIn(">Gia đình</option>", self.onboard)
+        self.assertNotIn('value="young_single"', chunk)
 
     def test_dna_enum_maps_six(self):
         for code, label in STAGES:

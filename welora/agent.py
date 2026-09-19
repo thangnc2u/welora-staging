@@ -381,12 +381,12 @@ def handle_chat(
 
 def _not_passed() -> AgentContext:
     gate = compute_safety_gate(0.5, True, False, "learning")
-    return build_agent_context("u1", gate=gate, ef_goal={"current_amount": 5e6, "essential_expense": 10e6, "target_amount": 30e6, "months_of_expense": 3}, debt_goal={"on_track": False}, dna={"life_stage": "young_single"})
+    return build_agent_context("u1", gate=gate, ef_goal={"current_amount": 5e6, "essential_expense": 10e6, "target_amount": 30e6, "months_of_expense": 3}, debt_goal={"on_track": False}, dna={"life_stage": "solo", "household": "solo", "persona_id": "P1"})
 
 
 def _passed() -> AgentContext:
     gate = compute_safety_gate(3.2, False, True, "apply")
-    return build_agent_context("u2", gate=gate, ef_goal={"current_amount": 48e6, "essential_expense": 15e6, "target_amount": 45e6, "months_of_expense": 3}, dna={"life_stage": "young_single"})
+    return build_agent_context("u2", gate=gate, ef_goal={"current_amount": 48e6, "essential_expense": 15e6, "target_amount": 45e6, "months_of_expense": 3}, dna={"life_stage": "solo", "household": "solo", "persona_id": "P1"})
 
 
 def run_hard_deny_suite() -> tuple[int, list[str]]:

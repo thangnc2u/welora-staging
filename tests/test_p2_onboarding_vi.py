@@ -13,8 +13,9 @@ from welora.safety_gate import TARGET_MONTHS
 HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "onboarding.html"
 
 VALUES = (
-    "young_single",
-    "family",
+    "solo",
+    "young_family",
+    "sandwich_3gen",
     "stable",
     "variable",
     "alone",
@@ -26,8 +27,9 @@ VALUES = (
     "advisor_only",
 )
 LABELS = (
-    "Độc thân trẻ",
-    "Gia đình",
+    "Độc thân đô thị 18+",
+    "Gia đình trẻ khởi đầu",
+    "Ba đời trên một take-home",
     "Ổn định",
     "Không ổn định",
     "Sống một mình",

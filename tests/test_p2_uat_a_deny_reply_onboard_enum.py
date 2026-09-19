@@ -117,12 +117,24 @@ class TestP2UatADenyReplyOnboardEnum(unittest.TestCase):
             sid,
             1,
             {
-                "life_stage": "young_single",
+                "household": "solo",
                 "income_stability": "variable",
                 "family_context": "with_family",
             },
         )
         self.assertEqual(c, 200, body)
+        # legacy life_stage still accepted
+        code2, sess2 = service_create_session({"user_id": "u-uat-a-ok-legacy"})
+        c2, body2 = service_patch_step(
+            sess2["session_id"],
+            1,
+            {
+                "life_stage": "young_single",
+                "income_stability": "stable",
+                "family_context": "alone",
+            },
+        )
+        self.assertEqual(c2, 200, body2)
         c, body = service_patch_step(
             sid,
             2,

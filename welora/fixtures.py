@@ -5,6 +5,10 @@ Builds complete in-memory state:
   Onboarding DNA + Constitution + Emergency Fund Goal + Gate flags
 
 Used by Agent Hard Deny suite and E2E smoke tests.
+
+PRD v2: persona fixtures keyed P1–P6 live in welora.personas.
+DNA-USER-2026-* 4-persona fixtures are retired (see personas.RETIRED_DNA_USER_2026).
+Demo seed prefers P2 + P4.
 """
 
 from __future__ import annotations
@@ -43,13 +47,17 @@ def _run_onboarding(
     *,
     essential: float,
     has_dangerous_debt: bool,
-    life_stage: str = "young_single",
+    life_stage: str = "solo",
+    household: str | None = None,
+    family_context: str = "alone",
 ) -> dict[str, Any]:
     s = ob.create_session(user_id)
+    hh = household or life_stage
     ob.patch_step(s.session_id, 1, {
-        "life_stage": life_stage,
+        "household": hh,
+        "life_stage": hh,
         "income_stability": "stable",
-        "family_context": "alone",
+        "family_context": family_context,
     })
     ob.patch_step(s.session_id, 2, {
         "essential_expense_monthly": essential,
@@ -87,9 +95,11 @@ def build_fixture(
         debt_on_track = True
         current_amount = essential * 3.2
 
+    # not_passed ≈ P4 sandwich stress; passed ≈ P2 young family (demo priority)
     completed = _run_onboarding(
         uid, essential=essential, has_dangerous_debt=has_debt,
-        life_stage="young_single" if kind == "not_passed" else "family",
+        household="sandwich_3gen" if kind == "not_passed" else "young_family",
+        family_context="with_family",
     )
     goal = store.create_for_user(
         uid, essential, current_amount=current_amount, linked_from_onboarding=True,
@@ -211,6 +221,93 @@ def build_p6_fixture(
     fx["companion_user_id"] = child_id
     fx["companion_role"] = "child"
     return fx
+
+
+
+def build_persona_fixture(
+    persona_id: str,
+    *,
+    user_id: Optional[str] = None,
+    essential: float = 10_000_000,
+    goal_store: Optional[InMemoryEmergencyFundStore] = None,
+) -> dict[str, Any]:
+    """Build fixture from canonical P1–P6 catalog (welora.personas)."""
+    from welora.personas import get_persona, os_goal_types
+    from welora.mode_c_act import set_persona
+
+    p = get_persona(persona_id)
+    store = goal_store or goals_api.STORE
+    uid = user_id or f"user_{persona_id.lower()}"
+    # P4 sandwich: debt stress / not_passed; others: EF-forward / passed
+    if persona_id == "P4":
+        has_debt, mastery, debt_on_track = True, "learning", False
+        current_amount = essential * 0.5
+        kind: FixtureKind = "not_passed"
+    else:
+        has_debt, mastery, debt_on_track = False, "apply", True
+        current_amount = essential * 3.2
+        kind = "passed"
+
+    completed = _run_onboarding(
+        uid,
+        essential=essential,
+        has_dangerous_debt=has_debt,
+        household=p["household"],
+        family_context="alone" if p["household"] == "solo" else "with_family",
+    )
+    goal = store.create_for_user(
+        uid, essential, current_amount=current_amount, linked_from_onboarding=True,
+    )
+    set_user_flags(
+        uid,
+        has_dangerous_debt=has_debt,
+        debt_on_track=debt_on_track,
+        mastery_no_efund_invest=mastery,
+    )
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=goal.current_amount,
+        essential_expense_monthly=goal.essential_expense_monthly,
+        has_dangerous_debt=has_debt,
+        debt_on_track=debt_on_track,
+        mastery_no_efund_invest=mastery,
+    )
+    set_persona(user_id=uid, persona=persona_id)
+    return {
+        "kind": kind,
+        "persona_id": persona_id,
+        "household": p["household"],
+        "user_id": uid,
+        "dna": completed["dna"],
+        "personal_constitution": completed["personal_constitution"],
+        "goal": goal.to_dict(),
+        "safety_gate": gate.to_dict(),
+        "os_goals": list(os_goal_types(persona_id)),
+        "dna_answers": dict(p["dna_answers"]),
+        "academy_emphasis": list(p["academy_emphasis"]),
+        "pillars": dict(p["pillars"]),
+        "flags": {
+            "has_dangerous_debt": has_debt,
+            "debt_on_track": debt_on_track,
+            "mastery_no_efund_invest": mastery,
+        },
+    }
+
+
+def load_demo_personas(
+    *,
+    essential: float = 10_000_000,
+    priority_only: bool = True,
+) -> dict[str, dict[str, Any]]:
+    """Demo seed prefers P2 + P4 (Founder lock §13)."""
+    from welora.personas import DEMO_SEED_ORDER, demo_seed_personas
+
+    reset_all_stores()
+    if priority_only:
+        order = [p["persona_id"] for p in demo_seed_personas(only_priority=True)]
+    else:
+        order = list(DEMO_SEED_ORDER)
+    return {pid: build_persona_fixture(pid, essential=essential) for pid in order}
+
 
 
 if __name__ == "__main__":

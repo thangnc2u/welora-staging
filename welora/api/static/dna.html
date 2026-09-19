@@ -24,12 +24,19 @@ a{color:var(--link);text-decoration:none}
 <script>
 const KEY='welora_device_id';
 const ENUM_VI={
+  solo:'Độc thân đô thị 18+',
+  young_family:'25–34 Gia đình trẻ khởi đầu',
+  couple_no_kids:'35–59 Nâng đỡ hai đầu',
+  sandwich_3gen:'35–59 Ba đời trên một take-home',
+  pre_retire:'55–64 Cửa sổ 10 năm trước hưu',
+  retire_companion:'65+ Tuổi vàng và hộ đồng hành',
+  // legacy life_stage (retired UI) — still map if old DNA present
   young_single:'Độc thân trẻ',
   established_single:'Độc thân ổn định',
   young_couple:'Mới kết hôn / đôi',
   family:'Gia đình có con',
-  pre_retire:'Trước hưu',
   retired:'Nghỉ hưu',
+  P1:'P1', P2:'P2', P3:'P3', P4:'P4', P5:'P5', P6:'P6',
   stable:'Ổn định',
   variable:'Không ổn định',
   alone:'Sống một mình',
@@ -87,6 +94,8 @@ function render(data){
   const snap=data.financial_snapshot_self||{};
   const psy=data.psychological_profile_self||{};
   const fields=[
+    ['Hộ gia đình', pick(ident,'household')??pick(ident,'life_stage')??data.household??data.life_stage],
+    ['Chân dung', pick(ident,'persona_id')??data.persona_id],
     ['Giai đoạn sống', pick(ident,'life_stage')??data.life_stage],
     ['Ổn định thu nhập', pick(ident,'income_stability')??data.income_stability],
     ['Hoàn cảnh gia đình', pick(ident,'family_context')??data.family_context],

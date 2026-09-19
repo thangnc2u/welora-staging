@@ -48,6 +48,68 @@ HOUSEHOLD_TO_PERSONA: dict[str, str] = {
     "retire_companion": "P6",
 }
 
+FAMILY_CONTEXT_VALUES = frozenset({"alone", "with_family"})
+
+# household → allowed family_context (P2 lock). Fail closed on unknown.
+HOUSEHOLD_ALLOWED_FAMILY_CONTEXT: dict[str, frozenset[str]] = {
+    "solo": frozenset({"alone"}),
+    "young_family": frozenset({"with_family"}),
+    "couple_no_kids": frozenset({"with_family"}),
+    "sandwich_3gen": frozenset({"with_family"}),
+    "retire_companion": frozenset({"with_family"}),
+    "pre_retire": frozenset({"alone", "with_family"}),
+}
+
+# Default when household changes (pre_retire defaults to with_family).
+HOUSEHOLD_DEFAULT_FAMILY_CONTEXT: dict[str, str] = {
+    "solo": "alone",
+    "young_family": "with_family",
+    "couple_no_kids": "with_family",
+    "sandwich_3gen": "with_family",
+    "retire_companion": "with_family",
+    "pre_retire": "with_family",
+}
+
+FAMILY_CONTEXT_MISMATCH_VI = "Hoàn cảnh gia đình không khớp hộ đã chọn."
+
+
+def allowed_family_contexts(household: str) -> frozenset[str]:
+    """Return allowed family_context set for household. Unknown → empty (fail closed)."""
+    v = (household or "").strip()
+    if v in HOUSEHOLD_VALUES:
+        h = v
+    elif v in LEGACY_LIFE_STAGE_TO_HOUSEHOLD:
+        h = LEGACY_LIFE_STAGE_TO_HOUSEHOLD[v]
+    else:
+        return frozenset()
+    return HOUSEHOLD_ALLOWED_FAMILY_CONTEXT.get(h, frozenset())
+
+
+def default_family_context(household: str) -> str:
+    """Canonical default family_context for household (pre_retire → with_family)."""
+    allowed = allowed_family_contexts(household)
+    if not allowed:
+        raise ValueError(FAMILY_CONTEXT_MISMATCH_VI)
+    v = (household or "").strip()
+    if v in HOUSEHOLD_VALUES:
+        h = v
+    elif v in LEGACY_LIFE_STAGE_TO_HOUSEHOLD:
+        h = LEGACY_LIFE_STAGE_TO_HOUSEHOLD[v]
+    else:
+        raise ValueError(FAMILY_CONTEXT_MISMATCH_VI)
+    d = HOUSEHOLD_DEFAULT_FAMILY_CONTEXT.get(h)
+    if d in allowed:
+        return d
+    return sorted(allowed)[0]
+
+
+def validate_household_family_context(household: str, family_context: str) -> None:
+    """Raise ValueError (VI) if combo invalid — never trust client."""
+    allowed = allowed_family_contexts(household)
+    if family_context not in allowed:
+        raise ValueError(FAMILY_CONTEXT_MISMATCH_VI)
+
+
 OS_GOAL_TYPES_MVP = frozenset({"emergency_fund", "debt_payoff"})
 
 # Forbidden as OS goal.type (narrative primary_goals only)

@@ -119,7 +119,7 @@ class TestP2UatADenyReplyOnboardEnum(unittest.TestCase):
             {
                 "household": "solo",
                 "income_stability": "variable",
-                "family_context": "with_family",
+                "family_context": "alone",
             },
         )
         self.assertEqual(c, 200, body)

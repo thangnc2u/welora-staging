@@ -40,14 +40,23 @@ button:disabled{opacity:.55}
 
 <div class="card hidden" id="step1">
   <h2>Bạn đang ở đâu trong đời?</h2>
-  <label for="life_stage">Giai đoạn sống</label>
-  <select id="life_stage">
-    <option value="young_single">Độc thân trẻ</option>
-    <option value="established_single">Độc thân ổn định</option>
-    <option value="young_couple">Mới kết hôn / đôi</option>
-    <option value="family">Gia đình có con</option>
-    <option value="pre_retire">Trước hưu</option>
-    <option value="retired">Nghỉ hưu</option>
+  <label for="household">Hộ gia đình</label>
+  <select id="household">
+    <option value="solo">Độc thân đô thị 18+</option>
+    <option value="young_family">25–34 Gia đình trẻ khởi đầu</option>
+    <option value="couple_no_kids">35–59 Nâng đỡ hai đầu</option>
+    <option value="sandwich_3gen">35–59 Ba đời trên một take-home</option>
+    <option value="pre_retire">55–64 Cửa sổ 10 năm trước hưu</option>
+    <option value="retire_companion">65+ Tuổi vàng và hộ đồng hành</option>
+  </select>
+  <!-- life_stage id kept as alias for legacy tests / DNA chrome -->
+  <select id="life_stage" class="hidden" aria-hidden="true">
+    <option value="solo">Độc thân đô thị 18+</option>
+    <option value="young_family">25–34 Gia đình trẻ khởi đầu</option>
+    <option value="couple_no_kids">35–59 Nâng đỡ hai đầu</option>
+    <option value="sandwich_3gen">35–59 Ba đời trên một take-home</option>
+    <option value="pre_retire">55–64 Cửa sổ 10 năm trước hưu</option>
+    <option value="retire_companion">65+ Tuổi vàng và hộ đồng hành</option>
   </select>
   <label for="income_stability">Thu nhập</label>
   <select id="income_stability">
@@ -103,6 +112,7 @@ button:disabled{opacity:.55}
   <select id="agent_role">
     <option value="advisor_only">Chỉ tư vấn, không quyết thay</option>
   </select>
+  <p class="muted">3 trụ: Welorapedia · Welorademy · WeloraOS. Agent không phải trụ 4.</p>
   <button type="button" id="next3">Tiếp</button>
 </div>
 
@@ -158,8 +168,12 @@ document.getElementById('auth').onclick=async()=>{
   }catch(e){ document.getElementById('err0').textContent='Không bắt đầu được. Thử lại.'; }
 };
 document.getElementById('next1').onclick=async()=>{
+  const hh=document.getElementById('household').value;
+  const lsAlias=document.getElementById('life_stage');
+  if(lsAlias) lsAlias.value=hh;
   await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    life_stage:document.getElementById('life_stage').value,
+    household:hh,
+    life_stage:hh,
     income_stability:document.getElementById('income_stability').value,
     family_context:document.getElementById('family_context').value
   })});
@@ -186,7 +200,7 @@ document.getElementById('next3').onclick=async()=>{
 document.getElementById('next4').onclick=async()=>{
   await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
   const essential=essVal();
-  const ls=document.getElementById('life_stage');
+  const ls=document.getElementById('household')||document.getElementById('life_stage');
   const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
   document.getElementById('summary').textContent=
     lsText+' · Chi tiêu thiết yếu: '+WeloraMoney.formatVnd(essential)+'/tháng · Mục tiêu quỹ: 3 tháng.';

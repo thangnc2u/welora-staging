@@ -44,7 +44,7 @@ class TestP2DemoVi(unittest.TestCase):
         self.assertIn("textContent", html)
         self.assertNotIn("innerHTML", html)
         self.assertIn("welora_device_id", html)
-        self.assertIn("young_single", html)
+        self.assertIn("young_family", html)
         self.assertIn("stable", html)
         self.assertIn("/agent/chat", html)
         self.assertIn("set_amount", html)

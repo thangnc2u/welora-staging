@@ -1,8 +1,12 @@
 """
 P1-E1-05 — Seed NOT_PASSED / PASSED fixtures into SQLite
 
+PRD v2: also seeds P1–P6 personas (demo prefers P2 + P4).
+DNA-USER-2026-* retired — see welora.personas.RETIRED_DNA_USER_2026.
+
 Usage:
   PYTHONPATH=. python -m welora.seed_db
+  PYTHONPATH=. python -m welora.seed_db --personas
 """
 
 from __future__ import annotations
@@ -51,11 +55,14 @@ def seed_fixture(
     if clear_user:
         _clear_user(uid, url=url)
 
+    # PRD v2 household: not_passed ≈ P4 sandwich; passed ≈ P2 young_family
+    household = "sandwich_3gen" if kind == "not_passed" else "young_family"
     s = ob.create_session(uid)
     ob.patch_step(s.session_id, 1, {
-        "life_stage": "young_single" if kind == "not_passed" else "family",
+        "household": household,
+        "life_stage": household,
         "income_stability": "stable",
-        "family_context": "alone" if kind == "not_passed" else "with_kids",
+        "family_context": "with_family",
     })
     ob.patch_step(s.session_id, 2, {
         "essential_expense_monthly": essential,
@@ -126,8 +133,121 @@ def _clear_user(user_id: str, *, url: str | None = None) -> None:
         conn.close()
 
 
+def seed_persona(
+    persona_id: str,
+    *,
+    url: str | None = None,
+    essential: float = 10_000_000,
+    clear_user: bool = True,
+) -> dict[str, Any]:
+    """Seed one P1–P6 persona into SQLite (OS goals only EF|debt)."""
+    from welora.personas import get_persona, os_goal_types
+    from welora.mode_c_act import set_persona
+
+    p = get_persona(persona_id)
+    migrate(url)
+    goals = SqliteEmergencyFundStore(url)
+    ob = SqliteOnboardingRepository(url)
+    uid = f"user_{persona_id.lower()}"
+
+    if persona_id == "P4":
+        has_debt, mastery, debt_on_track = True, "learning", False
+        current_amount = essential * 0.5
+        kind = "not_passed"
+    else:
+        has_debt, mastery, debt_on_track = False, "apply", True
+        current_amount = essential * 3.2
+        kind = "passed"
+
+    if clear_user:
+        _clear_user(uid, url=url)
+
+    s = ob.create_session(uid)
+    ob.patch_step(s.session_id, 1, {
+        "household": p["household"],
+        "life_stage": p["household"],
+        "income_stability": "stable",
+        "family_context": "alone" if p["household"] == "solo" else "with_family",
+    })
+    ob.patch_step(s.session_id, 2, {
+        "essential_expense_monthly": essential,
+        "emergency_fund_months_self": "0.5" if has_debt else "3+",
+        "has_dangerous_debt_self": has_debt,
+        "near_term_priority": "debt" if persona_id == "P4" else "safety",
+    })
+    ob.patch_step(s.session_id, 3, {
+        "surplus_habit": "hold",
+        "risk_tolerance": 2,
+        "agent_role_preference": "advisor_only",
+    })
+    ob.patch_step(s.session_id, 4, {})
+    completed = ob.complete_session(s.session_id)
+
+    goal = goals.create_for_user(
+        uid, essential, current_amount=current_amount, linked_from_onboarding=True,
+    )
+    set_user_flags_db(
+        uid,
+        has_dangerous_debt=has_debt,
+        debt_on_track=debt_on_track,
+        mastery_no_efund_invest=mastery,
+        url=url,
+    )
+    set_persona(user_id=uid, persona=persona_id)
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=goal.current_amount,
+        essential_expense_monthly=goal.essential_expense_monthly,
+        has_dangerous_debt=has_debt,
+        debt_on_track=debt_on_track,
+        mastery_no_efund_invest=mastery,
+    )
+    return {
+        "kind": kind,
+        "persona_id": persona_id,
+        "household": p["household"],
+        "user_id": uid,
+        "dna": completed["dna"],
+        "os_goals": list(os_goal_types(persona_id)),
+        "goal": goal.to_dict(),
+        "safety_gate": gate.to_dict(),
+        "flags": get_user_flags_db(uid, url=url),
+    }
+
+
+def seed_demo_personas(
+    *,
+    url: str | None = None,
+    essential: float = 10_000_000,
+    priority_only: bool = True,
+) -> dict[str, dict[str, Any]]:
+    """Prefer P2 + P4 for partner/demo walkthrough."""
+    from welora.personas import DEMO_SEED_ORDER, demo_seed_personas
+
+    migrate(url)
+    if priority_only:
+        order = [p["persona_id"] for p in demo_seed_personas(only_priority=True)]
+    else:
+        order = list(DEMO_SEED_ORDER)
+    return {
+        pid: seed_persona(pid, url=url, essential=essential)
+        for pid in order
+    }
+
+
 def main() -> None:
+    import sys
     url = os.environ.get("WELORA_DB_URL") or None
+    if "--personas" in sys.argv:
+        personas = seed_demo_personas(url=url, priority_only="--all" not in sys.argv)
+        for k, fx in personas.items():
+            g = fx["safety_gate"]
+            print(
+                f"[seed-persona] {k}: user={fx['user_id']} "
+                f"household={fx['household']} gate={g['status']} "
+                f"os_goals={fx['os_goals']}"
+            )
+        print(json.dumps({"seeded_personas": list(personas.keys())}, ensure_ascii=False))
+        return
     pair = seed_pair(url=url)
     for k, fx in pair.items():
         g = fx["safety_gate"]

@@ -13,6 +13,12 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
+from welora.personas import (
+    HOUSEHOLD_VALUES,
+    LEGACY_LIFE_STAGE_TO_HOUSEHOLD,
+    resolve_step1_identity,
+)
+
 DEFAULT_ARTICLES = [
     {
         "code": "PC-01",
@@ -46,14 +52,8 @@ DEFAULT_ARTICLES = [
 
 
 # UI allowlists — must match welora/api/static/onboarding.html <option value=…>
-LIFE_STAGE_VALUES = frozenset({
-    "young_single",
-    "established_single",
-    "young_couple",
-    "family",
-    "pre_retire",
-    "retired",
-})
+# PRD v2: household enums (P1–P6). Legacy life_stage aliases accepted via personas.normalize_household.
+LIFE_STAGE_VALUES = HOUSEHOLD_VALUES | frozenset(LEGACY_LIFE_STAGE_TO_HOUSEHOLD.keys())
 INCOME_STABILITY_VALUES = frozenset({"stable", "variable"})
 FAMILY_CONTEXT_VALUES = frozenset({"alone", "with_family"})
 NEAR_TERM_PRIORITY_VALUES = frozenset({"safety", "debt"})
@@ -139,12 +139,20 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
 
     data = dict(payload or {})
     if step == 1:
-        for req in ("life_stage", "income_stability", "family_context"):
-            if req not in data:
-                raise ValueError(f"step 1 requires {req}")
-        data["life_stage"] = _require_enum(
-            "life_stage", data["life_stage"], LIFE_STAGE_VALUES
-        )
+        # household (PRD v2) or legacy life_stage — normalize to household + persona_id
+        if "income_stability" not in data:
+            raise ValueError("step 1 requires income_stability")
+        if "family_context" not in data:
+            raise ValueError("step 1 requires family_context")
+        if "household" not in data and "life_stage" not in data:
+            raise ValueError("step 1 requires household (or legacy life_stage)")
+        try:
+            ident = resolve_step1_identity(data)
+        except ValueError as e:
+            raise OnboardingEnumError(str(e)) from e
+        data["household"] = ident["household"]
+        data["persona_id"] = ident["persona_id"]
+        data["life_stage"] = ident["life_stage"]
         data["income_stability"] = _require_enum(
             "income_stability", data["income_stability"], INCOME_STABILITY_VALUES
         )
@@ -218,7 +226,9 @@ def _build_dna(session: OnboardingSession) -> dict[str, Any]:
         "source": "onboarding_self",
         "confidence": "self_reported",
         "identity_context": {
-            "life_stage": b1.get("life_stage"),
+            "household": b1.get("household"),
+            "persona_id": b1.get("persona_id"),
+            "life_stage": b1.get("life_stage") or b1.get("household"),
             "income_stability": b1.get("income_stability"),
             "family_context": b1.get("family_context"),
         },

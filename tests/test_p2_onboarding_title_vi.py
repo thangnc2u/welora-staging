@@ -1,4 +1,4 @@
-"""P2 Ticket AW — onboarding title + muted Vietnamese."""
+"""P2 Ticket AW — onboarding title + muted Vietnamese (P1–P6 household)."""
 
 from __future__ import annotations
 
@@ -16,28 +16,26 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "onbo
 class TestP2OnboardingTitleVi(unittest.TestCase):
     def test_title_muted(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("<title>Welora · Hiến pháp Cá nhân</title>", html)
-        self.assertIn("<h1>Hiến pháp Cá nhân</h1>", html)
-        self.assertIn("B0–B5 · DNA · Quỹ khẩn cấp 3 tháng", html)
+        self.assertIn("<title>Welora · Bắt đầu</title>", html)
+        self.assertIn("<h1>Bắt đầu</h1>", html)
+        self.assertIn("quỹ 3 tháng", html)
         self.assertNotIn("Goal quỹ 3 tháng", html)
         self.assertNotIn("<title>Welora Onboarding</title>", html)
         self.assertNotIn("DNA Self", html)
-        self.assertIn("\u1ebf", html)
-        self.assertIn("\u00e1", html)
-        self.assertIn("\u00e2", html)
-        self.assertIn("\u1ed4n định", html)
-        self.assertIn("<h2>B1 · Danh tính</h2>", html)
-        self.assertIn("<h2>B2 · Hiện trạng</h2>", html)
-        self.assertIn("<h2>B3 · Hành vi</h2>", html)
+        self.assertIn("Ổn định", html)
+        self.assertIn("<h2>Bạn đang ở đâu trong đời?</h2>", html)
+        self.assertIn("<h2>Chi tiêu mỗi tháng</h2>", html)
+        self.assertIn("<h2>Cách bạn giữ tiền</h2>", html)
         self.assertIn("/onboarding/session", html)
         self.assertIn("linked_from_onboarding", html)
-        self.assertIn('value="young_single"', html)
+        self.assertIn('value="solo"', html)
+        self.assertIn('value="young_family"', html)
         self.assertIn('value="stable"', html)
         self.assertIn("welora_device_id", html)
         self.assertNotIn("innerHTML", html)
         for nid in (
             "navHome", "step0", "step1", "step2", "step3", "step4", "step5",
-            "life_stage", "income_stability", "family_context",
+            "household", "life_stage", "income_stability", "family_context",
             "next1", "next2", "next3", "next4", "ctaGoal",
         ):
             self.assertIn(f'id="{nid}"', html)

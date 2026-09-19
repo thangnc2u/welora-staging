@@ -14,9 +14,11 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from welora.personas import (
+    FAMILY_CONTEXT_VALUES,
     HOUSEHOLD_VALUES,
     LEGACY_LIFE_STAGE_TO_HOUSEHOLD,
     resolve_step1_identity,
+    validate_household_family_context,
 )
 
 DEFAULT_ARTICLES = [
@@ -55,7 +57,6 @@ DEFAULT_ARTICLES = [
 # PRD v2: household enums (P1–P6). Legacy life_stage aliases accepted via personas.normalize_household.
 LIFE_STAGE_VALUES = HOUSEHOLD_VALUES | frozenset(LEGACY_LIFE_STAGE_TO_HOUSEHOLD.keys())
 INCOME_STABILITY_VALUES = frozenset({"stable", "variable"})
-FAMILY_CONTEXT_VALUES = frozenset({"alone", "with_family"})
 NEAR_TERM_PRIORITY_VALUES = frozenset({"safety", "debt"})
 SURPLUS_HABIT_VALUES = frozenset({"hold", "spend"})
 AGENT_ROLE_PREFERENCE_VALUES = frozenset({"advisor_only"})
@@ -159,6 +160,12 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
         data["family_context"] = _require_enum(
             "family_context", data["family_context"], FAMILY_CONTEXT_VALUES
         )
+        # P2 lock: household → family_context (server never trusts client)
+        try:
+            validate_household_family_context(data["household"], data["family_context"])
+        except ValueError as e:
+            # ValueError → HTTP 400 with short VI message
+            raise ValueError(str(e)) from e
     if step == 2:
         if "essential_expense_monthly" not in data:
             raise ValueError("step 2 requires essential_expense_monthly")

@@ -63,11 +63,13 @@ button:disabled{opacity:.55}
     <option value="stable">Ổn định</option>
     <option value="variable">Không ổn định</option>
   </select>
-  <label for="family_context">Gia đình</label>
-  <select id="family_context">
-    <option value="alone">Sống một mình</option>
-    <option value="with_family">Sống cùng gia đình</option>
-  </select>
+  <div id="family_context_wrap">
+    <label for="family_context">Gia đình</label>
+    <select id="family_context">
+      <option value="alone">Sống một mình</option>
+      <option value="with_family">Sống cùng gia đình</option>
+    </select>
+  </div>
   <button type="button" id="next1">Tiếp</button>
 </div>
 
@@ -132,6 +134,7 @@ button:disabled{opacity:.55}
 </div>
 
 <script src="/static/money.js"></script>
+<script src="/static/family_context.js"></script>
 <script>
 let uid=null, sid=null;
 let ctaBusy=false;
@@ -155,6 +158,20 @@ function essVal(){
 }
 WeloraMoney.bindMoneyInput(document.getElementById('essential'));
 WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementById('essential'));
+(function(){
+  const hh=document.getElementById('household');
+  const fc=document.getElementById('family_context');
+  const wrap=document.getElementById('family_context_wrap');
+  const ls=document.getElementById('life_stage');
+  function syncFc(){
+    if(ls) ls.value=hh.value;
+    if(window.WeloraFamilyContext){
+      WeloraFamilyContext.syncFamilyContextLock(hh, fc, wrap);
+    }
+  }
+  hh.addEventListener('change', syncFc);
+  syncFc();
+})();
 document.getElementById('auth').onclick=async()=>{
   document.getElementById('err0').textContent='';
   try{
@@ -168,14 +185,25 @@ document.getElementById('auth').onclick=async()=>{
   }catch(e){ document.getElementById('err0').textContent='Không bắt đầu được. Thử lại.'; }
 };
 document.getElementById('next1').onclick=async()=>{
-  const hh=document.getElementById('household').value;
+  const hhEl=document.getElementById('household');
+  const fcEl=document.getElementById('family_context');
+  const wrap=document.getElementById('family_context_wrap');
+  if(window.WeloraFamilyContext){
+    WeloraFamilyContext.syncFamilyContextLock(hhEl, fcEl, wrap);
+  }
+  const hh=hhEl.value;
   const lsAlias=document.getElementById('life_stage');
   if(lsAlias) lsAlias.value=hh;
+  // disabled selects still expose .value; unlock briefly for safety
+  const wasDisabled=fcEl.disabled;
+  fcEl.disabled=false;
+  const fc=fcEl.value;
+  fcEl.disabled=wasDisabled;
   await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     household:hh,
     life_stage:hh,
     income_stability:document.getElementById('income_stability').value,
-    family_context:document.getElementById('family_context').value
+    family_context:fc
   })});
   show(2);
 };

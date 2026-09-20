@@ -110,6 +110,117 @@ def validate_household_family_context(household: str, family_context: str) -> No
         raise ValueError(FAMILY_CONTEXT_MISMATCH_VI)
 
 
+
+# --- Form logic locks (P2 UAT) — helpers only; catalog contents untouched -----
+
+NEAR_TERM_PRIORITY_VALUES = frozenset({"safety", "debt"})
+EMERGENCY_FUND_MONTHS_SELF_MIN = 0
+EMERGENCY_FUND_MONTHS_SELF_MAX = 3
+
+DEBT_PRIORITY_CONFLICT_VI = (
+    "Ưu tiên trả nợ chỉ hợp lệ khi đã khai có nợ nguy hiểm."
+)
+EMERGENCY_FUND_MONTHS_RANGE_VI = (
+    "Số tháng quỹ khẩn cấp tự khai phải từ 0 đến 3."
+)
+OS_PERSONA_DNA_MISMATCH_VI = (
+    "Persona OS phải khớp persona_id trên DNA."
+)
+
+# UI chrome labels for household (may add distinguishing suffix vs bare option).
+# Catalog label_vi for P3 stays untouched; UI must not use bare "Nâng đỡ hai đầu"
+# without the SoT suffix that separates it from sandwich "Ba đời…".
+HOUSEHOLD_UI_LABEL_VI: dict[str, str] = {
+    "solo": "Độc thân đô thị 18+",
+    "young_family": "25–34 Gia đình trẻ khởi đầu",
+    "couple_no_kids": "35–59 Vợ chồng không con nhỏ",
+    "sandwich_3gen": "35–59 Ba đời trên một take-home",
+    "pre_retire": "55–64 Cửa sổ 10 năm trước hưu",
+    "retire_companion": "65+ Tuổi vàng và hộ đồng hành",
+}
+
+
+def normalize_has_dangerous_debt_self(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    s = str(value).strip().lower()
+    if s in ("1", "true", "yes", "có", "co"):
+        return True
+    if s in ("0", "false", "no", "không", "khong", ""):
+        return False
+    return bool(value)
+
+
+def normalize_emergency_fund_months_self(value: Any) -> float:
+    """Parse months; raise ValueError(VI) if not in [0, 3]."""
+    if value is None or value == "":
+        raise ValueError(EMERGENCY_FUND_MONTHS_RANGE_VI)
+    try:
+        months = float(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError(EMERGENCY_FUND_MONTHS_RANGE_VI) from e
+    if months != months:  # NaN
+        raise ValueError(EMERGENCY_FUND_MONTHS_RANGE_VI)
+    if months < EMERGENCY_FUND_MONTHS_SELF_MIN or months > EMERGENCY_FUND_MONTHS_SELF_MAX:
+        raise ValueError(EMERGENCY_FUND_MONTHS_RANGE_VI)
+    return months
+
+
+def apply_debt_priority_lock(
+    *,
+    has_dangerous_debt_self: Any,
+    near_term_priority: Any,
+) -> dict[str, Any]:
+    """Lock debt × priority. Fail closed with VI ValueError on conflict.
+
+    Rules:
+      - priority=debt ⇒ require debt=true (400 if debt=false)
+      - debt=false ⇒ priority may not be debt; default/keep safety
+      - debt=true ⇒ default priority=debt when omitted
+    """
+    debt = normalize_has_dangerous_debt_self(has_dangerous_debt_self)
+    raw_pri = near_term_priority
+    if raw_pri is None or raw_pri == "":
+        pri = "debt" if debt else "safety"
+    else:
+        pri = str(raw_pri).strip().lower()
+        if pri not in NEAR_TERM_PRIORITY_VALUES:
+            raise ValueError(
+                "near_term_priority must be one of: "
+                + ", ".join(sorted(NEAR_TERM_PRIORITY_VALUES))
+            )
+    if pri == "debt" and not debt:
+        raise ValueError(DEBT_PRIORITY_CONFLICT_VI)
+    if debt and raw_pri in (None, ""):
+        pri = "debt"
+    return {
+        "has_dangerous_debt_self": debt,
+        "near_term_priority": pri,
+    }
+
+
+def debt_cta_allowed(has_dangerous_debt_self: Any) -> bool:
+    """CTA/reason copy only when debt=true for real."""
+    return normalize_has_dangerous_debt_self(has_dangerous_debt_self)
+
+
+def validate_os_persona_matches_dna(
+    os_persona: str,
+    dna_persona_id: Optional[str],
+) -> None:
+    """Raise ValueError(VI) if DNA has persona_id and OS persona mismatches."""
+    dna_pid = (dna_persona_id or "").upper().strip()
+    if not dna_pid:
+        return  # no DNA persona yet — allow set
+    os_pid = (os_persona or "").upper().strip()
+    if os_pid != dna_pid:
+        raise ValueError(OS_PERSONA_DNA_MISMATCH_VI)
+
+
 OS_GOAL_TYPES_MVP = frozenset({"emergency_fund", "debt_payoff"})
 
 # Forbidden as OS goal.type (narrative primary_goals only)

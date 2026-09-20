@@ -614,7 +614,7 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
     Separated from Hard Deny / Cổng / Mode C — auth-only seed.
     """
     if not guest_demo_enabled():
-        return {"seeded": False, "reason": "WELORA_GUEST_DEMO=0"}
+        return {"seeded": False, "reason": "demo_seed_disabled"}
     ensure_auth_schema(url)
     conn = get_connection(url)
     try:
@@ -653,7 +653,6 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
             "phone": DEMO_PHONE,
             "role": "demo",
             "password_hint": DEMO_PASSWORD,
-            "flag": "WELORA_GUEST_DEMO",
         }
     finally:
         conn.close()

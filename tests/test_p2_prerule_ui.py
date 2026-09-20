@@ -1,7 +1,8 @@
-"""P2 Native UI /app/pre-rule — debug Hard Deny, no JSON dump."""
+"""P2 Native UI /app/pre-rule — debug Hard Deny; gated off by default."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import unittest
 
@@ -15,10 +16,26 @@ STATIC = Path(__file__).resolve().parents[1] / "welora" / "api" / "static"
 
 class TestP2PreRuleUi(unittest.TestCase):
     def setUp(self) -> None:
+        self._prev = os.environ.get("WELORA_DEBUG_PRERULE")
+        os.environ.pop("WELORA_DEBUG_PRERULE", None)
         self.client = TestClient(create_app())
 
-    def test_get_app_prerule_200(self):
+    def tearDown(self) -> None:
+        if self._prev is None:
+            os.environ.pop("WELORA_DEBUG_PRERULE", None)
+        else:
+            os.environ["WELORA_DEBUG_PRERULE"] = self._prev
+
+    def test_get_app_prerule_404_by_default(self):
         r = self.client.get("/app/pre-rule")
+        self.assertEqual(r.status_code, 404)
+        r2 = self.client.get("/app/pre-rule/")
+        self.assertEqual(r2.status_code, 404)
+
+    def test_get_app_prerule_200_when_debug_on(self):
+        os.environ["WELORA_DEBUG_PRERULE"] = "1"
+        client = TestClient(create_app())
+        r = client.get("/app/pre-rule")
         self.assertEqual(r.status_code, 200)
         body = r.text
         self.assertIn('id="q"', body)
@@ -34,11 +51,6 @@ class TestP2PreRuleUi(unittest.TestCase):
         self.assertNotIn("JSON.stringify(d)", body)
         self.assertNotIn("JSON.stringify(data)", body)
         self.assertNotIn("textContent=user_id", body)
-
-    def test_get_app_prerule_slash_200(self):
-        r = self.client.get("/app/pre-rule/")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn('id="q"', r.text)
 
     def test_home_has_nav_prerule(self):
         html = (STATIC / "home.html").read_text(encoding="utf-8")

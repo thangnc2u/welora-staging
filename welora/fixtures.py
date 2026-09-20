@@ -310,6 +310,63 @@ def load_demo_personas(
 
 
 
+
+
+def _clear_memory_user(user_id: str) -> None:
+    """Remove one user's in-memory onboarding/goals/flags/persona (idempotent re-seed)."""
+    for sid, s in list(ob.SESSIONS.items()):
+        if getattr(s, "user_id", None) == user_id:
+            del ob.SESSIONS[sid]
+    ob.DNA_BY_USER.pop(user_id, None)
+    ob.CONSTITUTION_BY_USER.pop(user_id, None)
+    USER_FLAGS.pop(user_id, None)
+    store = goals_api.STORE
+    if hasattr(store, "_by_id"):
+        for gid, g in list(store._by_id.items()):
+            if getattr(g, "user_id", None) == user_id:
+                store._by_id.pop(gid, None)
+        if hasattr(store, "_active_by_user"):
+            store._active_by_user.pop(user_id, None)
+        if hasattr(store, "_debt_by_user"):
+            store._debt_by_user.pop(user_id, None)
+    try:
+        from welora.mode_c_act import _PERSONAS
+        _PERSONAS.pop(user_id, None)
+    except Exception:
+        pass
+
+
+def seed_priority_demo_personas(
+    *,
+    essential: float = 10_000_000,
+) -> dict[str, dict[str, Any]]:
+    """Idempotent P2+P4 DNA + goals for POST /auth/demo/seed.
+
+    Does not wipe unrelated users. Does not bypass Safety Gate / Hard Deny.
+    Goals remain in {emergency_fund, debt_payoff} only.
+    """
+    import os
+    from welora.personas import demo_seed_personas, os_goal_types
+
+    order = [p["persona_id"] for p in demo_seed_personas(only_priority=True)]
+    store_hint = (os.environ.get("WELORA_STORE") or "memory").strip().lower()
+    has_db = bool((os.environ.get("WELORA_DB_URL") or "").strip())
+    out: dict[str, dict[str, Any]] = {}
+    if store_hint in ("sqlite", "postgres", "db") or (has_db and store_hint != "memory"):
+        from welora.seed_db import seed_persona
+
+        for pid in order:
+            out[pid] = seed_persona(pid, essential=essential, clear_user=True)
+        return out
+    for pid in order:
+        uid = f"user_{pid.lower()}"
+        _clear_memory_user(uid)
+        out[pid] = build_persona_fixture(pid, essential=essential, user_id=uid)
+        # Sanity: os goals allowlist only
+        assert set(os_goal_types(pid)) <= {"emergency_fund", "debt_payoff"}
+    return out
+
+
 if __name__ == "__main__":
     pair = load_pair()
     for k, fx in pair.items():

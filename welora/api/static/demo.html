@@ -17,7 +17,15 @@ button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;paddi
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Welora · Demo 8 bước</h1>
 <p class="muted">Đăng nhập → Bắt đầu → Quỹ khẩn cấp → Từ chối → Nạp quỹ 3 tháng → Cổng → R01 vẫn từ chối</p>
-<div class="card"><button type="button" id="run">Chạy demo 8 bước</button><p class="muted">Chạy đủ demo 8 bước</p></div>
+<div class="card">
+<label for="persona" class="muted">Persona demo</label>
+<select id="persona" style="width:100%;margin:8px 0 12px;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7">
+  <option value="P2">P2 · Gia đình trẻ (young_family)</option>
+  <option value="P4">P4 · Ba đời (sandwich_3gen)</option>
+</select>
+<button type="button" id="run">Chạy demo 8 bước</button>
+<p class="muted">Chạy đủ demo 8 bước · P2 hoặc P4</p>
+</div>
 <div class="card" id="step1"><h2>1 · Đăng nhập</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step2"><h2>2 · Phiên Bắt đầu</h2><p class="result muted">Chưa chạy</p></div>
 <div class="card" id="step3"><h2>3 · Hoàn tất DNA</h2><p class="result muted">Chưa chạy</p></div>
@@ -50,6 +58,12 @@ document.getElementById('run').onclick=async()=>{
     }
     return id;
   }
+  const PERSONAS={
+    P2:{household:'young_family',life_stage:'young_family',debt:false,priority:'safety',goal:'emergency_fund'},
+    P4:{household:'sandwich_3gen',life_stage:'sandwich_3gen',debt:true,priority:'debt',goal:'debt_payoff'}
+  };
+  const personaKey=(document.getElementById('persona')||{}).value||'P2';
+  const P=PERSONAS[personaKey]||PERSONAS.P2;
   const device=weloraDeviceId();
   let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
   const uid=r.d.user_id;
@@ -59,22 +73,33 @@ document.getElementById('run').onclick=async()=>{
   const sid=r.d.session_id;
   setStep(2,'phiên tạo xong','ok');
 
-  await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({household:'young_family',life_stage:'young_family',income_stability:'stable',family_context:'with_family'})});
-  await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:false,near_term_priority:'safety'})});
+  await j('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({household:P.household,life_stage:P.life_stage,income_stability:'stable',family_context:'with_family'})});
+  await j('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({essential_expense_monthly:10000000,emergency_fund_months_self:'0.5',has_dangerous_debt_self:P.debt,near_term_priority:P.priority})});
   await j('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({surplus_habit:'hold',risk_tolerance:3,agent_role_preference:'advisor_only'})});
   await j('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
   r=await j('/onboarding/session/'+sid+'/complete',{method:'POST'});
   setStep(3,'DNA + Hiến pháp xong','ok');
 
-  r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'emergency_fund',essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
-  const gid=r.d.goal_id;
-  setStep(4,'Quỹ khẩn cấp 3 tháng đã tạo','ok');
+  let gid=null;
+  if(P.goal==='debt_payoff'){
+    r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'debt_payoff',target_amount:50000000,current_amount:0,title:'Trả nợ nguy hiểm'})});
+    gid=r.d.goal_id;
+    setStep(4,'Quỹ khẩn cấp 3 tháng đã tạo','ok');
+  }else{
+    r=await j('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,type:'emergency_fund',essential_expense_monthly:10000000,current_amount:0,linked_from_onboarding:true})});
+    gid=r.d.goal_id;
+    setStep(4,'Quỹ khẩn cấp 3 tháng đã tạo','ok');
+  }
 
   r=await j('/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message:'Tôi muốn all-in ETF ngay'})});
   setStep(5,resultLabel(r.d.guardrail_result), r.d.guardrail_result==='deny'?'deny':'ok');
 
-  r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
-  setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000','ok');
+  if(P.goal==='emergency_fund' && gid){
+    r=await j('/goals/'+gid+'/progress',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({set_amount:30000000})});
+    setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000','ok');
+  }else{
+    setStep(6,'Nạp quỹ = 3 × 10.000.000 = 30.000.000','ok');
+  }
 
   r=await j('/users/'+uid+'/safety-gate');
   setStep(7,'Trạng thái: '+gateLabel(r.d.status)+' · Tháng phủ: '+(r.d.months_covered!=null?r.d.months_covered:''), r.d.status==='passed'?'ok':'muted');

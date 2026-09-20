@@ -272,6 +272,11 @@ def create_app() -> FastAPI:
     @app.get("/app/pre-rule", include_in_schema=False)
     @app.get("/app/pre-rule/", include_in_schema=False)
     def prerule_ui() -> FileResponse:
+        """Debug-only UI — off by default (WELORA_DEBUG_PRERULE=1 to enable)."""
+        import os
+        flag = (os.environ.get("WELORA_DEBUG_PRERULE") or "0").strip().lower()
+        if flag not in ("1", "true", "yes", "on"):
+            raise HTTPException(status_code=404, detail="Not Found")
         return FileResponse(static_dir / "prerule.html")
 
     @app.get("/app/health-score", include_in_schema=False)
@@ -374,8 +379,27 @@ def create_app() -> FastAPI:
 
     @app.post("/auth/demo/seed", tags=["auth"])
     def auth_demo_seed() -> dict:
-        """Partner walkthrough seed — gated by WELORA_GUEST_DEMO (default on)."""
-        return _respond(*auth_svc.service_demo_seed())
+        """Partner walkthrough seed — account + P2/P4 DNA/goals (no gate/Hard Deny bypass)."""
+        code, out = auth_svc.service_demo_seed()
+        if not auth_svc.guest_demo_enabled():
+            return _respond(code, out)
+        out.pop("flag", None)
+        try:
+            from welora.fixtures import seed_priority_demo_personas
+            personas = seed_priority_demo_personas()
+            out["personas"] = {
+                pid: {
+                    "user_id": fx["user_id"],
+                    "household": fx.get("household"),
+                    "persona_id": fx.get("persona_id", pid),
+                    "os_goals": list(fx.get("os_goals") or []),
+                    "safety_gate": (fx.get("safety_gate") or {}).get("status"),
+                }
+                for pid, fx in personas.items()
+            }
+        except Exception as exc:  # pragma: no cover — surface seed errors without 500 if account ok
+            out["personas_error"] = str(exc)
+        return _respond(code, out)
 
     @app.post("/onboarding/session", tags=["onboarding"], status_code=201)
     def onboarding_create(body: SessionCreateBody) -> dict:

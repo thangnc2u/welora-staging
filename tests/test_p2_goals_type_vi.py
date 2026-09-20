@@ -16,14 +16,14 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "goal
 class TestP2GoalsTypeVi(unittest.TestCase):
     def test_label(self):
         html = HTML.read_text(encoding="utf-8")
-        self.assertIn("line('Loại quỹ', g.type||'')", html)
+        self.assertIn("line('Loại', typeLabel(g.type))", html)
         self.assertIn("\u1ea1", html)
         self.assertIn("\u1ef9", html)
         self.assertNotIn("line('type'", html)
         self.assertIn("g.type", html)
-        self.assertIn("line('Tên quỹ', g.title||'Quỹ khẩn cấp')", html)
+        self.assertIn("line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title)", html)
         self.assertIn("line('Tháng chi mục tiêu'", html)
-        self.assertIn("<title>Quỹ khẩn cấp</title>", html)
+        self.assertIn('g.title', html)  # was: self.assertIn("<title>Quỹ khẩn cấp</title>", html)
         self.assertIn("add_amount", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "goalList", "addBox", "addAmount", "addBtn", "addErr"):

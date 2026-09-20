@@ -197,6 +197,20 @@ def _mastery_block(flags: dict) -> dict:
     }
 
 
+DEBT_FLAG_AUDIT: list[dict] = []
+
+
+def reset_debt_flag_audit() -> None:
+    DEBT_FLAG_AUDIT.clear()
+
+
+def get_debt_flag_audit(user_id: str | None = None) -> list[dict]:
+    if user_id is None:
+        return list(DEBT_FLAG_AUDIT)
+    uid = str(user_id)
+    return [e for e in DEBT_FLAG_AUDIT if e.get("user_id") == uid]
+
+
 def _dna_has_dangerous_debt_self(user_id: str) -> bool:
     """Onboarding self-report: financial_snapshot_self.has_dangerous_debt_self."""
     try:
@@ -212,11 +226,13 @@ def _dna_has_dangerous_debt_self(user_id: str) -> bool:
 def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
     """Merge DNA self-report + debt_payoff goal into gate debt flags.
 
-    DNA has_dangerous_debt_self=true with no completed debt_payoff
-    (status=completed or current≥target) keeps has_dangerous_debt=true and
-    debt_on_track=false → dangerous_debt_unhandled. Partial progress does not pass.
-    Does not auto-create debt goals from near_term_priority.
+    DNA has_dangerous_debt_self is the preferred source. Gate must not contradict
+    DNA=true (keeps has_dangerous_debt until debt_payoff completed/on-track).
+    Partial progress does not pass. Does not auto-create debt goals from priority.
+    Appends an audit trail entry for each sync.
     """
+    from datetime import datetime, timezone
+
     dna_debt = _dna_has_dangerous_debt_self(user_id)
     debt = None
     if hasattr(STORE, "get_debt_for_user"):
@@ -224,16 +240,32 @@ def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
             debt = STORE.get_debt_for_user(user_id)
         except Exception:
             debt = None
+    source = "dna.has_dangerous_debt_self"
     if debt:
         from welora.goal_debt_payoff import debt_on_track_from_goal, has_dangerous_debt_from_goal
 
-        flags["has_dangerous_debt"] = dna_debt or has_dangerous_debt_from_goal(debt)
+        goal_debt = has_dangerous_debt_from_goal(debt)
+        # DNA preferred: never clear DNA=true just because goal exists incomplete
+        flags["has_dangerous_debt"] = bool(dna_debt) or bool(goal_debt)
         flags["debt_on_track"] = debt_on_track_from_goal(debt)
         flags["debt_goal_id"] = debt.goal_id
         flags["debt_goal_progress_percent"] = debt.percent
+        source = "dna+debt_payoff_goal"
     elif dna_debt:
         flags["has_dangerous_debt"] = True
         flags["debt_on_track"] = False
+    flags["debt_flag_source"] = source
+    DEBT_FLAG_AUDIT.append(
+        {
+            "user_id": str(user_id),
+            "at": datetime.now(timezone.utc).isoformat(),
+            "source": source,
+            "dna_has_dangerous_debt_self": bool(dna_debt),
+            "has_dangerous_debt": bool(flags.get("has_dangerous_debt")),
+            "debt_on_track": bool(flags.get("debt_on_track", True)),
+            "debt_goal_id": flags.get("debt_goal_id"),
+        }
+    )
     return flags
 
 

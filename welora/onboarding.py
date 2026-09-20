@@ -17,6 +17,9 @@ from welora.personas import (
     FAMILY_CONTEXT_VALUES,
     HOUSEHOLD_VALUES,
     LEGACY_LIFE_STAGE_TO_HOUSEHOLD,
+    apply_debt_priority_lock,
+    debt_cta_allowed,
+    normalize_emergency_fund_months_self,
     resolve_step1_identity,
     validate_household_family_context,
 )
@@ -176,14 +179,24 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
         if ess <= 0:
             raise ValueError("essential_expense_monthly must be > 0")
         data["essential_expense_monthly"] = ess
-        if "has_dangerous_debt_self" in data:
-            data["has_dangerous_debt_self"] = bool(data["has_dangerous_debt_self"])
-        if "near_term_priority" in data:
-            data["near_term_priority"] = _require_enum(
-                "near_term_priority",
-                data["near_term_priority"],
-                NEAR_TERM_PRIORITY_VALUES,
+        # P2 form locks: emergency_fund_months_self ∈ [0, 3]; debt × priority
+        if "emergency_fund_months_self" in data:
+            try:
+                data["emergency_fund_months_self"] = normalize_emergency_fund_months_self(
+                    data["emergency_fund_months_self"]
+                )
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+        try:
+            locked = apply_debt_priority_lock(
+                has_dangerous_debt_self=data.get("has_dangerous_debt_self", False),
+                near_term_priority=data.get("near_term_priority"),
             )
+        except ValueError as e:
+            # Combo / range locks → HTTP 400 (not 422 enum)
+            raise ValueError(str(e)) from e
+        data["has_dangerous_debt_self"] = locked["has_dangerous_debt_self"]
+        data["near_term_priority"] = locked["near_term_priority"]
 
     if step == 3:
         if "surplus_habit" in data:
@@ -292,7 +305,8 @@ def complete_session(session_id: str) -> dict[str, Any]:
     essential = snap.get("essential_expense_monthly") or 0
     has_dangerous_debt_self = bool(snap.get("has_dangerous_debt_self"))
     near_term_priority = snap.get("near_term_priority")
-    needs_debt_cta = near_term_priority == "debt" or has_dangerous_debt_self
+    # CTA/reason only when debt=true for real (priority alone never unlocks copy)
+    needs_debt_cta = debt_cta_allowed(has_dangerous_debt_self)
     cta = {
         "code": "create_emergency_fund_goal",
         "prefill_body": {

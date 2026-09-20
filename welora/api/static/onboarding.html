@@ -44,7 +44,7 @@ button:disabled{opacity:.55}
   <select id="household">
     <option value="solo">Độc thân đô thị 18+</option>
     <option value="young_family">25–34 Gia đình trẻ khởi đầu</option>
-    <option value="couple_no_kids">35–59 Nâng đỡ hai đầu</option>
+    <option value="couple_no_kids">35–59 Vợ chồng không con nhỏ</option>
     <option value="sandwich_3gen">35–59 Ba đời trên một take-home</option>
     <option value="pre_retire">55–64 Cửa sổ 10 năm trước hưu</option>
     <option value="retire_companion">65+ Tuổi vàng và hộ đồng hành</option>
@@ -53,7 +53,7 @@ button:disabled{opacity:.55}
   <select id="life_stage" class="hidden" aria-hidden="true">
     <option value="solo">Độc thân đô thị 18+</option>
     <option value="young_family">25–34 Gia đình trẻ khởi đầu</option>
-    <option value="couple_no_kids">35–59 Nâng đỡ hai đầu</option>
+    <option value="couple_no_kids">35–59 Vợ chồng không con nhỏ</option>
     <option value="sandwich_3gen">35–59 Ba đời trên một take-home</option>
     <option value="pre_retire">55–64 Cửa sổ 10 năm trước hưu</option>
     <option value="retire_companion">65+ Tuổi vàng và hộ đồng hành</option>
@@ -135,6 +135,7 @@ button:disabled{opacity:.55}
 
 <script src="/static/money.js"></script>
 <script src="/static/family_context.js"></script>
+<script src="/static/form_locks.js"></script>
 <script>
 let uid=null, sid=null;
 let ctaBusy=false;
@@ -171,6 +172,17 @@ WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementBy
   }
   hh.addEventListener('change', syncFc);
   syncFc();
+})();
+(function(){
+  const debtEl=document.getElementById('debt');
+  const priEl=document.getElementById('priority');
+  function syncDebtPri(){
+    if(window.WeloraFormLocks){
+      WeloraFormLocks.syncDebtPriorityLock(debtEl, priEl);
+    }
+  }
+  if(debtEl) debtEl.addEventListener('change', syncDebtPri);
+  syncDebtPri();
 })();
 document.getElementById('auth').onclick=async()=>{
   document.getElementById('err0').textContent='';
@@ -209,11 +221,21 @@ document.getElementById('next1').onclick=async()=>{
 };
 document.getElementById('next2').onclick=async()=>{
   const essential=essVal();
+  const debtEl=document.getElementById('debt');
+  const priEl=document.getElementById('priority');
+  if(window.WeloraFormLocks){
+    WeloraFormLocks.syncDebtPriorityLock(debtEl, priEl);
+  }
+  // unlock briefly so disabled option value still posts
+  const wasDis=priEl.disabled;
+  priEl.disabled=false;
+  const priority=priEl.value;
+  priEl.disabled=wasDis;
   await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     essential_expense_monthly:essential,
-    emergency_fund_months_self:'0',
-    has_dangerous_debt_self:document.getElementById('debt').value==='true',
-    near_term_priority:document.getElementById('priority').value
+    emergency_fund_months_self:0,
+    has_dangerous_debt_self:debtEl.value==='true',
+    near_term_priority:priority
   })});
   show(3);
 };
@@ -232,7 +254,7 @@ document.getElementById('next4').onclick=async()=>{
   const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
   document.getElementById('summary').textContent=
     lsText+' · Chi tiêu thiết yếu: '+WeloraMoney.formatVnd(essential)+'/tháng · Mục tiêu quỹ: 3 tháng.';
-  const needsDebt=document.getElementById('priority').value==='debt'||document.getElementById('debt').value==='true';
+  const needsDebt=(window.WeloraFormLocks?WeloraFormLocks.debtCtaAllowed(document.getElementById('debt')):document.getElementById('debt').value==='true');
   const hint=document.getElementById('debtHint');
   const debtLink=document.getElementById('ctaDebt');
   hint.hidden=!needsDebt;
@@ -256,7 +278,7 @@ document.getElementById('ctaGoal').onclick=async()=>{
         debtHref=completed.debt_cta.href+(completed.debt_cta.href.indexOf('?')>=0?'&':'?')+'user_id='+encodeURIComponent(uid);
       }
     }catch(_e){}
-    const needsDebt=!!debtHref||document.getElementById('priority').value==='debt'||document.getElementById('debt').value==='true';
+    const needsDebt=!!debtHref||(window.WeloraFormLocks?WeloraFormLocks.debtCtaAllowed(document.getElementById('debt')):document.getElementById('debt').value==='true');
     const essential=essVal();
     const r=await fetch('/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       user_id:uid,

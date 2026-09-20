@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGES = [
     ("solo", "Độc thân đô thị 18+"),
     ("young_family", "25–34 Gia đình trẻ khởi đầu"),
-    ("couple_no_kids", "35–59 Nâng đỡ hai đầu"),
+    ("couple_no_kids", "35–59 Vợ chồng không con nhỏ"),
     ("sandwich_3gen", "35–59 Ba đời trên một take-home"),
     ("pre_retire", "55–64 Cửa sổ 10 năm trước hưu"),
     ("retire_companion", "65+ Tuổi vàng và hộ đồng hành"),

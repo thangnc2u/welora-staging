@@ -580,6 +580,19 @@ def set_persona(*, user_id: str, persona: str) -> tuple[int, dict[str, Any]]:
             "error": "invalid persona",
             "allowed": sorted(PERSONA_FLOOR_MONTHS.keys()),
         }
+    # P2 lock: OS persona must match DNA persona_id when DNA exists
+    try:
+        from welora.onboarding import get_dna
+        from welora.personas import OS_PERSONA_DNA_MISMATCH_VI, validate_os_persona_matches_dna
+
+        dna = get_dna(str(user_id)) or {}
+        ident = dna.get("identity_context") or {}
+        dna_pid = ident.get("persona_id") or dna.get("persona_id")
+        validate_os_persona_matches_dna(p, dna_pid)
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    except Exception:
+        pass
     _PERSONAS[str(user_id)] = p
     _persist_persona(str(user_id), p)
     return 200, {

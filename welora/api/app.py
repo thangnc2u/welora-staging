@@ -166,6 +166,36 @@ def _respond(code: int, body: dict) -> dict:
     return body
 
 
+
+def _short_git_sha() -> str:
+    """Short tip SHA for UAT deploy confirmation (Render: RENDER_GIT_COMMIT)."""
+    import os
+    import subprocess
+    for key in (
+        "WELORA_GIT_SHA",
+        "RENDER_GIT_COMMIT",
+        "GIT_SHA",
+        "SOURCE_VERSION",
+        "GITHUB_SHA",
+    ):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            return val[:7]
+    try:
+        root = Path(__file__).resolve().parents[2]
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            cwd=str(root),
+            stderr=subprocess.DEVNULL,
+            timeout=1.5,
+        )
+        sha = out.decode("utf-8", errors="ignore").strip()
+        if sha:
+            return sha[:7]
+    except Exception:
+        pass
+    return "unknown"
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -305,6 +335,12 @@ def create_app() -> FastAPI:
     def goal_ui_redirect() -> RedirectResponse:
         return RedirectResponse(url="/app/safety")
 
+    @app.get("/app/os", include_in_schema=False)
+    @app.get("/app/os/", include_in_schema=False)
+    def os_ui_redirect() -> RedirectResponse:
+        """WeloraOS entry alias — shell lives at /app (+ goals / dual-control /os/*)."""
+        return RedirectResponse(url="/app", status_code=302)
+
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
@@ -324,6 +360,7 @@ def create_app() -> FastAPI:
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
             "gate_months": 3,
             "hard_deny": True,
+            "git_sha": _short_git_sha(),
         }
 
     @app.get("/healthz", tags=["system"], include_in_schema=False)

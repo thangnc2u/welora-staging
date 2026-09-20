@@ -34,6 +34,8 @@ class TestHealthLiveness(unittest.TestCase):
         self.assertEqual(body["gate_months"], 3)
         self.assertTrue(body["hard_deny"])
         self.assertEqual(body["env"], "staging")
+        self.assertIn("git_sha", body)
+        self.assertTrue(isinstance(body["git_sha"], str) and len(body["git_sha"]) >= 1)
 
     def test_health_200(self):
         r = self.client.get("/health")

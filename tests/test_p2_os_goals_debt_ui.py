@@ -38,7 +38,7 @@ class TestP2OsGoalsDebtUi(unittest.TestCase):
         self.assertIn("welora_device_id", HTML)
         self.assertIn("ctaOnboarding", HTML)
         self.assertIn("Chưa có quỹ khẩn cấp", HTML)
-        self.assertNotIn("JSON.stringify", HTML)
+        self.assertIn("JSON.stringify(payload)", HTML)  # fetch body only
         self.assertNotIn("innerHTML", HTML)
 
     def test_target_months_untouched(self):

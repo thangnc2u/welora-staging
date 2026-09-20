@@ -6,12 +6,17 @@
 <title>Welora · Mục tiêu</title>
 <link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
+<link rel="stylesheet" href="/static/money.css"/>
 <style>
 body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
 a{color:var(--link);text-decoration:none}
 .card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
 .card.sel{border-color:var(--border-focus);box-shadow:0 0 0 1px var(--border-focus)}
 .label{color:var(--text-secondary);font-size:13px}
+label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
+label[for]+input,label[for]+select{margin-top:4px}
+.card[tabindex="0"]:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 .val{margin-top:2px;font-weight:600}
 .muted{color:var(--text-secondary);font-size:13px}
 .empty{color:var(--text-secondary);margin-top:16px}
@@ -34,35 +39,42 @@ button:hover{background:var(--cta-primary-hover)}button:disabled{opacity:.55}
 <h1>Mục tiêu</h1>
 <p class="muted">Quỹ khẩn cấp 3 tháng · Trả nợ nguy hiểm</p>
 <div class="banner" id="debtFocusBanner" hidden>Bạn đã khai nợ nguy hiểm — tạo mục tiêu trả nợ</div>
-<div id="goalList"></div>
-<div class="card" id="debtBox">
-  <div class="label">Tạo mục tiêu trả nợ</div>
+<div id="goalList" role="list" aria-label="Danh sách mục tiêu"></div>
+<div class="card" id="debtBox" role="region" aria-labelledby="debtBoxLabel">
+  <div class="label" id="debtBoxLabel">Tạo mục tiêu trả nợ</div>
   <p class="muted" id="debtAlready" hidden>Đã có mục tiêu trả nợ — dùng Cộng tiến độ bên dưới.</p>
-  <div id="debtForm">
-    <input id="debtTitle" type="text" placeholder="Tên (tùy chọn)"/>
-    <input id="debtSubtype" type="text" placeholder="Loại nợ (tùy chọn)"/>
-    <input id="debtTarget" type="text" inputmode="numeric" placeholder="Số tiền cần trả"/>
-    <div class="chips" id="debtChips">
-      <button type="button" data-vnd="5000000">5tr</button>
-      <button type="button" data-vnd="10000000">10tr</button>
-      <button type="button" data-vnd="20000000">20tr</button>
+  <form id="debtForm" aria-labelledby="debtBoxLabel" onsubmit="return false;">
+    <label for="debtTitle">Tên mục tiêu (tùy chọn)</label>
+    <input id="debtTitle" name="debtTitle" type="text" placeholder="Tên (tùy chọn)" autocomplete="off"/>
+    <label for="debtSubtype">Loại nợ (tùy chọn)</label>
+    <input id="debtSubtype" name="debtSubtype" type="text" placeholder="Loại nợ (tùy chọn)" autocomplete="off"/>
+    <label for="debtTarget">Số tiền cần trả</label>
+    <input id="debtTarget" name="debtTarget" type="text" inputmode="numeric" placeholder="Số tiền cần trả" aria-describedby="debtErr" autocomplete="off"/>
+    <div class="chips" id="debtChips" role="group" aria-label="Gợi ý số tiền trả nợ">
+      <button type="button" data-vnd="5000000" aria-label="Đặt 5 triệu">5tr</button>
+      <button type="button" data-vnd="10000000" aria-label="Đặt 10 triệu">10tr</button>
+      <button type="button" data-vnd="20000000" aria-label="Đặt 20 triệu">20tr</button>
     </div>
     <button type="button" id="debtCreateBtn">Tạo trả nợ</button>
-    <p class="err" id="debtErr"></p>
-  </div>
+    <p class="err" id="debtErr" role="alert" aria-live="polite"></p>
+  </form>
 </div>
-<div class="card" id="addBox">
-  <div class="label">Cộng tiến độ</div>
+<div class="card" id="addBox" role="region" aria-labelledby="addBoxLabel">
+  <div class="label" id="addBoxLabel">Cộng tiến độ</div>
   <p class="muted" id="addHint"></p>
-  <select id="goalPick"></select>
-  <input id="addAmount" type="text" inputmode="numeric" placeholder="Số đã trả hướng mục tiêu"/>
-  <div class="chips" id="addChips">
-    <button type="button" data-vnd="5000000">5tr</button>
-    <button type="button" data-vnd="10000000">10tr</button>
-    <button type="button" data-vnd="20000000">20tr</button>
-  </div>
-  <button type="button" id="addBtn">Cộng tiền</button>
-  <p class="err" id="addErr"></p>
+  <form id="progressForm" aria-labelledby="addBoxLabel" onsubmit="return false;">
+    <label for="goalPick">Chọn mục tiêu</label>
+    <select id="goalPick" name="goalPick" aria-describedby="addHint"></select>
+    <label for="addAmount" id="addAmountLabel">Số tiền cộng / đã trả</label>
+    <input id="addAmount" name="addAmount" type="text" inputmode="numeric" placeholder="Số đã trả hướng mục tiêu" aria-describedby="addHint addErr" autocomplete="off"/>
+    <div class="chips" id="addChips" role="group" aria-label="Gợi ý số tiền cộng tiến độ">
+      <button type="button" data-vnd="5000000" aria-label="Cộng 5 triệu">5tr</button>
+      <button type="button" data-vnd="10000000" aria-label="Cộng 10 triệu">10tr</button>
+      <button type="button" data-vnd="20000000" aria-label="Cộng 20 triệu">20tr</button>
+    </div>
+    <button type="button" id="addBtn">Cộng tiền</button>
+    <p class="err" id="addErr" role="alert" aria-live="polite"></p>
+  </form>
 </div>
 <script src="/static/money.js"></script>
 <script>
@@ -231,7 +243,7 @@ function fillPick(items){
   (items||[]).forEach((g,i)=>{
     const o=document.createElement('option');
     o.value=g.goal_id||'';
-    o.textContent=typeLabel(g.type)+' · '+(g.title||'Mục tiêu');
+    o.textContent=g.title||typeLabel(g.type);
     if((g.goal_id||'')===lastId || (!lastId && i===0)) o.selected=true;
     sel.appendChild(o);
   });
@@ -261,10 +273,14 @@ function renderItems(items){
     const el=document.createElement('div');
     el.className='card'+(g.goal_id===lastId?' sel':'');
     el.setAttribute('data-gid', g.goal_id||'');
+    el.setAttribute('role','button');
+    el.setAttribute('tabindex','0');
+    el.setAttribute('aria-pressed', g.goal_id===lastId?'true':'false');
+    el.setAttribute('aria-label', (g.title||typeLabel(g.type)));
     const tgt=g.target||{};
     const cur=g.current||{};
     const isDebt=g.type==='debt_payoff';
-    el.appendChild(line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title||(isDebt?'Trả nợ nguy hiểm':'Quỹ khẩn cấp')));
+    el.appendChild(line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title));
     el.appendChild(line('Loại', typeLabel(g.type)));
     if(g.status==='completed'){
       const badge=document.createElement('div');
@@ -286,12 +302,20 @@ function renderItems(items){
     ped.className='pedia';
     fillPedia(ped, pediaKeys(g.type));
     el.appendChild(ped);
-    el.addEventListener('click',()=>{
+    function selectGoalCard(){
       lastId=g.goal_id||lastId;
       document.getElementById('goalPick').value=lastId;
-      box.querySelectorAll('.card').forEach(c=>c.classList.remove('sel'));
+      box.querySelectorAll('.card').forEach(function(c){
+        c.classList.remove('sel');
+        c.setAttribute('aria-pressed','false');
+      });
       el.classList.add('sel');
+      el.setAttribute('aria-pressed','true');
       syncAddUi();
+    }
+    el.addEventListener('click', selectGoalCard);
+    el.addEventListener('keydown', function(ev){
+      if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectGoalCard(); }
     });
     box.appendChild(el);
   });

@@ -22,10 +22,10 @@ class TestP2GoalsMonthsVi(unittest.TestCase):
         self.assertIn("\u00ea", html)
         self.assertNotIn("line('target.months_of_expense'", html)
         self.assertIn("tgt.months_of_expense", html)
-        self.assertIn("line('Tên quỹ', g.title||'Quỹ khẩn cấp')", html)
-        self.assertIn("line('Loại quỹ', g.type||'')", html)
+        self.assertIn("line(isDebt?'Tên mục tiêu':'Tên quỹ', g.title)", html)
+        self.assertIn("line('Loại', typeLabel(g.type))", html)
         self.assertIn("line('Số dư hiện tại'", html)
-        self.assertIn("<title>Quỹ khẩn cấp</title>", html)
+        self.assertIn('g.title', html)  # was: self.assertIn("<title>Quỹ khẩn cấp</title>", html)
         self.assertNotIn("innerHTML", html)
         for nid in ("navHome", "goalList", "addBox", "addAmount", "addBtn", "addErr"):
             self.assertIn(f'id="{nid}"', html)

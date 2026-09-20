@@ -1,36 +1,38 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Welora · Welorademy</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui;background:#0b0f14;color:#e8eef7;margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
-a{color:#7dd3fc;text-decoration:none}
-.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin:10px 0}
-.muted{color:#8b9bb4;font-size:13px}
-button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:#fff;font-weight:600;width:100%}
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+a{color:var(--link,#E8C86A);text-decoration:none}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);font-weight:600;width:100%}
+button:hover{background:var(--cta-primary-hover,#E8C86A)}button:active{background:var(--cta-primary-pressed,#B8922E)}
 button:disabled{opacity:.55}
-.status{font-size:12px;color:#8b9bb4}
-.tag{display:inline-block;background:#1a2438;color:#9fb4d0;font-weight:600;font-size:11px;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle;border:1px solid #2a3a52}
-.card.focus{border-color:#38bdf8;box-shadow:0 0 0 1px #38bdf8}
-.nudge{display:block;margin-top:10px;background:#142033;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eef7;text-decoration:none;font-weight:600}
+.status{font-size:12px;color:var(--text-secondary,#A8B0C0)}
+.tag{display:inline-block;background:var(--bg-elevated,#243044);color:var(--text-secondary,#A8B0C0);font-weight:600;font-size:11px;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle;border:1px solid var(--border-default,#2F3D54)}
+.card.focus{border-color:var(--border-focus,#E8C86A);box-shadow:0 0 0 1px var(--border-focus,#E8C86A)}
+.nudge{display:block;margin-top:10px;background:var(--bg-elevated,#243044);border:1px solid var(--border-default,#2F3D54);border-radius:10px;padding:12px;color:var(--text-primary,#F4F1E8);text-decoration:none;font-weight:600}
 .q{margin:10px 0}
-label{display:block;margin:4px 0}
+label{display:block;margin:4px 0;color:var(--text-primary,#F4F1E8)}
 #kuatOut{font-size:15px;font-weight:700;margin-top:10px}
-#kuatOut.pass{color:#3dd68c}
-#kuatOut.fail{color:#ff6b6b}
-#kuatOut.err{color:#ffb020}
-.modHead{font-size:16px;font-weight:700;margin:18px 0 8px;color:#c7d7ee}
-#lessonBody{font-size:15px;line-height:1.65;margin:12px 0 16px;background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px}
+#kuatOut.pass{color:var(--color-success,#3DB88A)}
+#kuatOut.fail{color:var(--color-danger,#E85D5D)}
+#kuatOut.err{color:var(--color-warning,#E8C86A)}
+.modHead{font-size:16px;font-weight:700;margin:18px 0 8px;color:var(--text-primary,#F4F1E8)}
+#lessonBody{font-size:15px;line-height:1.65;margin:12px 0 16px;background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;color:var(--text-primary,#F4F1E8)}
 #lessonBody h2{font-size:1.08rem;margin:16px 0 8px;font-weight:700}
 #lessonBody h3{font-size:1.0rem;margin:12px 0 6px;font-weight:700}
 #lessonBody p{margin:0 0 10px}
 #lessonBody ul,#lessonBody ol{margin:0 0 12px;padding-left:1.3rem}
 #lessonBody li{margin:4px 0}
-#lessonBody hr{border:0;border-top:1px solid #243041;margin:14px 0}
-#lessonBody code{font-size:13px;background:#0b0f14;padding:1px 4px;border-radius:4px}
+#lessonBody hr{border:0;border-top:1px solid var(--border-default,#2F3D54);margin:14px 0}
+#lessonBody code{font-size:13px;background:var(--bg-app,#121A28);padding:1px 4px;border-radius:4px}
 </style>
 </head>
 <body>

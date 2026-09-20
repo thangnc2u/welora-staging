@@ -57,4 +57,9 @@
   --danger-border: #E85D5D;
   --danger-text: #F5B4B4;
   --danger-bg: #2A1518;
+
+  /* Success surfaces (tint; never gold) */
+  --success-border: #3DB88A;
+  --success-text: #A8E6C8;
+  --success-bg: #143028;
 }

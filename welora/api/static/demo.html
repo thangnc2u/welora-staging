@@ -1,16 +1,20 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Welora · Demo 8 bước</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <style>
-body{font-family:system-ui,sans-serif;background:#0b0f14;color:#e8eef7;margin:0;padding:16px;max-width:480px;margin-inline:auto}
-.card{background:#141b24;border:1px solid #243041;border-radius:12px;padding:14px;margin-bottom:10px}
-.ok{color:#3dd68c}.deny{color:#ff6b6b}.muted{color:#8b9bb4;font-size:13px}
-h1{font-size:1.25rem}h2{font-size:14px;margin:0 0 6px;color:#8b9bb4}
-button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:12px 14px;font-weight:600}
+body{font-family:system-ui,sans-serif;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px;max-width:480px;margin-inline:auto}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin-bottom:10px;color:var(--text-primary,#F4F1E8)}
+.ok{color:var(--color-success,#3DB88A)}.deny{color:var(--color-danger,#E85D5D)}.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+h1{font-size:1.25rem;color:var(--text-primary,#F4F1E8)}h2{font-size:14px;margin:0 0 6px;color:var(--text-secondary,#A8B0C0)}
+button{width:100%;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28);border:0;border-radius:8px;padding:12px 14px;font-weight:600}
+button:hover{background:var(--cta-primary-hover,#E8C86A)}button:active{background:var(--cta-primary-pressed,#B8922E)}
+select{width:100%;margin:8px 0 12px;padding:10px;border-radius:8px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8)}
 .result{font-size:14px;line-height:1.45}
+a{color:var(--link,#E8C86A)}
 </style>
 </head>
 <body>
@@ -19,7 +23,7 @@ button{width:100%;background:#3b82f6;color:#fff;border:0;border-radius:8px;paddi
 <p class="muted">Đăng nhập → Bắt đầu → Quỹ khẩn cấp → Từ chối → Nạp quỹ 3 tháng → Cổng → R01 vẫn từ chối</p>
 <div class="card">
 <label for="persona" class="muted">Persona demo</label>
-<select id="persona" style="width:100%;margin:8px 0 12px;padding:10px;border-radius:8px;border:1px solid #243041;background:#0b0f14;color:#e8eef7">
+<select id="persona">
   <option value="P2">P2 · Gia đình trẻ (young_family)</option>
   <option value="P4">P4 · Ba đời (sandwich_3gen)</option>
 </select>

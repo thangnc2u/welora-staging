@@ -1,29 +1,30 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Welora · Welorapedia</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
 <link rel="stylesheet" href="/static/shell.css"/>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:16px 16px 88px;max-width:640px;margin-inline:auto;background:#0b1220;color:#e8eefc}
-a{color:#7dd3fc}
-.key{display:inline-block;background:#132337;color:#7dd3fc;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
-.tag{display:inline-block;background:#1a2438;color:#9fb4d0;font-weight:600;font-size:11px;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle;border:1px solid #2a3a52}
-article{background:#141c2e;border-radius:12px;padding:16px;margin-top:12px}
-article h1{font-size:1.25rem;margin:8px 0 12px}
-#contentBody{font-size:15px;line-height:1.65;margin:0}
+body{font-family:system-ui,sans-serif;margin:0;padding:16px 16px 88px;max-width:640px;margin-inline:auto;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8)}
+a{color:var(--link,#E8C86A)}
+.key{display:inline-block;background:var(--bg-elevated,#243044);color:var(--link,#E8C86A);font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px}
+.tag{display:inline-block;background:var(--bg-elevated,#243044);color:var(--text-secondary,#A8B0C0);font-weight:600;font-size:11px;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle;border:1px solid var(--border-default,#2F3D54)}
+article{background:var(--bg-surface,#1A2536);border-radius:12px;padding:16px;margin-top:12px;border:1px solid var(--border-default,#2F3D54);color:var(--text-primary,#F4F1E8)}
+article h1{font-size:1.25rem;margin:8px 0 12px;color:var(--text-primary,#F4F1E8)}
+#contentBody{font-size:15px;line-height:1.65;margin:0;color:var(--text-primary,#F4F1E8)}
 #contentBody h2{font-size:1.12rem;margin:18px 0 8px;font-weight:700}
 #contentBody h3{font-size:1.02rem;margin:14px 0 6px;font-weight:700}
 #contentBody p{margin:0 0 10px}
 #contentBody ul,#contentBody ol{margin:0 0 12px;padding-left:1.3rem}
 #contentBody li{margin:4px 0}
-#contentBody hr{border:0;border-top:1px solid #243041;margin:16px 0}
-#contentBody a{color:#7dd3fc}
-#contentBody code{font-size:13px;background:#0b1220;padding:1px 4px;border-radius:4px}
-.muted{color:#8b9bb4;font-size:13px}
+#contentBody hr{border:0;border-top:1px solid var(--border-default,#2F3D54);margin:16px 0}
+#contentBody a{color:var(--link,#E8C86A)}
+#contentBody code{font-size:13px;background:var(--bg-app,#121A28);padding:1px 4px;border-radius:4px}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
 .nav{margin-bottom:12px}
-.cta{display:block;margin-top:10px;background:#141c2e;border:1px solid #243041;border-radius:10px;padding:12px;color:#e8eefc;text-decoration:none;font-weight:600}
+.cta{display:block;margin-top:10px;background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:10px;padding:12px;color:var(--text-primary,#F4F1E8);text-decoration:none;font-weight:600}
 </style>
 </head>
 <body>

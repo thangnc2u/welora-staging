@@ -21,9 +21,9 @@ a#navHome{color:var(--link,#E8C86A)}
 /* Hard Deny CTA — red only, never gold */
 #denyCta{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--danger-bg);border:1px solid var(--danger-border);color:var(--danger-text);text-decoration:none;font-weight:600}
 #denyCta.show{display:block}
-#unlockWall{display:none;margin:0 0 12px;padding:14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--color-warning);color:var(--text-primary)}
+#unlockWall{display:none;margin:0 0 12px;padding:14px;border-radius:12px;background:var(--danger-bg,#2A1518);border:1px solid var(--danger-border,#E85D5D);color:var(--text-primary,#F4F1E8)}
 #unlockWall.show{display:block}
-#unlockWall h2{font-size:16px;margin:0 0 8px;color:var(--text-primary)}
+#unlockWall h2{font-size:16px;margin:0 0 8px;color:var(--danger-text,#F5B4B4)}
 #unlockWall p{margin:0 0 12px;color:var(--text-secondary);font-size:14px;line-height:1.45}
 #unlockWall .ctas{display:flex;flex-direction:column;gap:8px}
 #unlockCtaSafety{display:block;padding:12px;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);text-align:center;text-decoration:none;font-weight:600}
@@ -48,17 +48,17 @@ a#navHome{color:var(--link,#E8C86A)}
 #modeCConfirm .actions button{flex:1}
 #modeCConfirm #mcConfirmBtn{background:var(--cta-primary);color:var(--cta-primary-text)}
 #modeCConfirm #mcCancelBtn{background:var(--bg-elevated);color:var(--text-primary)}
-#modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:#14532d;border:1px solid var(--color-success);font-size:13px;color:var(--text-primary)}
+#modeCUndo{display:none;margin:8px 0 0;padding:10px;border-radius:10px;background:var(--success-bg,#143028);border:1px solid var(--color-success,#3DB88A);font-size:13px;color:var(--success-text,#A8E6C8)}
 #modeCUndo.show{display:block}
-#modeCUndo button{margin-top:8px;background:var(--color-success);color:var(--text-on-gold);width:100%}
+#modeCUndo button{margin-top:8px;background:var(--color-success,#3DB88A);color:var(--text-on-gold,#121A28);width:100%}
 /* Cool-off / danger — red only, never gold */
 .modeC.coolOff,.coolOff{border-left:3px solid var(--color-danger)}
-.modeChip.coolOffChip{background:#7f1d1d;color:#fecaca}
+.modeChip.coolOffChip{background:var(--danger-bg,#2A1518);color:var(--danger-text,#F5B4B4);border:1px solid var(--danger-border,#E85D5D)}
 #modeCCoolOff{display:none;margin:8px 0 0;padding:12px;border-radius:12px;background:var(--danger-bg);border:1px solid var(--color-danger)}
 #modeCCoolOff.show{display:block}
 #modeCCoolOff .warn{color:var(--danger-text);font-size:13px;font-weight:600;margin:0 0 8px;line-height:1.4}
-#modeCCoolOff label{display:block;font-size:12px;color:#fca5a5;margin:0 0 4px}
-#modeCCoolOff textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px;border-radius:8px;border:1px solid #7f1d1d;background:var(--bg-subtle);color:#fee2e2;resize:vertical}
+#modeCCoolOff label{display:block;font-size:12px;color:var(--danger-text,#F5B4B4);margin:0 0 4px}
+#modeCCoolOff textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px;border-radius:8px;border:1px solid var(--danger-border,#E85D5D);background:var(--bg-subtle,#0B1220);color:var(--danger-text,#F5B4B4);resize:vertical}
 #modeCCoolOff .actions{display:flex;gap:8px;margin-top:10px}
 #modeCCoolOff .actions button{flex:1}
 #modeCCoolOff #mcCoolSubmit{background:var(--color-danger);color:#fff}
@@ -117,7 +117,7 @@ a#navHome{color:var(--link,#E8C86A)}
   <span class="modeChip coolOffChip">L-COOL-OFF · Chờ 24 giờ</span>
   <p id="mcCoolPendingText" style="margin:8px 0 0">Đang chờ đủ 24 giờ trước khi xác nhận ghi OS.</p>
   <div class="actions" style="display:flex;gap:8px;margin-top:10px">
-    <button type="button" id="mcCoolConfirmEarly" style="flex:1;background:#7f1d1d;color:#fecaca">Thử xác nhận</button>
+    <button type="button" id="mcCoolConfirmEarly" style="flex:1;background:var(--danger-bg,#2A1518);color:var(--danger-text,#F5B4B4);border:1px solid var(--danger-border,#E85D5D)">Thử xác nhận</button>
   </div>
 </div>
 <form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>

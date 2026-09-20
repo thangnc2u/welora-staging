@@ -66,7 +66,7 @@ def seed_fixture(
     })
     ob.patch_step(s.session_id, 2, {
         "essential_expense_monthly": essential,
-        "emergency_fund_months_self": "0.5" if kind == "not_passed" else "3+",
+        "emergency_fund_months_self": "0.5" if kind == "not_passed" else "3",
         "has_dangerous_debt_self": has_debt,
         "near_term_priority": "safety",
     })
@@ -171,7 +171,7 @@ def seed_persona(
     })
     ob.patch_step(s.session_id, 2, {
         "essential_expense_monthly": essential,
-        "emergency_fund_months_self": "0.5" if has_debt else "3+",
+        "emergency_fund_months_self": "0.5" if has_debt else "3",
         "has_dangerous_debt_self": has_debt,
         "near_term_priority": "debt" if persona_id == "P4" else "safety",
     })

@@ -24,7 +24,7 @@ article h1{font-size:1.25rem;margin:8px 0 12px;color:var(--text-primary,#F4F1E8)
 #contentBody code{font-size:13px;background:var(--bg-app,#121A28);padding:1px 4px;border-radius:4px}
 .muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
 .nav{margin-bottom:12px}
-.cta{display:block;margin-top:10px;background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:10px;padding:12px;color:var(--text-primary,#F4F1E8);text-decoration:none;font-weight:600}
+.cta,.btn-primary{display:block;margin-top:10px;background:var(--cta-primary,#D4AF37);border:1px solid var(--cta-primary,#D4AF37);border-radius:10px;padding:12px;color:var(--cta-primary-text,#121A28);text-decoration:none;font-weight:600}.cta:hover,.btn-primary:hover{background:var(--cta-primary-hover,#E8C86A)}
 </style>
 </head>
 <body>
@@ -36,8 +36,8 @@ article h1{font-size:1.25rem;margin:8px 0 12px;color:var(--text-primary,#F4F1E8)
   <h1 id="contentTitle">Đang tải…</h1>
   <div id="contentBody"></div>
 </article>
-<p><a id="ctaAcademy" class="cta" href="/app/academy">Học sâu hơn · Welorademy</a></p>
-<p><a id="ctaConstitution" class="cta" href="/app/constitution">Xây Hiến pháp Cá nhân</a></p>
+<p><a id="ctaAcademy" class="cta btn-primary" href="/app/academy">Học sâu hơn · Welorademy</a></p>
+<p><a id="ctaConstitution" class="cta btn-primary" href="/app/constitution">Xây Hiến pháp Cá nhân</a></p>
 <script>
 const params=new URLSearchParams(location.search);
 const key=params.get('key')||'';

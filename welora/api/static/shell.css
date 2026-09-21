@@ -43,7 +43,7 @@ body.welora-shell{
 }
 .welora-shell .muted,
 .welora-muted{color:var(--text-secondary, #A8B0C0)}
-.welora-shell a:not(#weloraBottomNav a):not(.pillar):not(.nav):not(.btn),
+.welora-shell a:not(#weloraBottomNav a):not(.pillar):not(.nav):not(.btn):not(.btn-primary):not(.cta):not(.welora-btn-primary):not(.on),
 .welora-link{color:var(--link, #E8C86A)}
 
 .btn-primary,
@@ -58,6 +58,20 @@ body.welora-shell{
 .welora-btn-primary:hover{background:var(--cta-primary-hover, #E8C86A)}
 .btn-primary:active,
 .welora-btn-primary:active{background:var(--cta-primary-pressed, #B8922E)}
+
+/* Gold CTA <a> — navy text on gold (shell link rule previously overrode these) */
+.welora-shell a.btn-primary,
+.welora-shell a.welora-btn-primary,
+.welora-shell a.cta.btn-primary,
+.welora-shell .tabs a.on,
+.welora-shell a#ctaGateChat,
+a.btn-primary,
+a.welora-btn-primary,
+a.cta.btn-primary,
+.tabs a.on,
+a#ctaGateChat{
+  color:var(--cta-primary-text, #121A28);
+}
 
 /* Hard Deny / DENY / danger — red only, never gold */
 .danger,

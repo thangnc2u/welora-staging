@@ -43,7 +43,10 @@ body.welora-shell{
 }
 .welora-shell .muted,
 .welora-muted{color:var(--text-secondary, #A8B0C0)}
-.welora-shell a:not(#weloraBottomNav a):not(.pillar):not(.nav):not(.btn):not(.btn-primary):not(.cta):not(.welora-btn-primary):not(.on),
+/* Link gold — exclude gold CTAs/tabs. Avoid ID-bearing :not() on bottom-nav
+   (that pattern inflated specificity and beat CTA navy text). Bottom-nav keeps
+   its own #weloraBottomNav rules (ID wins over this class stack). */
+.welora-shell a:not(.pillar):not(.nav):not(.btn):not(.btn-primary):not(.cta):not(.welora-btn-primary):not(.on),
 .welora-link{color:var(--link, #E8C86A)}
 
 .btn-primary,
@@ -59,18 +62,25 @@ body.welora-shell{
 .btn-primary:active,
 .welora-btn-primary:active{background:var(--cta-primary-pressed, #B8922E)}
 
-/* Gold CTA <a> — navy text on gold (shell link rule previously overrode these) */
+/* Gold CTA <a> — force navy on gold (hotfix: getComputedStyle must be #121A28).
+   !important beats residual page link-color rules / inflated shell link rules. */
+a.btn-primary,
+a.cta.btn-primary,
+a.welora-btn-primary,
+.tabs a.on,
+a#ctaGateChat,
+a#osNudge,
+a#ctaAcademy,
+a#ctaConstitution,
 .welora-shell a.btn-primary,
-.welora-shell a.welora-btn-primary,
 .welora-shell a.cta.btn-primary,
+.welora-shell a.welora-btn-primary,
 .welora-shell .tabs a.on,
 .welora-shell a#ctaGateChat,
-a.btn-primary,
-a.welora-btn-primary,
-a.cta.btn-primary,
-.tabs a.on,
-a#ctaGateChat{
-  color:var(--cta-primary-text, #121A28);
+.welora-shell a#osNudge,
+.welora-shell a#ctaAcademy,
+.welora-shell a#ctaConstitution{
+  color:var(--cta-primary-text, #121A28) !important;
 }
 
 /* Hard Deny / DENY / danger — red only, never gold */

@@ -53,18 +53,29 @@ class TestP2FixGoldCtaContrast(unittest.TestCase):
 
     def test_shell_excludes_gold_cta_anchors_from_link_rule(self):
         # Link rule must not paint gold CTAs / active tabs
-        link_line = [ln for ln in SHELL.splitlines() if "welora-shell a:not(#weloraBottomNav" in ln]
+        # Hotfix: must NOT use :not(#weloraBottomNav a) — ID-in-:not inflates specificity
+        link_sel = [ln for ln in SHELL.splitlines() if ln.startswith(".welora-shell a:not(")]
+        self.assertTrue(link_sel)
+        self.assertNotIn("#weloraBottomNav", link_sel[0])
+        link_line = [
+            ln for ln in SHELL.splitlines()
+            if "welora-shell a:not(.pillar)" in ln or "welora-shell a:not(.btn" in ln
+        ]
         self.assertTrue(link_line, "shell link rule missing")
         rule = link_line[0]
         for cls in (".btn-primary", ".cta", ".welora-btn-primary", ".on"):
             self.assertIn(f":not({cls})", rule, msg=f"link rule must exclude {cls}")
-        # Reinforcing navy-on-gold for <a> CTAs
+        # Reinforcing navy-on-gold for <a> CTAs (incl. explicit IDs + !important)
         self.assertIn("a.btn-primary", SHELL)
         self.assertIn(".tabs a.on", SHELL)
         self.assertIn("a#ctaGateChat", SHELL)
-        block = _rule_block(SHELL, "/* Gold CTA <a>", window=520)
+        self.assertIn("a#osNudge", SHELL)
+        self.assertIn("a#ctaAcademy", SHELL)
+        self.assertIn("a#ctaConstitution", SHELL)
+        block = _rule_block(SHELL, "/* Gold CTA <a>", window=720)
         self.assertIn("var(--cta-primary-text", block)
         self.assertIn(NAVY, block)
+        self.assertIn("!important", block)
         # Must not force soft/link color onto gold CTAs in this block
         self.assertNotIn("var(--link", block)
         self.assertNotIn(CREAM, block)

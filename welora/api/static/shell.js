@@ -22,7 +22,8 @@
     path.indexOf("/app/constitution") === 0 ||
     path.indexOf("/app/health-score") === 0 ||
     path.indexOf("/app/onboarding") === 0 ||
-    path.indexOf("/app/dual-control") === 0
+    path.indexOf("/app/dual-control") === 0 ||
+    path.indexOf("/app/accounts") === 0
   ) active = "ops";
   else if (path === "/app" || path === "/app/home") active = "home";
 

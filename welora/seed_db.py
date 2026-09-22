@@ -194,6 +194,12 @@ def seed_persona(
         url=url,
     )
     set_persona(user_id=uid, persona=persona_id)
+    os_accounts_seed: dict = {"created": [], "skipped": [], "count": 0}
+    try:
+        from welora.os_accounts import service_seed_from_persona
+        _code, os_accounts_seed = service_seed_from_persona(uid, persona_id)
+    except Exception:
+        pass
     gate = compute_safety_gate_from_amounts(
         current_efund_amount=goal.current_amount,
         essential_expense_monthly=goal.essential_expense_monthly,
@@ -208,6 +214,8 @@ def seed_persona(
         "user_id": uid,
         "dna": completed["dna"],
         "os_goals": list(os_goal_types(persona_id)),
+        "os_accounts": list(os_accounts_seed.get("created") or []),
+        "os_accounts_seed": os_accounts_seed,
         "goal": goal.to_dict(),
         "safety_gate": gate.to_dict(),
         "flags": get_user_flags_db(uid, url=url),

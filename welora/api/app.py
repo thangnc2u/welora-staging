@@ -20,6 +20,7 @@ from welora import health_score as hs_svc
 from welora import csv_parser as csv_svc
 from welora import budget as budget_svc
 from welora import mode_c_act as mode_c_svc
+from welora import os_accounts as accounts_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
@@ -153,6 +154,31 @@ class ModeCCompanionConfirmBody(BaseModel):
 class ModeCCancelPendingBody(BaseModel):
     user_id: str
     proposal_id: str
+
+class AccountCreateBody(BaseModel):
+    user_id: str
+    name: str
+    type: str = "chi_tieu_hang_ngay"
+    opening_balance: Optional[float] = 0
+    balance: Optional[float] = None
+    consent_ack: bool = False
+    source: str = "manual"
+
+class AccountUpdateBody(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    balance: Optional[float] = None
+    opening_balance: Optional[float] = None
+    unhide: Optional[bool] = None
+    status: Optional[str] = None
+
+class AccountBalanceBody(BaseModel):
+    balance: float
+
+class AccountSeedBody(BaseModel):
+    user_id: str
+    persona_id: str
+
 
 class AcademyKuatBody(BaseModel):
     user_id: str
@@ -319,6 +345,11 @@ def create_app() -> FastAPI:
     def dual_control_ui() -> FileResponse:
         return FileResponse(static_dir / "dual-control.html")
 
+    @app.get("/app/accounts", include_in_schema=False)
+    @app.get("/app/accounts/", include_in_schema=False)
+    def accounts_ui() -> FileResponse:
+        return FileResponse(static_dir / "accounts.html")
+
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
         return FileResponse(static_dir / "content.html")
@@ -430,6 +461,7 @@ def create_app() -> FastAPI:
                     "household": fx.get("household"),
                     "persona_id": fx.get("persona_id", pid),
                     "os_goals": list(fx.get("os_goals") or []),
+                    "os_accounts_count": len(fx.get("os_accounts") or []),
                     "safety_gate": (fx.get("safety_gate") or {}).get("status"),
                 }
                 for pid, fx in personas.items()
@@ -669,6 +701,59 @@ def create_app() -> FastAPI:
         return _respond(*mode_c_svc.cancel_pending_dual(
             user_id=body.user_id,
             proposal_id=body.proposal_id,
+        ))
+
+
+    # --- WeloraOS P0 Accounts CRUD (manual + consent + soft-hide) ---
+    @app.post("/os/accounts", tags=["os", "accounts"], status_code=201)
+    def os_accounts_create(body: AccountCreateBody) -> dict:
+        payload = body.model_dump(exclude_none=True)
+        code, out = accounts_svc.service_create_account(payload)
+        # Preserve consent_required + consent_text for the gate UI / tests.
+        if code >= 400 and out.get("consent_required"):
+            raise HTTPException(status_code=code, detail=out)
+        if code == 201:
+            return out
+        return _respond(code, out)
+
+    @app.get("/os/accounts", tags=["os", "accounts"])
+    def os_accounts_list(
+        user_id: str = Query(...),
+        include_hidden: bool = Query(False),
+    ) -> dict:
+        return _respond(*accounts_svc.service_list_accounts(
+            user_id, include_hidden=include_hidden,
+        ))
+
+    @app.get("/os/accounts/{account_id}", tags=["os", "accounts"])
+    def os_accounts_get(account_id: str) -> dict:
+        return _respond(*accounts_svc.service_get_account(account_id))
+
+    @app.patch("/os/accounts/{account_id}", tags=["os", "accounts"])
+    def os_accounts_patch(account_id: str, body: AccountUpdateBody) -> dict:
+        return _respond(*accounts_svc.service_update_account(
+            account_id, body.model_dump(exclude_none=True),
+        ))
+
+    @app.patch("/os/accounts/{account_id}/balance", tags=["os", "accounts"])
+    def os_accounts_balance(account_id: str, body: AccountBalanceBody) -> dict:
+        return _respond(*accounts_svc.service_set_balance(
+            account_id, body.model_dump(),
+        ))
+
+    @app.post("/os/accounts/{account_id}/hide", tags=["os", "accounts"])
+    def os_accounts_hide(account_id: str) -> dict:
+        return _respond(*accounts_svc.service_hide_account(account_id))
+
+    @app.delete("/os/accounts/{account_id}", tags=["os", "accounts"])
+    def os_accounts_soft_delete(account_id: str) -> dict:
+        """Soft-delete alias — hide, never hard-delete."""
+        return _respond(*accounts_svc.service_hide_account(account_id))
+
+    @app.post("/os/accounts/seed-persona", tags=["os", "accounts"])
+    def os_accounts_seed(body: AccountSeedBody) -> dict:
+        return _respond(*accounts_svc.service_seed_from_persona(
+            body.user_id, body.persona_id,
         ))
 
     return app

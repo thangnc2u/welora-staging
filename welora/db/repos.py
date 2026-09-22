@@ -307,3 +307,116 @@ class SqliteOnboardingRepository:
         finally:
             conn.close()
         return result
+
+
+# --- WeloraOS P0 Accounts (manual CRUD + soft-hide) ---
+
+
+class SqliteAccountStore:
+    """SQLite-backed Account store — same method surface as InMemoryAccountStore."""
+
+    def __init__(self, url: str | None = None) -> None:
+        self.url = url
+        migrate(url)
+
+    def _conn(self):
+        return get_connection(self.url)
+
+    def clear(self) -> None:
+        conn = self._conn()
+        try:
+            conn.execute("DELETE FROM os_accounts")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _row_to_account(self, row) -> "Any":
+        from welora.os_accounts import Account
+
+        return Account(
+            account_id=row["account_id"],
+            user_id=row["user_id"],
+            name=row["name"],
+            type=row["type"],
+            balance=float(row["balance"] or 0),
+            source=row["source"] or "manual",
+            consent_ack=bool(row["consent_ack"]),
+            consent_at=row["consent_at"],
+            status=row["status"] or "active",
+            hidden_at=row["hidden_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def save(self, account) -> Any:
+        conn = self._conn()
+        try:
+            conn.execute(
+                "INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
+                (account.user_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO os_accounts(
+                  account_id, user_id, name, type, balance, source,
+                  consent_ack, consent_at, status, hidden_at, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(account_id) DO UPDATE SET
+                  name=excluded.name,
+                  type=excluded.type,
+                  balance=excluded.balance,
+                  source=excluded.source,
+                  consent_ack=excluded.consent_ack,
+                  consent_at=excluded.consent_at,
+                  status=excluded.status,
+                  hidden_at=excluded.hidden_at,
+                  updated_at=excluded.updated_at
+                """,
+                (
+                    account.account_id,
+                    account.user_id,
+                    account.name,
+                    account.type,
+                    float(account.balance),
+                    account.source,
+                    int(bool(account.consent_ack)),
+                    account.consent_at,
+                    account.status,
+                    account.hidden_at,
+                    account.created_at,
+                    account.updated_at,
+                ),
+            )
+            conn.commit()
+            return account
+        finally:
+            conn.close()
+
+    def get(self, account_id: str):
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM os_accounts WHERE account_id=?",
+                (account_id,),
+            ).fetchone()
+            return self._row_to_account(row) if row else None
+        finally:
+            conn.close()
+
+    def list_for_user(self, user_id: str, *, include_hidden: bool = False):
+        conn = self._conn()
+        try:
+            if include_hidden:
+                rows = conn.execute(
+                    "SELECT * FROM os_accounts WHERE user_id=? ORDER BY created_at",
+                    (user_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM os_accounts WHERE user_id=? AND status!='hidden' "
+                    "ORDER BY created_at",
+                    (user_id,),
+                ).fetchall()
+            return [self._row_to_account(r) for r in rows]
+        finally:
+            conn.close()

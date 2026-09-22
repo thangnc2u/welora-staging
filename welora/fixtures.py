@@ -45,6 +45,11 @@ def reset_all_stores(goal_store: Optional[InMemoryEmergencyFundStore] = None) ->
         reset_account_store()
     except Exception:
         pass
+    try:
+        from welora.os_transactions import reset_transaction_store
+        reset_transaction_store()
+    except Exception:
+        pass
 
 
 def _run_onboarding(
@@ -345,6 +350,15 @@ def _clear_memory_user(user_id: str) -> None:
     try:
         from welora.mode_c_act import _PERSONAS
         _PERSONAS.pop(user_id, None)
+    except Exception:
+        pass
+    try:
+        from welora.os_transactions import STORE as TX_STORE
+        for t in list(TX_STORE.list_for_user(user_id, include_hidden=True)):
+            if hasattr(TX_STORE, "delete_hard"):
+                TX_STORE.delete_hard(t.transaction_id)
+            elif hasattr(TX_STORE, "_by_id"):
+                TX_STORE._by_id.pop(t.transaction_id, None)
     except Exception:
         pass
     try:

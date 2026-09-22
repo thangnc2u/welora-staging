@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Giao dịch</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<link rel="stylesheet" href="/static/money.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+a{color:var(--link);text-decoration:none}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
+.label{color:var(--text-secondary);font-size:13px;font-weight:600}
+label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
+input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+button.danger{background:var(--color-danger,#E85D5D);color:#fff}
+button:disabled{opacity:.55}
+.err{color:var(--color-danger,#E85D5D);font-size:13px;margin-top:6px}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:6px}
+.item{border:1px solid var(--border-default);border-radius:12px;padding:12px;margin:8px 0;background:var(--bg-surface)}
+.item h3{margin:0 0 4px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1;min-width:100px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg-elevated);border:1px solid var(--border-default);margin-left:6px}
+.pill.split{color:var(--color-success,#3DB88A);border-color:var(--color-success,#3DB88A)}
+.split-line{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:8px;align-items:end}
+.split-line label{margin-top:0}
+.split-line button{margin-top:0;padding:8px 10px}
+.consent{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-elevated)}
+.consent input{width:auto;margin:2px 0 0;flex-shrink:0}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/accounts">Tài khoản</a> · <a href="/app/parser">Sao kê CSV</a></p>
+<h1>Giao dịch</h1>
+<p class="muted">Nhập thủ công · tách dòng (Shopee/Grab/siêu thị) · CSV parser riêng (không ghi đè)</p>
+
+<div class="card" id="listCard">
+  <div class="label">Danh sách giao dịch</div>
+  <label for="filterAccount">Lọc theo tài khoản</label>
+  <select id="filterAccount"><option value="">Tất cả</option></select>
+  <div id="txList" role="list" aria-label="Danh sách giao dịch">
+    <p class="muted" id="listEmpty">Đang tải…</p>
+  </div>
+</div>
+
+<div class="card" id="createCard">
+  <div class="label" id="createLabel">Thêm giao dịch (thủ công)</div>
+  <form id="createForm" aria-labelledby="createLabel" onsubmit="return false;">
+    <label for="txAccount">Tài khoản</label>
+    <select id="txAccount" name="txAccount"></select>
+    <label for="txAmount">Số tiền (VNĐ)</label>
+    <input id="txAmount" name="txAmount" type="text" inputmode="numeric" placeholder="-150000" autocomplete="off"/>
+    <label for="txCategory">Danh mục</label>
+    <input id="txCategory" name="txCategory" type="text" list="catHints" placeholder="Siêu thị / Ăn uống / Di chuyển" autocomplete="off"/>
+    <datalist id="catHints">
+      <option value="Nhà ở"/><option value="Điện nước"/><option value="Lương"/>
+      <option value="Siêu thị"/><option value="Học phí"/><option value="Ăn uống"/>
+      <option value="Di chuyển"/><option value="Mua sắm"/><option value="Khác"/>
+    </datalist>
+    <label for="txDate">Ngày (ISO)</label>
+    <input id="txDate" name="txDate" type="date"/>
+    <label for="txMerchant">Merchant (tuỳ chọn)</label>
+    <input id="txMerchant" name="txMerchant" type="text" placeholder="Shopee / Grab / WinMart" autocomplete="off"/>
+    <label for="txNote">Ghi chú (tuỳ chọn)</label>
+    <input id="txNote" name="txNote" type="text" autocomplete="off"/>
+
+    <div class="label" style="margin-top:14px">Tách dòng (split) — tuỳ chọn</div>
+    <p class="muted">Tổng các dòng phải bằng số tiền (±0.01). Ví dụ merchant hỗn hợp.</p>
+    <div id="splitLines"></div>
+    <button type="button" class="secondary" id="btnAddSplit">+ Thêm dòng split</button>
+
+    <div class="consent">
+      <input type="checkbox" id="consentAck" name="consentAck" checked/>
+      <label for="consentAck" style="margin:0">Tôi đồng ý lưu giao dịch này trên Welora (nhập thủ công). Không kết nối Open Banking.</label>
+    </div>
+    <button type="button" id="btnCreate">Tạo giao dịch</button>
+    <p class="err" id="createErr" role="alert" aria-live="polite"></p>
+    <p class="ok" id="createOk" aria-live="polite"></p>
+  </form>
+</div>
+
+<script src="/static/money.js"></script>
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+<script>
+const KEY='welora_device_id';
+let uid='';
+let accounts=[];
+let txs=[];
+
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function money(n){ return window.WeloraMoney?WeloraMoney.formatVnd(n):String(n); }
+function parseMoney(s){
+  if(window.WeloraMoney && WeloraMoney.parseVnd) return WeloraMoney.parseVnd(s);
+  const n=Number(String(s||'').replace(/[^\d.-]/g,''));
+  return isFinite(n)?n:NaN;
+}
+async function api(url, opts){
+  const r=await fetch(url,Object.assign({headers:{'Content-Type':'application/json'}},opts||{}));
+  const d=await r.json().catch(()=>({}));
+  return {ok:r.ok,status:r.status,body:d};
+}
+function errText(body, fallback){
+  if(!body) return fallback;
+  if(typeof body.detail==='string') return body.detail;
+  if(body.detail && body.detail.error) return body.detail.error;
+  return body.error||body.message||fallback;
+}
+function todayISO(){
+  const d=new Date();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+day;
+}
+
+async function ensureUser(){
+  const auth=await api('/auth/device',{method:'POST',body:JSON.stringify({device_id:deviceId()})});
+  uid=auth.body.user_id||'';
+}
+
+function fillAccountSelects(){
+  const sel=document.getElementById('txAccount');
+  const filter=document.getElementById('filterAccount');
+  const cur=sel.value;
+  const fcur=filter.value;
+  sel.innerHTML='';
+  filter.innerHTML='';
+  const all=document.createElement('option');
+  all.value=''; all.textContent='Tất cả';
+  filter.appendChild(all);
+  if(!accounts.length){
+    const o=document.createElement('option');
+    o.value=''; o.textContent='(Chưa có tài khoản — tạo ở /app/accounts)';
+    sel.appendChild(o);
+    return;
+  }
+  accounts.forEach(function(a){
+    const o=document.createElement('option');
+    o.value=a.account_id; o.textContent=a.name+' ('+money(a.balance)+')';
+    sel.appendChild(o);
+    const o2=document.createElement('option');
+    o2.value=a.account_id; o2.textContent=a.name;
+    filter.appendChild(o2);
+  });
+  if(cur) sel.value=cur;
+  if(fcur) filter.value=fcur;
+}
+
+function addSplitRow(amount, category){
+  const box=document.getElementById('splitLines');
+  const row=document.createElement('div');
+  row.className='split-line';
+  const l1=document.createElement('div');
+  const lab1=document.createElement('label'); lab1.textContent='Số tiền';
+  const inpA=document.createElement('input'); inpA.type='text'; inpA.inputMode='numeric';
+  inpA.className='split-amount'; inpA.value=amount!=null?String(amount):'';
+  l1.appendChild(lab1); l1.appendChild(inpA);
+  const l2=document.createElement('div');
+  const lab2=document.createElement('label'); lab2.textContent='Danh mục';
+  const inpC=document.createElement('input'); inpC.type='text';
+  inpC.className='split-cat'; inpC.setAttribute('list','catHints');
+  inpC.value=category||'';
+  l2.appendChild(lab2); l2.appendChild(inpC);
+  const btn=document.createElement('button');
+  btn.type='button'; btn.className='danger'; btn.textContent='X';
+  btn.addEventListener('click',function(){ row.remove(); });
+  row.appendChild(l1); row.appendChild(l2); row.appendChild(btn);
+  box.appendChild(row);
+}
+
+function collectSplits(){
+  const rows=document.querySelectorAll('#splitLines .split-line');
+  const out=[];
+  rows.forEach(function(row){
+    const a=parseMoney(row.querySelector('.split-amount').value);
+    const c=(row.querySelector('.split-cat').value||'').trim();
+    if(!c && !isFinite(a)) return;
+    out.push({amount:a, category:c});
+  });
+  return out;
+}
+
+function renderList(){
+  const box=document.getElementById('txList');
+  box.innerHTML='';
+  if(!txs.length){
+    const p=document.createElement('p');
+    p.className='muted'; p.id='listEmpty';
+    p.textContent='Chưa có giao dịch — thêm bên dưới (cần tài khoản active).';
+    box.appendChild(p);
+    return;
+  }
+  const nameById={};
+  accounts.forEach(function(a){ nameById[a.account_id]=a.name; });
+  txs.forEach(function(t){
+    const el=document.createElement('div');
+    el.className='item'; el.setAttribute('role','listitem');
+    const h=document.createElement('h3');
+    h.textContent=(t.merchant||t.category||'Giao dịch')+' · '+money(t.amount);
+    if(t.is_split){
+      const pill=document.createElement('span');
+      pill.className='pill split'; pill.textContent='Split';
+      h.appendChild(pill);
+    }
+    el.appendChild(h);
+    const meta=document.createElement('p');
+    meta.className='muted';
+    meta.textContent=t.date+' · '+(nameById[t.account_id]||t.account_id)+' · '+t.category;
+    el.appendChild(meta);
+    if(t.splits && t.splits.length){
+      const ul=document.createElement('ul');
+      ul.className='muted';
+      t.splits.forEach(function(s){
+        const li=document.createElement('li');
+        li.textContent=s.category+': '+money(s.amount);
+        ul.appendChild(li);
+      });
+      el.appendChild(ul);
+    }
+    const row=document.createElement('div');
+    row.className='row';
+    const bHide=document.createElement('button');
+    bHide.type='button'; bHide.className='danger'; bHide.textContent='Ẩn';
+    bHide.addEventListener('click',function(){ hideTx(t.transaction_id); });
+    row.appendChild(bHide);
+    el.appendChild(row);
+    box.appendChild(el);
+  });
+}
+
+async function loadAccounts(){
+  if(!uid) return;
+  const r=await api('/os/accounts?user_id='+encodeURIComponent(uid));
+  accounts=r.ok?(r.body.accounts||[]):[];
+  fillAccountSelects();
+}
+
+async function loadList(){
+  if(!uid) return;
+  const aid=document.getElementById('filterAccount').value;
+  let url='/os/transactions?user_id='+encodeURIComponent(uid);
+  if(aid) url+='&account_id='+encodeURIComponent(aid);
+  const r=await api(url);
+  txs=r.ok?(r.body.transactions||[]):[];
+  renderList();
+}
+
+async function hideTx(id){
+  await api('/os/transactions/'+encodeURIComponent(id)+'/hide',{method:'POST',body:'{}'});
+  await loadList();
+}
+
+async function createTx(){
+  const err=document.getElementById('createErr');
+  const ok=document.getElementById('createOk');
+  err.textContent=''; ok.textContent='';
+  const account_id=document.getElementById('txAccount').value;
+  const amount=parseMoney(document.getElementById('txAmount').value);
+  const category=(document.getElementById('txCategory').value||'').trim();
+  const date=document.getElementById('txDate').value||todayISO();
+  const merchant=(document.getElementById('txMerchant').value||'').trim();
+  const note=(document.getElementById('txNote').value||'').trim();
+  const consent_ack=document.getElementById('consentAck').checked;
+  if(!account_id){ err.textContent='Chọn tài khoản (tạo ở Tài khoản trước).'; return; }
+  if(!isFinite(amount)){ err.textContent='Số tiền không hợp lệ.'; return; }
+  if(!category){ err.textContent='Danh mục bắt buộc.'; return; }
+  const body={user_id:uid, account_id:account_id, amount:amount, category:category, date:date, consent_ack:consent_ack};
+  if(merchant) body.merchant=merchant;
+  if(note) body.note=note;
+  const splits=collectSplits();
+  if(splits.length) body.splits=splits;
+  const r=await api('/os/transactions',{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không tạo được giao dịch');
+    return;
+  }
+  ok.textContent='Đã tạo · '+(r.body.is_split?'có split · ':'')+money(r.body.amount);
+  document.getElementById('txAmount').value='';
+  document.getElementById('txNote').value='';
+  document.getElementById('splitLines').innerHTML='';
+  await loadList();
+}
+
+document.getElementById('btnAddSplit').addEventListener('click',function(){ addSplitRow(); });
+document.getElementById('btnCreate').addEventListener('click',createTx);
+document.getElementById('filterAccount').addEventListener('change',loadList);
+
+(async function(){
+  document.getElementById('txDate').value=todayISO();
+  await ensureUser();
+  await loadAccounts();
+  await loadList();
+})();
+</script>
+</body>
+</html>

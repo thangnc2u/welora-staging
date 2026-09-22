@@ -25,7 +25,8 @@
     path.indexOf("/app/dual-control") === 0 ||
     path.indexOf("/app/accounts") === 0 ||
     path.indexOf("/app/transactions") === 0 ||
-    path.indexOf("/app/categories") === 0
+    path.indexOf("/app/categories") === 0 ||
+    path.indexOf("/app/budget") === 0
   ) active = "ops";
   else if (path === "/app" || path === "/app/home") active = "home";
 

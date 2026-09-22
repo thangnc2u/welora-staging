@@ -41,9 +41,13 @@
       <button type="button" id="createGoalBtn" disabled>Tạo quỹ khẩn cấp</button>
     </div>
     <div class="card" id="budgetDraft">
-      <p class="muted">Ngân sách theo danh mục</p>
+      <p class="muted">Ngân sách theo danh mục · <a href="/app/budget">Trung bình 3–6 tháng / rollover / Mục tiêu</a></p>
       <ul id="budgetLines"></ul>
+      <p class="muted" id="budgetGoalContrib"></p>
       <p class="muted" id="budgetNote"></p>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;color:var(--text-secondary)">
+        <input type="checkbox" id="budgetConfirm"/> Tôi xác nhận lưu ngân sách (không ghi đè im lặng)
+      </label>
       <button type="button" id="budgetApplyBtn" disabled>Tạo / cập nhật ngân sách</button>
     </div>
   </div>
@@ -140,6 +144,8 @@
         }
         budgetDraft = j.budget_draft || null;
         const lines = (budgetDraft && budgetDraft.lines) || [];
+        const gContrib = document.getElementById('budgetGoalContrib');
+        if (gContrib) gContrib.textContent = '';
         if (!lines.length) {
           const li = document.createElement('li');
           li.className = 'muted';
@@ -156,6 +162,10 @@
             li.appendChild(b);
             bLines.appendChild(li);
           });
+        }
+        const gLines = (budgetDraft && budgetDraft.goal_contrib_lines) || [];
+        if (gContrib && gLines.length) {
+          gContrib.textContent = 'Đóng góp Mục tiêu: ' + gLines.map((x) => (x.label || x.goal_type) + ' ' + vnd(x.amount)).join(' · ');
         }
         const br = await fetch('/budget?user_id=' + encodeURIComponent(uid));
         const bj = await br.json();
@@ -194,6 +204,12 @@
     };
     document.getElementById('budgetApplyBtn').onclick = async () => {
       if (!budgetDraft || !(budgetDraft.lines || []).length) return;
+      const note = document.getElementById('budgetNote');
+      const conf = document.getElementById('budgetConfirm');
+      if (conf && !conf.checked) {
+        note.textContent = 'Cần xác nhận trước khi lưu ngân sách.';
+        return;
+      }
       const auth = await fetch('/auth/device', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +227,6 @@
           draft: budgetDraft,
         }),
       });
-      const note = document.getElementById('budgetNote');
       if (!r.ok) {
         note.textContent = 'Ngân sách đã có · không ghi đè im lặng.';
         return;

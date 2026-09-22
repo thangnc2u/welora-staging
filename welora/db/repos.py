@@ -420,3 +420,174 @@ class SqliteAccountStore:
             return [self._row_to_account(r) for r in rows]
         finally:
             conn.close()
+
+
+# --- WeloraOS P0 Transactions (manual + split + soft-hide) ---
+
+
+class SqliteTransactionStore:
+    """SQLite-backed Transaction store — same method surface as InMemoryTransactionStore."""
+
+    def __init__(self, url: str | None = None) -> None:
+        self.url = url
+        migrate(url)
+
+    def _conn(self):
+        return get_connection(self.url)
+
+    def clear(self) -> None:
+        conn = self._conn()
+        try:
+            conn.execute("DELETE FROM os_transactions")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _row_to_tx(self, row) -> "Any":
+        import json
+        from welora.os_transactions import SplitLine, Transaction
+
+        raw_splits = row["splits_json"] or "[]"
+        try:
+            parsed = json.loads(raw_splits) if isinstance(raw_splits, str) else (raw_splits or [])
+        except Exception:
+            parsed = []
+        splits = []
+        for s in parsed:
+            if not isinstance(s, dict):
+                continue
+            splits.append(
+                SplitLine(
+                    split_id=str(s.get("split_id") or ""),
+                    amount=float(s.get("amount") or 0),
+                    category=str(s.get("category") or ""),
+                    note=s.get("note"),
+                )
+            )
+        return Transaction(
+            transaction_id=row["transaction_id"],
+            user_id=row["user_id"],
+            account_id=row["account_id"],
+            amount=float(row["amount"] or 0),
+            category=row["category"] or "",
+            date=row["date"] or "",
+            note=row["note"],
+            merchant=row["merchant"],
+            source=row["source"] or "manual",
+            consent_ack=bool(row["consent_ack"]),
+            consent_at=row["consent_at"],
+            is_split=bool(row["is_split"]) or len(splits) > 0,
+            splits=splits,
+            status=row["status"] or "active",
+            hidden_at=row["hidden_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def save(self, tx) -> Any:
+        import json
+
+        conn = self._conn()
+        try:
+            conn.execute(
+                "INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
+                (tx.user_id,),
+            )
+            splits_payload = [
+                s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in (tx.splits or [])
+            ]
+            conn.execute(
+                """
+                INSERT INTO os_transactions(
+                  transaction_id, user_id, account_id, amount, category, date,
+                  note, merchant, source, consent_ack, consent_at, is_split,
+                  splits_json, status, hidden_at, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(transaction_id) DO UPDATE SET
+                  account_id=excluded.account_id,
+                  amount=excluded.amount,
+                  category=excluded.category,
+                  date=excluded.date,
+                  note=excluded.note,
+                  merchant=excluded.merchant,
+                  source=excluded.source,
+                  consent_ack=excluded.consent_ack,
+                  consent_at=excluded.consent_at,
+                  is_split=excluded.is_split,
+                  splits_json=excluded.splits_json,
+                  status=excluded.status,
+                  hidden_at=excluded.hidden_at,
+                  updated_at=excluded.updated_at
+                """,
+                (
+                    tx.transaction_id,
+                    tx.user_id,
+                    tx.account_id,
+                    float(tx.amount),
+                    tx.category,
+                    tx.date,
+                    tx.note,
+                    tx.merchant,
+                    tx.source,
+                    int(bool(tx.consent_ack)),
+                    tx.consent_at,
+                    int(bool(tx.is_split or splits_payload)),
+                    json.dumps(splits_payload, ensure_ascii=False),
+                    tx.status,
+                    tx.hidden_at,
+                    tx.created_at,
+                    tx.updated_at,
+                ),
+            )
+            conn.commit()
+            return tx
+        finally:
+            conn.close()
+
+    def get(self, transaction_id: str):
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM os_transactions WHERE transaction_id=?",
+                (transaction_id,),
+            ).fetchone()
+            return self._row_to_tx(row) if row else None
+        finally:
+            conn.close()
+
+    def list_for_user(
+        self,
+        user_id: str,
+        *,
+        account_id: str | None = None,
+        include_hidden: bool = False,
+    ):
+        conn = self._conn()
+        try:
+            clauses = ["user_id=?"]
+            params: list = [user_id]
+            if account_id:
+                clauses.append("account_id=?")
+                params.append(account_id)
+            if not include_hidden:
+                clauses.append("status!='hidden'")
+            sql = (
+                "SELECT * FROM os_transactions WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY date DESC, created_at DESC"
+            )
+            rows = conn.execute(sql, tuple(params)).fetchall()
+            return [self._row_to_tx(r) for r in rows]
+        finally:
+            conn.close()
+
+    def delete_hard(self, transaction_id: str) -> None:
+        conn = self._conn()
+        try:
+            conn.execute(
+                "DELETE FROM os_transactions WHERE transaction_id=?",
+                (transaction_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()

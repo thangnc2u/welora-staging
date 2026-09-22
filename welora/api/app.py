@@ -21,6 +21,7 @@ from welora import csv_parser as csv_svc
 from welora import budget as budget_svc
 from welora import mode_c_act as mode_c_svc
 from welora import os_accounts as accounts_svc
+from welora import os_transactions as tx_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
@@ -178,6 +179,42 @@ class AccountBalanceBody(BaseModel):
 class AccountSeedBody(BaseModel):
     user_id: str
     persona_id: str
+
+
+class TxSplitLineBody(BaseModel):
+    amount: float
+    category: str
+    note: Optional[str] = None
+    split_id: Optional[str] = None
+
+class TransactionCreateBody(BaseModel):
+    user_id: str
+    account_id: str
+    amount: float
+    category: str
+    date: str
+    note: Optional[str] = None
+    merchant: Optional[str] = None
+    consent_ack: Optional[bool] = None
+    splits: Optional[list[TxSplitLineBody]] = None
+
+class TransactionUpdateBody(BaseModel):
+    account_id: Optional[str] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    date: Optional[str] = None
+    note: Optional[str] = None
+    merchant: Optional[str] = None
+    splits: Optional[list[TxSplitLineBody]] = None
+    unhide: Optional[bool] = None
+    status: Optional[str] = None
+
+class TransactionSplitBody(BaseModel):
+    splits: list[TxSplitLineBody]
+    amount: Optional[float] = None
+    merchant: Optional[str] = None
+    category: Optional[str] = None
+
 
 
 class AcademyKuatBody(BaseModel):
@@ -349,6 +386,12 @@ def create_app() -> FastAPI:
     @app.get("/app/accounts/", include_in_schema=False)
     def accounts_ui() -> FileResponse:
         return FileResponse(static_dir / "accounts.html")
+
+    @app.get("/app/transactions", include_in_schema=False)
+    @app.get("/app/transactions/", include_in_schema=False)
+    def transactions_ui() -> FileResponse:
+        return FileResponse(static_dir / "transactions.html")
+
 
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
@@ -755,6 +798,54 @@ def create_app() -> FastAPI:
         return _respond(*accounts_svc.service_seed_from_persona(
             body.user_id, body.persona_id,
         ))
+
+
+    # --- WeloraOS P0 Transactions (manual + split; CSV parser separate) ---
+    @app.post("/os/transactions", tags=["os", "transactions"], status_code=201)
+    def os_transactions_create(body: TransactionCreateBody) -> dict:
+        payload = body.model_dump(exclude_none=True)
+        code, out = tx_svc.service_create_transaction(payload)
+        if code >= 400 and out.get("consent_required"):
+            raise HTTPException(status_code=code, detail=out)
+        if code == 201:
+            return out
+        return _respond(code, out)
+
+    @app.get("/os/transactions", tags=["os", "transactions"])
+    def os_transactions_list(
+        user_id: str = Query(...),
+        account_id: Optional[str] = Query(None),
+        include_hidden: bool = Query(False),
+    ) -> dict:
+        return _respond(*tx_svc.service_list_transactions(
+            user_id, account_id=account_id, include_hidden=include_hidden,
+        ))
+
+    @app.get("/os/transactions/{tx_id}", tags=["os", "transactions"])
+    def os_transactions_get(tx_id: str) -> dict:
+        return _respond(*tx_svc.service_get_transaction(tx_id))
+
+    @app.patch("/os/transactions/{tx_id}", tags=["os", "transactions"])
+    def os_transactions_patch(tx_id: str, body: TransactionUpdateBody) -> dict:
+        return _respond(*tx_svc.service_update_transaction(
+            tx_id, body.model_dump(exclude_none=True),
+        ))
+
+    @app.post("/os/transactions/{tx_id}/split", tags=["os", "transactions"])
+    def os_transactions_split(tx_id: str, body: TransactionSplitBody) -> dict:
+        return _respond(*tx_svc.service_split_transaction(
+            tx_id, body.model_dump(exclude_none=True),
+        ))
+
+    @app.post("/os/transactions/{tx_id}/hide", tags=["os", "transactions"])
+    def os_transactions_hide(tx_id: str) -> dict:
+        return _respond(*tx_svc.service_hide_transaction(tx_id))
+
+    @app.delete("/os/transactions/{tx_id}", tags=["os", "transactions"])
+    def os_transactions_soft_delete(tx_id: str) -> dict:
+        """Soft-delete alias — hide, never hard-delete."""
+        return _respond(*tx_svc.service_hide_transaction(tx_id))
+
 
     return app
 

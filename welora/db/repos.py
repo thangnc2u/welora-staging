@@ -591,3 +591,146 @@ class SqliteTransactionStore:
             conn.commit()
         finally:
             conn.close()
+
+
+# --- WeloraOS P0 Categories (Fixed/Variable/Goals + tags + soft-disable) ---
+
+
+class SqliteCategoryStore:
+    """SQLite-backed Category store — same method surface as InMemoryCategoryStore."""
+
+    def __init__(self, url: str | None = None) -> None:
+        self.url = url
+        migrate(url)
+
+    def _conn(self):
+        return get_connection(self.url)
+
+    def clear(self) -> None:
+        conn = self._conn()
+        try:
+            conn.execute("DELETE FROM os_categories")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _row_to_category(self, row) -> "Any":
+        import json
+        from welora.os_categories import Category
+
+        raw_tags = row["tags_json"] or "[]"
+        try:
+            parsed = json.loads(raw_tags) if isinstance(raw_tags, str) else (raw_tags or [])
+        except Exception:
+            parsed = []
+        tags = [str(t) for t in parsed if t is not None and str(t).strip()]
+        return Category(
+            category_id=row["category_id"],
+            user_id=row["user_id"],
+            name=row["name"],
+            kind=row["kind"],
+            tags=tags,
+            note=row["note"],
+            status=row["status"] or "active",
+            disabled_at=row["disabled_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    def save(self, category) -> Any:
+        import json
+
+        conn = self._conn()
+        try:
+            conn.execute(
+                "INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
+                (category.user_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO os_categories(
+                  category_id, user_id, name, kind, tags_json, note,
+                  status, disabled_at, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(category_id) DO UPDATE SET
+                  name=excluded.name,
+                  kind=excluded.kind,
+                  tags_json=excluded.tags_json,
+                  note=excluded.note,
+                  status=excluded.status,
+                  disabled_at=excluded.disabled_at,
+                  updated_at=excluded.updated_at
+                """,
+                (
+                    category.category_id,
+                    category.user_id,
+                    category.name,
+                    category.kind,
+                    json.dumps(list(category.tags or []), ensure_ascii=False),
+                    category.note,
+                    category.status,
+                    category.disabled_at,
+                    category.created_at,
+                    category.updated_at,
+                ),
+            )
+            conn.commit()
+            return category
+        finally:
+            conn.close()
+
+    def get(self, category_id: str):
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM os_categories WHERE category_id=?",
+                (category_id,),
+            ).fetchone()
+            return self._row_to_category(row) if row else None
+        finally:
+            conn.close()
+
+    def list_for_user(self, user_id: str, *, include_disabled: bool = False):
+        conn = self._conn()
+        try:
+            if include_disabled:
+                rows = conn.execute(
+                    "SELECT * FROM os_categories WHERE user_id=? ORDER BY created_at",
+                    (user_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM os_categories WHERE user_id=? AND status!='disabled' "
+                    "ORDER BY created_at",
+                    (user_id,),
+                ).fetchall()
+            items = [self._row_to_category(r) for r in rows]
+            kind_order = {"fixed": 0, "variable": 1, "goals": 2}
+            items.sort(
+                key=lambda c: (kind_order.get(c.kind, 9), c.name.lower(), c.created_at)
+            )
+            return items
+        finally:
+            conn.close()
+
+    def find_by_name(
+        self, user_id: str, name: str, *, include_disabled: bool = True
+    ):
+        target = (name or "").strip().lower()
+        if not target:
+            return None
+        for c in self.list_for_user(user_id, include_disabled=include_disabled):
+            if c.name.strip().lower() == target:
+                return c
+        return None
+
+    def delete_hard(self, category_id: str) -> None:
+        conn = self._conn()
+        try:
+            conn.execute(
+                "DELETE FROM os_categories WHERE category_id=?",
+                (category_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()

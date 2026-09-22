@@ -50,6 +50,11 @@ def reset_all_stores(goal_store: Optional[InMemoryEmergencyFundStore] = None) ->
         reset_transaction_store()
     except Exception:
         pass
+    try:
+        from welora.os_categories import reset_category_store
+        reset_category_store()
+    except Exception:
+        pass
 
 
 def _run_onboarding(

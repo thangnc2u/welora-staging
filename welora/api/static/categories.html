@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Danh mục</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<link rel="stylesheet" href="/static/money.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+a{color:var(--link);text-decoration:none}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
+.label{color:var(--text-secondary);font-size:13px;font-weight:600}
+label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
+input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+button.danger{background:var(--color-danger,#E85D5D);color:#fff}
+button:disabled{opacity:.55}
+.err{color:var(--color-danger,#E85D5D);font-size:13px;margin-top:6px}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:6px}
+.item{border:1px solid var(--border-default);border-radius:12px;padding:12px;margin:8px 0;background:var(--bg-surface)}
+.item h3{margin:0 0 4px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1;min-width:110px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg-elevated);border:1px solid var(--border-default);margin-left:6px}
+.pill.disabled{color:var(--color-warning);border-color:var(--color-warning)}
+.pill.kind{margin-left:0;margin-right:4px}
+.tags{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.kind-group{margin-top:12px}
+.kind-group h2{font-size:14px;margin:0 0 6px;color:var(--text-secondary)}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/accounts">Tài khoản</a> · <a href="/app/transactions">Giao dịch</a></p>
+<h1>Danh mục</h1>
+<p class="muted">Cố định · Biến đổi · Mục tiêu — gắn thẻ (budget_tags) · vô hiệu hoá có chuyển lịch sử</p>
+
+<div class="card" id="listCard">
+  <div class="label">Danh sách danh mục</div>
+  <div class="row">
+    <button type="button" class="secondary" id="btnSeed">Nạp mặc định</button>
+    <button type="button" class="secondary" id="btnRefresh">Tải lại</button>
+  </div>
+  <div id="categoryList" role="list" aria-label="Danh sách danh mục">
+    <p class="muted" id="listEmpty">Đang tải…</p>
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+    <input type="checkbox" id="showDisabled"/> Hiện danh mục đã vô hiệu
+  </label>
+  <p class="err" id="listErr" role="alert" aria-live="polite"></p>
+  <p class="ok" id="listOk" aria-live="polite"></p>
+</div>
+
+<div class="card" id="createCard">
+  <div class="label" id="createLabel">Thêm danh mục</div>
+  <form id="createForm" aria-labelledby="createLabel" onsubmit="return false;">
+    <label for="catName">Tên danh mục</label>
+    <input id="catName" name="catName" type="text" placeholder="Ví dụ: Ăn uống" autocomplete="off"/>
+    <label for="catKind">Nhóm</label>
+    <select id="catKind" name="catKind">
+      <option value="fixed">Cố định</option>
+      <option value="variable" selected>Biến đổi</option>
+      <option value="goals">Mục tiêu</option>
+    </select>
+    <label for="catTags">Thẻ (slug, cách nhau bởi dấu phẩy)</label>
+    <input id="catTags" name="catTags" type="text" placeholder="an_uong, sieu_thi" autocomplete="off"/>
+    <label for="catNote">Ghi chú</label>
+    <input id="catNote" name="catNote" type="text" autocomplete="off"/>
+    <button type="button" id="btnCreate">Tạo danh mục</button>
+    <p class="err" id="createErr" role="alert" aria-live="polite"></p>
+    <p class="ok" id="createOk" aria-live="polite"></p>
+  </form>
+</div>
+
+<div class="card" id="editCard" hidden>
+  <div class="label" id="editLabel">Sửa danh mục</div>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="editId"/>
+    <label for="editName">Tên</label>
+    <input id="editName" type="text" autocomplete="off"/>
+    <label for="editKind">Nhóm</label>
+    <select id="editKind">
+      <option value="fixed">Cố định</option>
+      <option value="variable">Biến đổi</option>
+      <option value="goals">Mục tiêu</option>
+    </select>
+    <label for="editTags">Thẻ</label>
+    <input id="editTags" type="text" autocomplete="off"/>
+    <label for="editNote">Ghi chú</label>
+    <input id="editNote" type="text" autocomplete="off"/>
+    <div class="row">
+      <button type="button" id="btnSave">Lưu</button>
+      <button type="button" class="secondary" id="btnCancelEdit">Huỷ</button>
+    </div>
+    <p class="err" id="editErr" role="alert" aria-live="polite"></p>
+  </form>
+</div>
+
+<div class="card" id="disableCard" hidden>
+  <div class="label">Vô hiệu hoá — chuyển lịch sử (nếu cần)</div>
+  <input type="hidden" id="disableId"/>
+  <p class="muted" id="disableHint"></p>
+  <label for="reassignTo">Chuyển giao dịch sang danh mục</label>
+  <select id="reassignTo"></select>
+  <div class="row">
+    <button type="button" class="danger" id="btnConfirmDisable">Vô hiệu hoá</button>
+    <button type="button" class="secondary" id="btnCancelDisable">Huỷ</button>
+  </div>
+  <p class="err" id="disableErr" role="alert" aria-live="polite"></p>
+</div>
+
+<script>
+const KEY='welora_device_id';
+const KIND_VI={fixed:'Cố định',variable:'Biến đổi',goals:'Mục tiêu'};
+const KIND_ORDER=['fixed','variable','goals'];
+let uid='';
+let categories=[];
+
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+async function api(url, opts){
+  const r=await fetch(url,Object.assign({headers:{'Content-Type':'application/json'}},opts||{}));
+  const d=await r.json().catch(()=>({}));
+  return {ok:r.ok,status:r.status,body:d};
+}
+function errText(body, fallback){
+  if(!body) return fallback;
+  if(typeof body.detail==='string') return body.detail;
+  if(body.detail && body.detail.error) return body.detail.error;
+  return body.error||body.message||fallback;
+}
+async function ensureUser(){
+  const auth=await api('/auth/device',{method:'POST',body:JSON.stringify({device_id:deviceId()})});
+  uid=auth.body.user_id||'';
+}
+function parseTags(s){
+  return String(s||'').split(/[,;\s]+/).map(function(x){return x.trim();}).filter(Boolean);
+}
+
+function renderList(){
+  const box=document.getElementById('categoryList');
+  box.innerHTML='';
+  if(!categories.length){
+    const p=document.createElement('p');
+    p.className='muted';
+    p.id='listEmpty';
+    p.textContent='Chưa có danh mục — bấm «Nạp mặc định» hoặc thêm bên dưới.';
+    box.appendChild(p);
+    return;
+  }
+  KIND_ORDER.forEach(function(kind){
+    const group=categories.filter(function(c){return c.kind===kind;});
+    if(!group.length) return;
+    const wrap=document.createElement('div');
+    wrap.className='kind-group';
+    const h=document.createElement('h2');
+    h.textContent=KIND_VI[kind]||kind;
+    wrap.appendChild(h);
+    group.forEach(function(c){
+      const el=document.createElement('div');
+      el.className='item';
+      el.setAttribute('role','listitem');
+      const title=document.createElement('h3');
+      const kindPill=document.createElement('span');
+      kindPill.className='pill kind';
+      kindPill.textContent=KIND_VI[c.kind]||c.kind;
+      title.appendChild(kindPill);
+      title.appendChild(document.createTextNode(c.name||'(không tên)'));
+      if(c.status==='disabled'){
+        const pill=document.createElement('span');
+        pill.className='pill disabled';
+        pill.textContent='Đã vô hiệu';
+        title.appendChild(pill);
+      }
+      el.appendChild(title);
+      const tags=document.createElement('p');
+      tags.className='tags';
+      tags.textContent=(c.tags&&c.tags.length)?('Thẻ: '+c.tags.join(', ')):'(không thẻ)';
+      el.appendChild(tags);
+      if(c.note){
+        const note=document.createElement('p');
+        note.className='muted';
+        note.textContent=c.note;
+        el.appendChild(note);
+      }
+      const row=document.createElement('div');
+      row.className='row';
+      if(c.status!=='disabled'){
+        const bEdit=document.createElement('button');
+        bEdit.type='button';
+        bEdit.className='secondary';
+        bEdit.textContent='Sửa';
+        bEdit.addEventListener('click',function(){ openEdit(c); });
+        const bDis=document.createElement('button');
+        bDis.type='button';
+        bDis.className='danger';
+        bDis.textContent='Vô hiệu';
+        bDis.addEventListener('click',function(){ openDisable(c); });
+        row.appendChild(bEdit);
+        row.appendChild(bDis);
+      }else{
+        const bRe=document.createElement('button');
+        bRe.type='button';
+        bRe.className='secondary';
+        bRe.textContent='Kích hoạt lại';
+        bRe.addEventListener('click',function(){ reactivate(c.category_id); });
+        row.appendChild(bRe);
+      }
+      el.appendChild(row);
+      wrap.appendChild(el);
+    });
+    box.appendChild(wrap);
+  });
+}
+
+async function loadList(){
+  if(!uid) return;
+  const show=document.getElementById('showDisabled').checked;
+  const r=await api('/os/categories?user_id='+encodeURIComponent(uid)+(show?'&include_disabled=true':''));
+  if(!r.ok){
+    document.getElementById('listErr').textContent=errText(r.body,'Không tải được danh mục.');
+    return;
+  }
+  categories=(r.body.categories||r.body.items||[]);
+  renderList();
+}
+
+function openEdit(c){
+  document.getElementById('editCard').hidden=false;
+  document.getElementById('editId').value=c.category_id;
+  document.getElementById('editName').value=c.name||'';
+  document.getElementById('editKind').value=c.kind||'variable';
+  document.getElementById('editTags').value=(c.tags||[]).join(', ');
+  document.getElementById('editNote').value=c.note||'';
+  document.getElementById('editErr').textContent='';
+  document.getElementById('editCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function openDisable(c){
+  document.getElementById('disableCard').hidden=false;
+  document.getElementById('disableId').value=c.category_id;
+  document.getElementById('disableHint').textContent='Vô hiệu «'+c.name+'». Nếu còn giao dịch dùng tên này, chọn danh mục đích bên dưới.';
+  document.getElementById('disableErr').textContent='';
+  const sel=document.getElementById('reassignTo');
+  sel.innerHTML='';
+  const opt0=document.createElement('option');
+  opt0.value='';
+  opt0.textContent='— Không chuyển (chỉ khi không có lịch sử) —';
+  sel.appendChild(opt0);
+  categories.filter(function(x){
+    return x.status!=='disabled' && x.category_id!==c.category_id;
+  }).forEach(function(x){
+    const o=document.createElement('option');
+    o.value=x.category_id;
+    o.textContent=(KIND_VI[x.kind]||x.kind)+' · '+x.name;
+    sel.appendChild(o);
+  });
+  document.getElementById('disableCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function reactivate(id){
+  await api('/os/categories/'+encodeURIComponent(id),{
+    method:'PATCH',body:JSON.stringify({reactivate:true,status:'active'})
+  });
+  await loadList();
+}
+
+document.getElementById('btnSeed').addEventListener('click',async function(){
+  document.getElementById('listErr').textContent='';
+  document.getElementById('listOk').textContent='';
+  const r=await api('/os/categories/seed-defaults',{
+    method:'POST',body:JSON.stringify({user_id:uid})
+  });
+  if(!r.ok){
+    document.getElementById('listErr').textContent=errText(r.body,'Không nạp được mặc định.');
+    return;
+  }
+  document.getElementById('listOk').textContent='Đã nạp '+(r.body.count||0)+' danh mục mặc định (bỏ qua trùng).';
+  await loadList();
+});
+document.getElementById('btnRefresh').addEventListener('click',function(){ loadList(); });
+
+document.getElementById('btnCreate').addEventListener('click',async function(){
+  const err=document.getElementById('createErr');
+  const ok=document.getElementById('createOk');
+  err.textContent=''; ok.textContent='';
+  const name=(document.getElementById('catName').value||'').trim();
+  if(!name){ err.textContent='Nhập tên danh mục.'; return; }
+  const r=await api('/os/categories',{
+    method:'POST',
+    body:JSON.stringify({
+      user_id:uid,
+      name:name,
+      kind:document.getElementById('catKind').value,
+      tags:parseTags(document.getElementById('catTags').value),
+      note:(document.getElementById('catNote').value||'').trim()||null
+    })
+  });
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không tạo được danh mục.');
+    return;
+  }
+  ok.textContent='Đã tạo danh mục.';
+  document.getElementById('catName').value='';
+  document.getElementById('catTags').value='';
+  document.getElementById('catNote').value='';
+  await loadList();
+});
+
+document.getElementById('btnSave').addEventListener('click',async function(){
+  const err=document.getElementById('editErr');
+  err.textContent='';
+  const id=document.getElementById('editId').value;
+  const name=(document.getElementById('editName').value||'').trim();
+  if(!name){ err.textContent='Tên không được trống.'; return; }
+  const r=await api('/os/categories/'+encodeURIComponent(id),{
+    method:'PATCH',
+    body:JSON.stringify({
+      name:name,
+      kind:document.getElementById('editKind').value,
+      tags:parseTags(document.getElementById('editTags').value),
+      note:(document.getElementById('editNote').value||'').trim()||null
+    })
+  });
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không lưu được.');
+    return;
+  }
+  document.getElementById('editCard').hidden=true;
+  await loadList();
+});
+document.getElementById('btnCancelEdit').addEventListener('click',function(){
+  document.getElementById('editCard').hidden=true;
+});
+
+document.getElementById('btnConfirmDisable').addEventListener('click',async function(){
+  const err=document.getElementById('disableErr');
+  err.textContent='';
+  const id=document.getElementById('disableId').value;
+  const reassign=document.getElementById('reassignTo').value;
+  const body={};
+  if(reassign) body.reassign_to=reassign;
+  const r=await api('/os/categories/'+encodeURIComponent(id)+'/disable',{
+    method:'POST',body:JSON.stringify(body)
+  });
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không vô hiệu được. Nếu còn lịch sử, hãy chọn danh mục đích.');
+    return;
+  }
+  document.getElementById('disableCard').hidden=true;
+  await loadList();
+});
+document.getElementById('btnCancelDisable').addEventListener('click',function(){
+  document.getElementById('disableCard').hidden=true;
+});
+document.getElementById('showDisabled').addEventListener('change',function(){ loadList(); });
+
+(async function(){
+  await ensureUser();
+  await loadList();
+})();
+</script>
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+</body>
+</html>

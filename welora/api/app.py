@@ -22,6 +22,7 @@ from welora import budget as budget_svc
 from welora import mode_c_act as mode_c_svc
 from welora import os_accounts as accounts_svc
 from welora import os_transactions as tx_svc
+from welora import os_categories as categories_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import core_constitution as core_const_svc
@@ -217,6 +218,34 @@ class TransactionSplitBody(BaseModel):
 
 
 
+class CategoryCreateBody(BaseModel):
+    user_id: str
+    name: str
+    kind: str = "variable"
+    tags: Optional[list[str]] = None
+    note: Optional[str] = None
+
+class CategoryUpdateBody(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    tags: Optional[list[str]] = None
+    note: Optional[str] = None
+    reactivate: Optional[bool] = None
+    status: Optional[str] = None
+
+class CategoryDisableBody(BaseModel):
+    reassign_to: Optional[str] = None
+    target_category_id: Optional[str] = None
+
+class CategoryReassignBody(BaseModel):
+    reassign_to: str
+    target_category_id: Optional[str] = None
+
+class CategorySeedBody(BaseModel):
+    user_id: str
+
+
+
 class AcademyKuatBody(BaseModel):
     user_id: str
     node_id: str
@@ -391,6 +420,13 @@ def create_app() -> FastAPI:
     @app.get("/app/transactions/", include_in_schema=False)
     def transactions_ui() -> FileResponse:
         return FileResponse(static_dir / "transactions.html")
+
+
+    @app.get("/app/categories", include_in_schema=False)
+    @app.get("/app/categories/", include_in_schema=False)
+    def categories_ui() -> FileResponse:
+        return FileResponse(static_dir / "categories.html")
+
 
 
     @app.get("/app/content/{content_id}", include_in_schema=False)
@@ -845,6 +881,59 @@ def create_app() -> FastAPI:
     def os_transactions_soft_delete(tx_id: str) -> dict:
         """Soft-delete alias — hide, never hard-delete."""
         return _respond(*tx_svc.service_hide_transaction(tx_id))
+
+
+    # --- WeloraOS P0 Categories (Fixed/Variable/Goals + tags + soft-disable) ---
+    @app.get("/os/categories/defaults", tags=["os", "categories"])
+    def os_categories_defaults() -> dict:
+        return _respond(*categories_svc.service_defaults())
+
+    @app.post("/os/categories/seed-defaults", tags=["os", "categories"])
+    def os_categories_seed(body: CategorySeedBody) -> dict:
+        return _respond(*categories_svc.service_seed_defaults(body.user_id))
+
+    @app.post("/os/categories", tags=["os", "categories"], status_code=201)
+    def os_categories_create(body: CategoryCreateBody) -> dict:
+        payload = body.model_dump(exclude_none=True)
+        code, out = categories_svc.service_create_category(payload)
+        if code == 201:
+            return out
+        return _respond(code, out)
+
+    @app.get("/os/categories", tags=["os", "categories"])
+    def os_categories_list(
+        user_id: str = Query(...),
+        include_disabled: bool = Query(False),
+    ) -> dict:
+        return _respond(*categories_svc.service_list_categories(
+            user_id, include_disabled=include_disabled,
+        ))
+
+    @app.get("/os/categories/{category_id}", tags=["os", "categories"])
+    def os_categories_get(category_id: str) -> dict:
+        return _respond(*categories_svc.service_get_category(category_id))
+
+    @app.patch("/os/categories/{category_id}", tags=["os", "categories"])
+    def os_categories_patch(category_id: str, body: CategoryUpdateBody) -> dict:
+        return _respond(*categories_svc.service_update_category(
+            category_id, body.model_dump(exclude_none=True),
+        ))
+
+    @app.post("/os/categories/{category_id}/reassign", tags=["os", "categories"])
+    def os_categories_reassign(category_id: str, body: CategoryReassignBody) -> dict:
+        payload = body.model_dump(exclude_none=True)
+        return _respond(*categories_svc.service_reassign_category(category_id, payload))
+
+    @app.post("/os/categories/{category_id}/disable", tags=["os", "categories"])
+    def os_categories_disable(
+        category_id: str, body: Optional[CategoryDisableBody] = None,
+    ) -> dict:
+        payload = body.model_dump(exclude_none=True) if body else {}
+        code, out = categories_svc.service_disable_category(category_id, payload)
+        # Preserve reassign_required + counts for the UI / tests.
+        if code >= 400 and out.get("reassign_required"):
+            raise HTTPException(status_code=code, detail=out)
+        return _respond(code, out)
 
 
     return app

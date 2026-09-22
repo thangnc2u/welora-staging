@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Tài khoản</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<link rel="stylesheet" href="/static/money.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+a{color:var(--link);text-decoration:none}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
+.label{color:var(--text-secondary);font-size:13px;font-weight:600}
+label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
+input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+button.danger{background:var(--color-danger,#E85D5D);color:#fff}
+button:disabled{opacity:.55}
+.err{color:var(--color-danger,#E85D5D);font-size:13px;margin-top:6px}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:6px}
+.item{border:1px solid var(--border-default);border-radius:12px;padding:12px;margin:8px 0;background:var(--bg-surface)}
+.item h3{margin:0 0 4px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1;min-width:110px}
+.consent{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-elevated)}
+.consent input{width:auto;margin:2px 0 0;flex-shrink:0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg-elevated);border:1px solid var(--border-default);margin-left:6px}
+.pill.hidden{color:var(--color-warning);border-color:var(--color-warning)}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/goals">Mục tiêu</a> · <a href="/app/safety">An Toàn</a></p>
+<h1>Tài khoản</h1>
+<p class="muted">Nhập thủ công số dư · ẩn thay vì xoá · không Open Banking</p>
+
+<div class="card" id="listCard">
+  <div class="label">Danh sách tài khoản</div>
+  <div id="accountList" role="list" aria-label="Danh sách tài khoản">
+    <p class="muted" id="listEmpty">Đang tải…</p>
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+    <input type="checkbox" id="showHidden"/> Hiện tài khoản đã ẩn
+  </label>
+</div>
+
+<div class="card" id="createCard">
+  <div class="label" id="createLabel">Thêm tài khoản (thủ công)</div>
+  <form id="createForm" aria-labelledby="createLabel" onsubmit="return false;">
+    <label for="accName">Tên tài khoản</label>
+    <input id="accName" name="accName" type="text" placeholder="Ví dụ: Vietcombank chi tiêu" autocomplete="off"/>
+    <label for="accType">Phân loại</label>
+    <select id="accType" name="accType">
+      <option value="chi_tieu_hang_ngay">Chi tiêu hàng ngày</option>
+      <option value="tiet_kiem">Tiết kiệm</option>
+      <option value="no">Nợ</option>
+      <option value="dau_tu">Đầu tư</option>
+      <option value="tai_san_dai_han">Tài sản dài hạn</option>
+    </select>
+    <label for="accBalance">Số dư ban đầu (VNĐ)</label>
+    <input id="accBalance" name="accBalance" type="text" inputmode="numeric" placeholder="0" autocomplete="off"/>
+    <div class="consent">
+      <input type="checkbox" id="consentAck" name="consentAck"/>
+      <label for="consentAck" style="margin:0">Tôi đồng ý lưu số dư / tên tài khoản này trên Welora (nhập thủ công). Không kết nối Open Banking hay thu thập dữ liệu ngân hàng.</label>
+    </div>
+    <button type="button" id="btnCreate">Tạo tài khoản</button>
+    <p class="err" id="createErr" role="alert" aria-live="polite"></p>
+    <p class="ok" id="createOk" aria-live="polite"></p>
+  </form>
+</div>
+
+<div class="card" id="editCard" hidden>
+  <div class="label" id="editLabel">Sửa / cập nhật số dư</div>
+  <form id="editForm" onsubmit="return false;">
+    <input type="hidden" id="editId"/>
+    <label for="editName">Tên</label>
+    <input id="editName" type="text" autocomplete="off"/>
+    <label for="editType">Phân loại</label>
+    <select id="editType">
+      <option value="chi_tieu_hang_ngay">Chi tiêu hàng ngày</option>
+      <option value="tiet_kiem">Tiết kiệm</option>
+      <option value="no">Nợ</option>
+      <option value="dau_tu">Đầu tư</option>
+      <option value="tai_san_dai_han">Tài sản dài hạn</option>
+    </select>
+    <label for="editBalance">Số dư (VNĐ) — nhập thủ công</label>
+    <input id="editBalance" type="text" inputmode="numeric" autocomplete="off"/>
+    <div class="row">
+      <button type="button" id="btnSave">Lưu</button>
+      <button type="button" class="secondary" id="btnCancelEdit">Huỷ</button>
+    </div>
+    <p class="err" id="editErr" role="alert" aria-live="polite"></p>
+  </form>
+</div>
+
+<script src="/static/money.js"></script>
+<script>
+const KEY='welora_device_id';
+const TYPE_VI={
+  chi_tieu_hang_ngay:'Chi tiêu hàng ngày',
+  tiet_kiem:'Tiết kiệm',
+  no:'Nợ',
+  dau_tu:'Đầu tư',
+  tai_san_dai_han:'Tài sản dài hạn'
+};
+let uid='';
+let accounts=[];
+
+function deviceId(){
+  let d=localStorage.getItem(KEY);
+  if(!d){d='dev-'+Math.random().toString(36).slice(2,10);localStorage.setItem(KEY,d);}
+  return d;
+}
+function money(n){ return window.WeloraMoney?WeloraMoney.formatVnd(n):String(n); }
+function parseMoney(s){
+  if(window.WeloraMoney && WeloraMoney.parseVnd) return WeloraMoney.parseVnd(s);
+  const n=Number(String(s||'').replace(/[^\d.-]/g,''));
+  return isFinite(n)?n:NaN;
+}
+async function api(url, opts){
+  const r=await fetch(url,Object.assign({headers:{'Content-Type':'application/json'}},opts||{}));
+  const d=await r.json().catch(()=>({}));
+  return {ok:r.ok,status:r.status,body:d};
+}
+function errText(body, fallback){
+  if(!body) return fallback;
+  if(typeof body.detail==='string') return body.detail;
+  if(body.detail && body.detail.error) return body.detail.error;
+  return body.error||body.message||fallback;
+}
+
+async function ensureUser(){
+  const auth=await api('/auth/device',{method:'POST',body:JSON.stringify({device_id:deviceId()})});
+  uid=auth.body.user_id||'';
+}
+
+function renderList(){
+  const box=document.getElementById('accountList');
+  box.innerHTML='';
+  if(!accounts.length){
+    const p=document.createElement('p');
+    p.className='muted';
+    p.id='listEmpty';
+    p.textContent='Chưa có tài khoản — thêm bên dưới (có xác nhận đồng ý).';
+    box.appendChild(p);
+    return;
+  }
+  accounts.forEach(function(a){
+    const el=document.createElement('div');
+    el.className='item';
+    el.setAttribute('role','listitem');
+    const h=document.createElement('h3');
+    h.textContent=a.name||'(không tên)';
+    if(a.status==='hidden'){
+      const pill=document.createElement('span');
+      pill.className='pill hidden';
+      pill.textContent='Đã ẩn';
+      h.appendChild(pill);
+    }
+    el.appendChild(h);
+    const meta=document.createElement('p');
+    meta.className='muted';
+    meta.textContent=(TYPE_VI[a.type]||a.type)+' · '+money(a.balance)+' · nguồn: thủ công';
+    el.appendChild(meta);
+    const row=document.createElement('div');
+    row.className='row';
+    if(a.status!=='hidden'){
+      const bEdit=document.createElement('button');
+      bEdit.type='button';
+      bEdit.className='secondary';
+      bEdit.textContent='Sửa / số dư';
+      bEdit.addEventListener('click',function(){ openEdit(a); });
+      const bHide=document.createElement('button');
+      bHide.type='button';
+      bHide.className='danger';
+      bHide.textContent='Ẩn';
+      bHide.addEventListener('click',function(){ hideAccount(a.account_id); });
+      row.appendChild(bEdit);
+      row.appendChild(bHide);
+    }else{
+      const bUn=document.createElement('button');
+      bUn.type='button';
+      bUn.className='secondary';
+      bUn.textContent='Hiện lại';
+      bUn.addEventListener('click',function(){ unhideAccount(a.account_id); });
+      row.appendChild(bUn);
+    }
+    el.appendChild(row);
+    box.appendChild(el);
+  });
+}
+
+async function loadList(){
+  if(!uid) return;
+  const show=document.getElementById('showHidden').checked;
+  const r=await api('/os/accounts?user_id='+encodeURIComponent(uid)+(show?'&include_hidden=true':''));
+  accounts=(r.body.accounts||r.body.items||[]);
+  renderList();
+}
+
+function openEdit(a){
+  document.getElementById('editCard').hidden=false;
+  document.getElementById('editId').value=a.account_id;
+  document.getElementById('editName').value=a.name||'';
+  document.getElementById('editType').value=a.type||'chi_tieu_hang_ngay';
+  document.getElementById('editBalance').value=String(a.balance!=null?a.balance:0);
+  document.getElementById('editErr').textContent='';
+  document.getElementById('editCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function hideAccount(id){
+  await api('/os/accounts/'+encodeURIComponent(id)+'/hide',{method:'POST',body:'{}'});
+  await loadList();
+}
+async function unhideAccount(id){
+  await api('/os/accounts/'+encodeURIComponent(id),{
+    method:'PATCH',body:JSON.stringify({unhide:true,status:'active'})
+  });
+  await loadList();
+}
+
+document.getElementById('btnCreate').addEventListener('click',async function(){
+  const err=document.getElementById('createErr');
+  const ok=document.getElementById('createOk');
+  err.textContent=''; ok.textContent='';
+  if(!document.getElementById('consentAck').checked){
+    err.textContent='Cần xác nhận đồng ý trước khi thêm nguồn dữ liệu thủ công.';
+    return;
+  }
+  const name=(document.getElementById('accName').value||'').trim();
+  if(!name){ err.textContent='Nhập tên tài khoản.'; return; }
+  const bal=parseMoney(document.getElementById('accBalance').value||'0');
+  if(!isFinite(bal)){ err.textContent='Số dư không hợp lệ.'; return; }
+  const r=await api('/os/accounts',{
+    method:'POST',
+    body:JSON.stringify({
+      user_id:uid,
+      name:name,
+      type:document.getElementById('accType').value,
+      opening_balance:bal,
+      consent_ack:true,
+      source:'manual'
+    })
+  });
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không tạo được tài khoản.');
+    return;
+  }
+  ok.textContent='Đã tạo tài khoản.';
+  document.getElementById('accName').value='';
+  document.getElementById('accBalance').value='0';
+  document.getElementById('consentAck').checked=false;
+  await loadList();
+});
+
+document.getElementById('btnSave').addEventListener('click',async function(){
+  const err=document.getElementById('editErr');
+  err.textContent='';
+  const id=document.getElementById('editId').value;
+  const name=(document.getElementById('editName').value||'').trim();
+  const bal=parseMoney(document.getElementById('editBalance').value||'0');
+  if(!name){ err.textContent='Tên không được trống.'; return; }
+  if(!isFinite(bal)){ err.textContent='Số dư không hợp lệ.'; return; }
+  const r=await api('/os/accounts/'+encodeURIComponent(id),{
+    method:'PATCH',
+    body:JSON.stringify({
+      name:name,
+      type:document.getElementById('editType').value,
+      balance:bal
+    })
+  });
+  if(!r.ok){
+    err.textContent=errText(r.body,'Không lưu được.');
+    return;
+  }
+  document.getElementById('editCard').hidden=true;
+  await loadList();
+});
+document.getElementById('btnCancelEdit').addEventListener('click',function(){
+  document.getElementById('editCard').hidden=true;
+});
+document.getElementById('showHidden').addEventListener('change',function(){ loadList(); });
+
+(async function(){
+  await ensureUser();
+  await loadList();
+})();
+</script>
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+</body>
+</html>

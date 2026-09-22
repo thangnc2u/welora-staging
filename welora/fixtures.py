@@ -40,6 +40,11 @@ def reset_all_stores(goal_store: Optional[InMemoryEmergencyFundStore] = None) ->
         reset_mode_c_store()
     except Exception:
         pass
+    try:
+        from welora.os_accounts import reset_account_store
+        reset_account_store()
+    except Exception:
+        pass
 
 
 def _run_onboarding(
@@ -272,6 +277,12 @@ def build_persona_fixture(
         mastery_no_efund_invest=mastery,
     )
     set_persona(user_id=uid, persona=persona_id)
+    os_accounts_seed: dict = {"created": [], "skipped": [], "count": 0}
+    try:
+        from welora.os_accounts import service_seed_from_persona
+        _code, os_accounts_seed = service_seed_from_persona(uid, persona_id)
+    except Exception:
+        pass
     return {
         "kind": kind,
         "persona_id": persona_id,
@@ -282,6 +293,8 @@ def build_persona_fixture(
         "goal": goal.to_dict(),
         "safety_gate": gate.to_dict(),
         "os_goals": list(os_goal_types(persona_id)),
+        "os_accounts": list(os_accounts_seed.get("created") or []),
+        "os_accounts_seed": os_accounts_seed,
         "dna_answers": dict(p["dna_answers"]),
         "academy_emphasis": list(p["academy_emphasis"]),
         "pillars": dict(p["pillars"]),
@@ -332,6 +345,15 @@ def _clear_memory_user(user_id: str) -> None:
     try:
         from welora.mode_c_act import _PERSONAS
         _PERSONAS.pop(user_id, None)
+    except Exception:
+        pass
+    try:
+        from welora.os_accounts import STORE as ACC_STORE
+        for a in list(ACC_STORE.list_for_user(user_id, include_hidden=True)):
+            if hasattr(ACC_STORE, "delete_hard"):
+                ACC_STORE.delete_hard(a.account_id)
+            elif hasattr(ACC_STORE, "_by_id"):
+                ACC_STORE._by_id.pop(a.account_id, None)
     except Exception:
         pass
 

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Ngân sách</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<link rel="stylesheet" href="/static/money.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+a{color:var(--link);text-decoration:none}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:14px;margin:10px 0;color:var(--text-primary,#F4F1E8)}
+.label{color:var(--text-secondary);font-size:13px;font-weight:600}
+label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
+input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
+button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+button:disabled{opacity:.55}
+.err{color:var(--color-danger,#E85D5D);font-size:13px;margin-top:6px}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:6px}
+ul{list-style:none;padding:0;margin:8px 0}
+li{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-default);font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > *{flex:1;min-width:120px}
+.check{display:flex;align-items:center;gap:8px;margin-top:10px}
+.check input{width:auto;margin:0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg-elevated);border:1px solid var(--border-default);margin-left:6px}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/transactions">Giao dịch</a> · <a href="/app/categories">Danh mục</a> · <a href="/app/parser">CSV</a></p>
+<h1>Ngân sách</h1>
+<p class="muted">Trung bình chi tiêu thật 3–6 tháng · chuyển số dư · đóng góp Mục tiêu · xác nhận trước khi lưu</p>
+
+<div class="card" id="avgCard">
+  <div class="label">Nháp từ trung bình chi tiêu</div>
+  <div class="row">
+    <label>Số tháng (3–6)
+      <select id="monthsSel">
+        <option value="3" selected>3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+      </select>
+    </label>
+  </div>
+  <button type="button" id="btnDraftAvg">Tạo nháp trung bình</button>
+  <p class="muted" id="avgWindow"></p>
+  <ul id="avgLines"></ul>
+  <p class="muted" id="goalContribLabel"></p>
+  <ul id="goalContribLines"></ul>
+  <label class="check"><input type="checkbox" id="confirmSave"/> Tôi xác nhận lưu / cập nhật ngân sách (không ghi đè im lặng)</label>
+  <label class="check"><input type="checkbox" id="replaceExisting"/> Thay thế ngân sách hiện có (nếu đã có)</label>
+  <button type="button" id="btnApply" disabled>Lưu ngân sách</button>
+  <p class="err" id="avgErr" role="alert"></p>
+  <p class="ok" id="avgOk"></p>
+</div>
+
+<div class="card" id="currentCard">
+  <div class="label">Ngân sách hiện tại</div>
+  <p class="muted" id="currentMeta">Chưa có</p>
+  <ul id="currentLines"></ul>
+  <p class="muted" id="currentGoals"></p>
+</div>
+
+<div class="card" id="rolloverCard">
+  <div class="label">Đóng kỳ · chuyển số dư</div>
+  <label>Kỳ (YYYY-MM)
+    <input id="periodInput" placeholder="2026-09" autocomplete="off"/>
+  </label>
+  <label class="check"><input type="checkbox" id="confirmClose"/> Tôi xác nhận đóng kỳ và chuyển phần còn lại sang tháng sau</label>
+  <button type="button" id="btnClose" class="secondary">Đóng kỳ / rollover</button>
+  <p class="err" id="closeErr" role="alert"></p>
+  <p class="ok" id="closeOk"></p>
+</div>
+
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+<script>
+const KEY = 'welora_device_id';
+let draft = null;
+let existing = null;
+function deviceId(){
+  let d = localStorage.getItem(KEY);
+  if(!d){ d = 'dev-' + Math.random().toString(36).slice(2,10); localStorage.setItem(KEY, d); }
+  return d;
+}
+function vnd(n){ return Number(n||0).toLocaleString('vi-VN') + ' đ'; }
+async function ensureUser(){
+  const auth = await fetch('/auth/device', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: deviceId() }),
+  });
+  const a = await auth.json();
+  return a.user_id || '';
+}
+function renderLines(el, lines, mode){
+  el.textContent = '';
+  if(!lines || !lines.length){
+    const li = document.createElement('li');
+    li.className = 'muted';
+    li.textContent = 'Chưa có dòng';
+    el.appendChild(li);
+    return;
+  }
+  lines.forEach((row) => {
+    const li = document.createElement('li');
+    const a = document.createElement('span');
+    const kind = row.kind ? ' · ' + row.kind : '';
+    a.textContent = (row.category || row.label || '') + kind;
+    const b = document.createElement('span');
+    if(mode === 'avg'){
+      b.textContent = vnd(row.avg_monthly || row.outflow || 0) + '/tháng · ' + (row.months_used||'') + ' tháng · n=' + (row.count||0);
+    } else if(mode === 'goal'){
+      b.textContent = vnd(row.amount || 0) + '/tháng';
+    } else {
+      const rin = Number(row.rollover_in||0);
+      const rem = Number(row.remaining!=null ? row.remaining : (row.allocated||row.outflow||0));
+      b.textContent = 'cấp ' + vnd(row.allocated||row.outflow||0) + (rin ? (' · dư vào ' + vnd(rin)) : '') + ' · còn ' + vnd(rem);
+    }
+    li.appendChild(a);
+    li.appendChild(b);
+    el.appendChild(li);
+  });
+}
+async function loadCurrent(uid){
+  const br = await fetch('/budget?user_id=' + encodeURIComponent(uid));
+  const bj = await br.json();
+  existing = (bj && bj.budget) || null;
+  const meta = document.getElementById('currentMeta');
+  const linesEl = document.getElementById('currentLines');
+  const goalsEl = document.getElementById('currentGoals');
+  if(!existing){
+    meta.textContent = 'Chưa có ngân sách đã lưu';
+    linesEl.textContent = '';
+    goalsEl.textContent = '';
+    return;
+  }
+  meta.textContent = 'Kỳ ' + (existing.period||'—') + ' · nguồn ' + (existing.source||'—') + ' · auto_overwrite=false';
+  renderLines(linesEl, existing.lines || [], 'current');
+  const g = existing.goal_contrib_lines || [];
+  if(g.length){
+    goalsEl.textContent = 'Đóng góp Mục tiêu: ' + g.map(x => (x.label||x.goal_type) + ' ' + vnd(x.amount)).join(' · ');
+  } else {
+    goalsEl.textContent = 'Chưa có dòng đóng góp Mục tiêu';
+  }
+  if(existing.period) document.getElementById('periodInput').value = existing.period;
+}
+document.getElementById('btnDraftAvg').onclick = async () => {
+  const err = document.getElementById('avgErr');
+  const ok = document.getElementById('avgOk');
+  err.textContent = ''; ok.textContent = '';
+  try {
+    const uid = await ensureUser();
+    const months = Number(document.getElementById('monthsSel').value || 3);
+    const r = await fetch('/budget/draft-from-avg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: uid, months }),
+    });
+    const j = await r.json();
+    if(!r.ok){
+      err.textContent = (j.detail && (j.detail.error || j.detail)) || j.error || r.statusText;
+      draft = null;
+      document.getElementById('btnApply').disabled = true;
+      return;
+    }
+    draft = j.draft || null;
+    const win = (draft && draft.window_months) || [];
+    document.getElementById('avgWindow').textContent =
+      'Cửa sổ ' + (draft.months_used||0) + '/' + (draft.months_requested||months) + ' tháng: ' + win.join(', ') +
+      ' · không dùng ước ảo · auto_overwrite=false';
+    renderLines(document.getElementById('avgLines'), (draft && draft.lines) || [], 'avg');
+    const gl = (draft && draft.goal_contrib_lines) || [];
+    document.getElementById('goalContribLabel').textContent = gl.length ? 'Đóng góp Mục tiêu (chỉ đọc)' : 'Chưa có đóng góp Mục tiêu';
+    renderLines(document.getElementById('goalContribLines'), gl, 'goal');
+    document.getElementById('btnApply').disabled = !(draft && (draft.lines||[]).length);
+    await loadCurrent(uid);
+    ok.textContent = 'Đã tạo nháp từ chi tiêu thật.';
+  } catch(e){
+    err.textContent = String(e.message || e);
+  }
+};
+document.getElementById('btnApply').onclick = async () => {
+  const err = document.getElementById('avgErr');
+  const ok = document.getElementById('avgOk');
+  err.textContent = ''; ok.textContent = '';
+  if(!draft){ err.textContent = 'Chưa có nháp'; return; }
+  if(!document.getElementById('confirmSave').checked){
+    err.textContent = 'Cần xác nhận trước khi lưu (confirm).';
+    return;
+  }
+  try {
+    const uid = await ensureUser();
+    const r = await fetch('/budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: uid,
+        confirm: true,
+        replace_existing: !!document.getElementById('replaceExisting').checked,
+        draft,
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok){
+      const detail = j.detail;
+      const msg = (detail && (detail.error || detail.hint || detail)) || j.error || ('HTTP ' + r.status);
+      err.textContent = String(msg);
+      if(r.status === 409) err.textContent = 'Ngân sách đã có · không ghi đè im lặng. Bật «Thay thế» + xác nhận.';
+      return;
+    }
+    ok.textContent = j.replaced ? 'Đã cập nhật ngân sách.' : 'Đã lưu ngân sách.';
+    await loadCurrent(uid);
+  } catch(e){
+    err.textContent = String(e.message || e);
+  }
+};
+document.getElementById('btnClose').onclick = async () => {
+  const err = document.getElementById('closeErr');
+  const ok = document.getElementById('closeOk');
+  err.textContent = ''; ok.textContent = '';
+  if(!document.getElementById('confirmClose').checked){
+    err.textContent = 'Cần xác nhận đóng kỳ.';
+    return;
+  }
+  try {
+    const uid = await ensureUser();
+    const period = (document.getElementById('periodInput').value || '').trim();
+    const r = await fetch('/budget/close-period', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: uid, period, confirm: true }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok){
+      const detail = j.detail;
+      err.textContent = String((detail && (detail.error || detail)) || j.error || r.statusText);
+      return;
+    }
+    ok.textContent = 'Đã đóng ' + ((j.closed&&j.closed.period)||period) + ' · kỳ mới ' + ((j.next&&j.next.period)||'');
+    await loadCurrent(uid);
+  } catch(e){
+    err.textContent = String(e.message || e);
+  }
+};
+(async () => {
+  try {
+    const uid = await ensureUser();
+    await loadCurrent(uid);
+  } catch(_){}
+})();
+</script>
+</body>
+</html>

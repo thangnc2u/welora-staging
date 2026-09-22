@@ -102,6 +102,21 @@ class BudgetApplyBody(BaseModel):
     replace_existing: bool = False
     draft: Optional[dict[str, Any]] = None
     lines: Optional[list[dict[str, Any]]] = None
+    period: Optional[str] = None
+    goal_contrib_lines: Optional[list[dict[str, Any]]] = None
+
+
+class BudgetDraftFromAvgBody(BaseModel):
+    user_id: str
+    months: int = 3
+    account_id: Optional[str] = None
+
+
+class BudgetClosePeriodBody(BaseModel):
+    user_id: str
+    period: str
+    confirm: bool = False
+    spent_by_category: Optional[dict[str, Any]] = None
 
 class AcademyReadBody(BaseModel):
     user_id: str
@@ -328,7 +343,7 @@ def create_app() -> FastAPI:
     @app.get("/app/budget", include_in_schema=False)
     @app.get("/app/budget/", include_in_schema=False)
     def budget_ui() -> FileResponse:
-        return FileResponse(static_dir / "parser.html")
+        return FileResponse(static_dir / "budget.html")
 
     @app.get("/app/metrics", include_in_schema=False)
     @app.get("/app/metrics/", include_in_schema=False)
@@ -657,6 +672,15 @@ def create_app() -> FastAPI:
     @app.post("/budget", tags=["budget"])
     def budget_post(body: BudgetApplyBody) -> dict:
         return _respond(*budget_svc.service_apply(body.model_dump()))
+
+    @app.post("/budget/draft-from-avg", tags=["budget"])
+    def budget_draft_from_avg(body: BudgetDraftFromAvgBody) -> dict:
+        return _respond(*budget_svc.service_draft_from_avg(body.model_dump()))
+
+    @app.post("/budget/close-period", tags=["budget"])
+    @app.post("/budget/rollover", tags=["budget"])
+    def budget_close_period(body: BudgetClosePeriodBody) -> dict:
+        return _respond(*budget_svc.service_close_period(body.model_dump()))
 
     @app.get("/content", tags=["content"])
     def content_index() -> dict:

@@ -16,6 +16,10 @@ h1{font-size:1.25rem;margin:4px 0 8px}
 .label{color:var(--text-secondary);font-size:13px;font-weight:600}
 label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
 input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+/* Checkbox: do not inherit width:100% (overflows «Hiện tài khoản đã ẩn» on ~375px) */
+input[type="checkbox"]{width:auto;max-width:none;flex-shrink:0;padding:0;margin:0;border:none;background:transparent;border-radius:0}
+.show-hidden{display:flex;align-items:center;gap:8px;margin-top:8px;min-width:0;max-width:100%;box-sizing:border-box}
+.show-hidden span{min-width:0;overflow-wrap:anywhere;word-break:break-word}
 input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
 button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
@@ -43,8 +47,9 @@ button:disabled{opacity:.55}
   <div id="accountList" role="list" aria-label="Danh sách tài khoản">
     <p class="muted" id="listEmpty">Đang tải…</p>
   </div>
-  <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
-    <input type="checkbox" id="showHidden"/> Hiện tài khoản đã ẩn
+  <label class="show-hidden" for="showHidden">
+    <input type="checkbox" id="showHidden"/>
+    <span>Hiện tài khoản đã ẩn</span>
   </label>
 </div>
 

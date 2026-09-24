@@ -128,24 +128,33 @@
     btn.textContent = "Đăng xuất";
 
     btn.addEventListener("click", function () {
+      /* Capture Bearer BEFORE any storage clear; logout POST is fire-and-forget. */
       var token = "";
       try {
         token = localStorage.getItem("welora_token") || "";
-      } catch (_e) {}
+      } catch (_eTok) {}
 
-      function clearAuthAndRedirect() {
-        /* Clear ALL auth client storage; keep only welora_device_id. */
+      /* SYNCHRONOUS clear BEFORE fetch/redirect — token must die even if clear() throws. */
+      function clearAuthStorage() {
+        try {
+          localStorage.removeItem("welora_token");
+        } catch (_eRm) {}
+        try {
+          localStorage.removeItem("welora_dev");
+        } catch (_eDevKey) {}
         var deviceId = "";
         try {
           deviceId = localStorage.getItem("welora_device_id") || "";
         } catch (_eDev) {}
         try {
           localStorage.clear();
+        } catch (_eClear) {}
+        try {
           if (deviceId) localStorage.setItem("welora_device_id", deviceId);
-        } catch (_e2) {}
+        } catch (_eRest) {}
         try {
           sessionStorage.clear();
-        } catch (_e2b) {}
+        } catch (_eSess) {}
         /* Best-effort clear session-ish cookies (path=/ and path=/app). */
         try {
           var parts = (document.cookie || "").split(";");
@@ -157,28 +166,31 @@
             document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/app";
           }
         } catch (_eCk) {}
-        /* keep welora_device_id — device identity, not login session */
-        location.replace("/app/login");
       }
 
-      if (!token) {
-        clearAuthAndRedirect();
-        return;
+      clearAuthStorage();
+
+      if (token) {
+        try {
+          fetch("/auth/logout", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + token },
+            keepalive: true
+          }).catch(function () {});
+        } catch (_eFetch) {}
       }
-      var finished = false;
-      function once() {
-        if (finished) return;
-        finished = true;
-        clearAuthAndRedirect();
-      }
+
+      /* Belt: token gone again right before navigation (do not wait on fetch). */
       try {
-        fetch("/auth/logout", {
-          method: "POST",
-          headers: { Authorization: "Bearer " + token }
-        }).then(once, once);
-      } catch (_e3) {
-        once();
-      }
+        localStorage.removeItem("welora_token");
+      } catch (_eBelt) {}
+      try {
+        if (localStorage.getItem("welora_token")) {
+          localStorage.removeItem("welora_token");
+        }
+      } catch (_eAssert) {}
+      /* keep welora_device_id — device identity, not login session */
+      location.replace("/app/login");
     });
 
     chrome.appendChild(btn);

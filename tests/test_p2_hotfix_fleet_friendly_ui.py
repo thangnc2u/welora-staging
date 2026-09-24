@@ -163,6 +163,24 @@ class TestP2HotfixFleetFriendlyUi(unittest.TestCase):
         self.assertNotIn("Auth tabs", LOGIN_HTML)
         self.assertIn("Khách / demo", LOGIN_HTML)
 
+    def test_transactions_meta_no_bare_merchant_label(self):
+        """UAT #214 FAIL leftover: muted/meta chrome still said English merchant."""
+        # Strip <script> so API/JS field keys (t.merchant, body.merchant) are allowed.
+        chrome = re.sub(
+            r"<script\b[^>]*>.*?</script>",
+            "",
+            TX_HTML,
+            flags=re.I | re.S,
+        )
+        self.assertIn("Cửa hàng / ứng dụng", chrome)
+        # No user-facing bare English «merchant» in labels / muted help / meta chrome.
+        self.assertIsNone(
+            re.search(r"(?i)(?<![A-Za-z_/\"'=])merchant(?![A-Za-z_])", chrome),
+            "user-facing chrome still contains bare merchant",
+        )
+        self.assertNotIn("Ví dụ merchant", TX_HTML)
+        self.assertIn("Ví dụ Cửa hàng / ứng dụng hỗn hợp", TX_HTML)
+
     def test_target_months_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)
         r = self.client.get("/health")

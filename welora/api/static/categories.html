@@ -16,6 +16,10 @@ h1{font-size:1.25rem;margin:4px 0 8px}
 .label{color:var(--text-secondary);font-size:13px;font-weight:600}
 label{display:block;margin-top:10px;color:var(--text-secondary);font-size:13px}
 input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-subtle);color:var(--text-primary);margin-top:4px}
+/* Checkbox: do not inherit width:100% (overflows «Hiện danh mục đã vô hiệu» on ~375px) */
+input[type="checkbox"]{width:auto;max-width:none;flex-shrink:0;padding:0;margin:0;border:none;background:transparent;border-radius:0}
+.show-disabled{display:flex;align-items:center;gap:8px;margin-top:8px;min-width:0;max-width:100%;box-sizing:border-box}
+.show-disabled span{min-width:0;overflow-wrap:anywhere;word-break:break-word}
 input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600}
 button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
@@ -49,8 +53,9 @@ button:disabled{opacity:.55}
   <div id="categoryList" role="list" aria-label="Danh sách danh mục">
     <p class="muted" id="listEmpty">Đang tải…</p>
   </div>
-  <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
-    <input type="checkbox" id="showDisabled"/> Hiện danh mục đã vô hiệu
+  <label class="show-disabled" for="showDisabled">
+    <input type="checkbox" id="showDisabled"/>
+    <span>Hiện danh mục đã vô hiệu</span>
   </label>
   <p class="err" id="listErr" role="alert" aria-live="polite"></p>
   <p class="ok" id="listOk" aria-live="polite"></p>

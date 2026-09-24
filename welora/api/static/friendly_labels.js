@@ -67,7 +67,7 @@
       "Staging MVP · mã thử (không gửi email/SMS). Nhận mã đặt lại rồi đổi mật khẩu.",
     reset_intro: "Dùng mã đặt lại từ bước quên mật khẩu (bản staging thử nghiệm).",
     reset_needed: "Cần mã đặt lại mật khẩu",
-    guest_demo: "Khách / demo · email hoặc số điện thoại + mật khẩu",
+    guest_demo: "Khách / demo · chỉ cần email hoặc SĐT + mật khẩu",
     auth_tabs_aria: "Thẻ đăng nhập",
   };
 

@@ -17,7 +17,7 @@ class TestP2OsDnaOnboardEnumVi(unittest.TestCase):
         self.assertIn("solo:'Độc thân đô thị 18+'", DNA)
         self.assertIn("young_family:'25–34 Gia đình trẻ khởi đầu'", DNA)
         self.assertIn("couple_no_kids:'35–59 Vợ chồng không con nhỏ'", DNA)
-        self.assertIn("sandwich_3gen:'35–59 Ba đời trên một take-home'", DNA)
+        self.assertIn("sandwich_3gen:'35–59 Ba đời trên một thu nhập'", DNA)
         self.assertIn("pre_retire:'55–64 Cửa sổ 10 năm trước hưu'", DNA)
         self.assertIn("retire_companion:'65+ Tuổi vàng và hộ đồng hành'", DNA)
         self.assertIn("stable:'Ổn định'", DNA)

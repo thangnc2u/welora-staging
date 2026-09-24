@@ -81,7 +81,7 @@ DEFAULT_CATEGORIES: list[dict[str, Any]] = [
     {"name": "Lương", "kind": KIND_VARIABLE, "tags": ["luong"], "note": "Thu nhập (hint CSV)"},
     {"name": "Khác", "kind": KIND_VARIABLE, "tags": ["khac"], "note": None},
     # --- Goals (Mục tiêu) ---
-    {"name": "PYF", "kind": KIND_GOALS, "tags": ["pyf"], "note": "Pay Yourself First"},
+    {"name": "PYF", "kind": KIND_GOALS, "tags": ["pyf"], "note": "Trả cho mình trước"},
     {
         "name": "Quỹ khẩn cấp",
         "kind": KIND_GOALS,

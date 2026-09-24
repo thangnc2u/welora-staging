@@ -29,7 +29,7 @@ VALUES = (
 LABELS = (
     "Độc thân đô thị 18+",
     "Gia đình trẻ khởi đầu",
-    "Ba đời trên một take-home",
+    "Ba đời trên một thu nhập",
     "Ổn định",
     "Không ổn định",
     "Sống một mình",

@@ -134,7 +134,7 @@ HOUSEHOLD_UI_LABEL_VI: dict[str, str] = {
     "solo": "Độc thân đô thị 18+",
     "young_family": "25–34 Gia đình trẻ khởi đầu",
     "couple_no_kids": "35–59 Vợ chồng không con nhỏ",
-    "sandwich_3gen": "35–59 Ba đời trên một take-home",
+    "sandwich_3gen": "35–59 Ba đời trên một thu nhập",
     "pre_retire": "55–64 Cửa sổ 10 năm trước hưu",
     "retire_companion": "65+ Tuổi vàng và hộ đồng hành",
 }
@@ -399,10 +399,10 @@ PERSONAS: dict[str, dict[str, Any]] = {
     },
     "P4": {
         "persona_id": "P4",
-        "label_vi": "35–59 Ba đời trên một take-home",
+        "label_vi": "35–59 Ba đời trên một thu nhập",
         "age_band": "35–59",
         "household": "sandwich_3gen",
-        "income_band_vnd_mo": "1 take-home 18–30tr nuôi hộ",
+        "income_band_vnd_mo": "1 thu nhập mang về 18–30tr nuôi hộ",
         "primary_goals": [
             "Dòng tiền sống sót",
             "Cắt nợ xấu",

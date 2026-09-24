@@ -42,7 +42,7 @@ button:disabled{opacity:.55}
 <body>
 <p><a id="navHome" href="/app">← Welora</a> · <a href="/app/accounts">Tài khoản</a> · <a href="/app/transactions">Giao dịch</a></p>
 <h1>Danh mục</h1>
-<p class="muted">Cố định · Biến đổi · Mục tiêu — gắn thẻ (budget_tags) · vô hiệu hoá có chuyển lịch sử</p>
+<p class="muted">Cố định · Biến đổi · Mục tiêu — gắn thẻ ngân sách · vô hiệu hoá có chuyển lịch sử</p>
 
 <div class="card" id="listCard">
   <div class="label">Danh sách danh mục</div>
@@ -72,8 +72,8 @@ button:disabled{opacity:.55}
       <option value="variable" selected>Biến đổi</option>
       <option value="goals">Mục tiêu</option>
     </select>
-    <label for="catTags">Thẻ (slug, cách nhau bởi dấu phẩy)</label>
-    <input id="catTags" name="catTags" type="text" placeholder="an_uong, sieu_thi" autocomplete="off"/>
+    <label for="catTags">Thẻ (cách nhau bởi dấu phẩy)</label>
+    <input id="catTags" name="catTags" type="text" placeholder="ăn uống, siêu thị" autocomplete="off"/>
     <label for="catNote">Ghi chú</label>
     <input id="catNote" name="catNote" type="text" autocomplete="off"/>
     <button type="button" id="btnCreate">Tạo danh mục</button>
@@ -119,6 +119,7 @@ button:disabled{opacity:.55}
   <p class="err" id="disableErr" role="alert" aria-live="polite"></p>
 </div>
 
+<script src="/static/friendly_labels.js"></script>
 <script>
 const KEY='welora_device_id';
 const KIND_VI={fixed:'Cố định',variable:'Biến đổi',goals:'Mục tiêu'};
@@ -147,7 +148,12 @@ async function ensureUser(){
   uid=auth.body.user_id||'';
 }
 function parseTags(s){
-  return String(s||'').split(/[,;\s]+/).map(function(x){return x.trim();}).filter(Boolean);
+  return String(s||'').split(/[,;]+/).map(function(x){
+    x=x.trim();
+    if(!x) return '';
+    if(typeof WeloraLabels!=='undefined'&&WeloraLabels.slugCategoryTag) return WeloraLabels.slugCategoryTag(x);
+    return x;
+  }).filter(Boolean);
 }
 
 function renderList(){
@@ -188,12 +194,12 @@ function renderList(){
       el.appendChild(title);
       const tags=document.createElement('p');
       tags.className='tags';
-      tags.textContent=(c.tags&&c.tags.length)?('Thẻ: '+c.tags.join(', ')):'(không thẻ)';
+      tags.textContent=(c.tags&&c.tags.length)?('Thẻ: '+(typeof labelCategoryTags==='function'?labelCategoryTags(c.tags):c.tags.join(', '))):'(không thẻ)';
       el.appendChild(tags);
       if(c.note){
         const note=document.createElement('p');
         note.className='muted';
-        note.textContent=c.note;
+        note.textContent=(typeof WeloraLabels!=='undefined'&&WeloraLabels.friendlyNote)?WeloraLabels.friendlyNote(c.note):c.note;
         el.appendChild(note);
       }
       const row=document.createElement('div');
@@ -243,7 +249,7 @@ function openEdit(c){
   document.getElementById('editId').value=c.category_id;
   document.getElementById('editName').value=c.name||'';
   document.getElementById('editKind').value=c.kind||'variable';
-  document.getElementById('editTags').value=(c.tags||[]).join(', ');
+  document.getElementById('editTags').value=(c.tags&&c.tags.length)?(typeof labelCategoryTags==='function'?labelCategoryTags(c.tags):c.tags.join(', ')):'';
   document.getElementById('editNote').value=c.note||'';
   document.getElementById('editErr').textContent='';
   document.getElementById('editCard').scrollIntoView({behavior:'smooth',block:'nearest'});

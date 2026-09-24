@@ -320,7 +320,7 @@ class TestP2LockFormLogicConflicts(unittest.TestCase):
             personas,
         )
         self.assertIn(
-            'label_vi": "35–59 Ba đời trên một take-home"',
+            'label_vi": "35–59 Ba đời trên một thu nhập"',
             personas,
         )
 

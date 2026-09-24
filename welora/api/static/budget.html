@@ -73,11 +73,12 @@ li{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-botto
     <input id="periodInput" placeholder="2026-09" autocomplete="off"/>
   </label>
   <label class="check"><input type="checkbox" id="confirmClose"/><span>Tôi xác nhận đóng kỳ và chuyển phần còn lại sang tháng sau</span></label>
-  <button type="button" id="btnClose" class="secondary">Đóng kỳ / rollover</button>
+  <button type="button" id="btnClose" class="secondary">Đóng kỳ / chuyển số dư</button>
   <p class="err" id="closeErr" role="alert"></p>
   <p class="ok" id="closeOk"></p>
 </div>
 
+<script src="/static/friendly_labels.js"></script>
 <script src="/static/shell.js" data-shell-tab="ops"></script>
 <script>
 const KEY = 'welora_device_id';
@@ -140,11 +141,11 @@ async function loadCurrent(uid){
     goalsEl.textContent = '';
     return;
   }
-  meta.textContent = 'Kỳ ' + (existing.period||'—') + ' · nguồn ' + (existing.source||'—') + ' · auto_overwrite=false';
+  meta.textContent = 'Kỳ ' + (existing.period||'—') + ' · nguồn ' + (existing.source||'—');
   renderLines(linesEl, existing.lines || [], 'current');
   const g = existing.goal_contrib_lines || [];
   if(g.length){
-    goalsEl.textContent = 'Đóng góp Mục tiêu: ' + g.map(x => (x.label||x.goal_type) + ' ' + vnd(x.amount)).join(' · ');
+    goalsEl.textContent = 'Đóng góp Mục tiêu: ' + g.map(x => (x.label||(typeof labelGoalType==='function'?labelGoalType(x.goal_type):x.goal_type)||'—') + ' ' + vnd(x.amount)).join(' · ');
   } else {
     goalsEl.textContent = 'Chưa có dòng đóng góp Mục tiêu';
   }
@@ -173,7 +174,7 @@ document.getElementById('btnDraftAvg').onclick = async () => {
     const win = (draft && draft.window_months) || [];
     document.getElementById('avgWindow').textContent =
       'Cửa sổ ' + (draft.months_used||0) + '/' + (draft.months_requested||months) + ' tháng: ' + win.join(', ') +
-      ' · không dùng ước ảo · auto_overwrite=false';
+      ' · không dùng ước ảo';
     renderLines(document.getElementById('avgLines'), (draft && draft.lines) || [], 'avg');
     const gl = (draft && draft.goal_contrib_lines) || [];
     document.getElementById('goalContribLabel').textContent = gl.length ? 'Đóng góp Mục tiêu (chỉ đọc)' : 'Chưa có đóng góp Mục tiêu';
@@ -191,7 +192,7 @@ document.getElementById('btnApply').onclick = async () => {
   err.textContent = ''; ok.textContent = '';
   if(!draft){ err.textContent = 'Chưa có nháp'; return; }
   if(!document.getElementById('confirmSave').checked){
-    err.textContent = 'Cần xác nhận trước khi lưu (confirm).';
+    err.textContent = 'Cần tick xác nhận trước khi lưu.';
     return;
   }
   try {

@@ -27,7 +27,7 @@
   <p><a href="/app/safety">← An Toàn</a></p>
   <h1>Sao kê CSV ngân hàng</h1>
   <p class="muted">Gợi ý chi tiêu thiết yếu · <strong>không</strong> ghi đè quỹ/DNA tự động, không bỏ qua Cổng.</p>
-  <textarea id="csv" placeholder="Dán CSV (date,amount,description)…"></textarea>
+  <textarea id="csv" placeholder="Dán CSV: ngày, số tiền, mô tả…"></textarea>
   <button id="go">Phân tích</button>
   <div id="out">
     <div class="card">
@@ -45,7 +45,7 @@
       <button type="button" id="createGoalBtn" disabled>Tạo quỹ khẩn cấp</button>
     </div>
     <div class="card" id="budgetDraft">
-      <p class="muted">Ngân sách theo danh mục · <a href="/app/budget">Trung bình 3–6 tháng / rollover / Mục tiêu</a></p>
+      <p class="muted">Ngân sách theo danh mục · <a href="/app/budget">Trung bình 3–6 tháng / chuyển số dư / Mục tiêu</a></p>
       <ul id="budgetLines"></ul>
       <p class="muted" id="budgetGoalContrib"></p>
       <p class="muted" id="budgetNote"></p>
@@ -55,6 +55,7 @@
       <button type="button" id="budgetApplyBtn" disabled>Tạo / cập nhật ngân sách</button>
     </div>
   </div>
+<script src="/static/friendly_labels.js"></script>
   <script>
     const KEY = 'welora_device_id';
     let draftEssential = 0;
@@ -169,7 +170,7 @@
         }
         const gLines = (budgetDraft && budgetDraft.goal_contrib_lines) || [];
         if (gContrib && gLines.length) {
-          gContrib.textContent = 'Đóng góp Mục tiêu: ' + gLines.map((x) => (x.label || x.goal_type) + ' ' + vnd(x.amount)).join(' · ');
+          gContrib.textContent = 'Đóng góp Mục tiêu: ' + gLines.map((x) => (x.label || (typeof labelGoalType==='function'?labelGoalType(x.goal_type):x.goal_type) || '—') + ' ' + vnd(x.amount)).join(' · ');
         }
         const br = await fetch('/budget?user_id=' + encodeURIComponent(uid));
         const bj = await br.json();

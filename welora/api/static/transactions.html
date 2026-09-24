@@ -67,21 +67,21 @@ button:disabled{opacity:.55}
       <option value="Siêu thị"/><option value="Học phí"/><option value="Ăn uống"/>
       <option value="Di chuyển"/><option value="Mua sắm"/><option value="Khác"/>
     </datalist>
-    <label for="txDate">Ngày (ISO)</label>
+    <label for="txDate">Ngày</label>
     <input id="txDate" name="txDate" type="date"/>
-    <label for="txMerchant">Merchant (tuỳ chọn)</label>
+    <label for="txMerchant">Cửa hàng / ứng dụng (tuỳ chọn)</label>
     <input id="txMerchant" name="txMerchant" type="text" placeholder="Shopee / Grab / WinMart" autocomplete="off"/>
     <label for="txNote">Ghi chú (tuỳ chọn)</label>
     <input id="txNote" name="txNote" type="text" autocomplete="off"/>
 
-    <div class="label" style="margin-top:14px">Tách dòng (split) — tuỳ chọn</div>
+    <div class="label" style="margin-top:14px">Tách dòng — tuỳ chọn</div>
     <p class="muted">Tổng các dòng phải bằng số tiền (±0.01). Ví dụ merchant hỗn hợp.</p>
     <div id="splitLines"></div>
-    <button type="button" class="secondary" id="btnAddSplit">+ Thêm dòng split</button>
+    <button type="button" class="secondary" id="btnAddSplit">+ Thêm dòng tách</button>
 
     <div class="consent">
       <input type="checkbox" id="consentAck" name="consentAck" checked/>
-      <label for="consentAck" style="margin:0">Tôi đồng ý lưu giao dịch này trên Welora (nhập thủ công). Không kết nối Open Banking.</label>
+      <label for="consentAck" style="margin:0">Tôi đồng ý lưu giao dịch này trên Welora (nhập thủ công). Không kết nối ngân hàng.</label>
     </div>
     <button type="button" id="btnCreate">Tạo giao dịch</button>
     <p class="err" id="createErr" role="alert" aria-live="polite"></p>
@@ -212,7 +212,7 @@ function renderList(){
     h.textContent=(t.merchant||t.category||'Giao dịch')+' · '+money(t.amount);
     if(t.is_split){
       const pill=document.createElement('span');
-      pill.className='pill split'; pill.textContent='Split';
+      pill.className='pill split'; pill.textContent='Tách dòng';
       h.appendChild(pill);
     }
     el.appendChild(h);
@@ -287,7 +287,7 @@ async function createTx(){
     err.textContent=errText(r.body,'Không tạo được giao dịch');
     return;
   }
-  ok.textContent='Đã tạo · '+(r.body.is_split?'có split · ':'')+money(r.body.amount);
+  ok.textContent='Đã tạo · '+(r.body.is_split?'có tách dòng · ':'')+money(r.body.amount);
   document.getElementById('txAmount').value='';
   document.getElementById('txNote').value='';
   document.getElementById('splitLines').innerHTML='';

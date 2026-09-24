@@ -91,7 +91,7 @@ a#navHome{color:var(--link,#E8C86A)}
 </div>
 
 <div id="modeCConfirm" aria-live="polite">
-  <span class="modeChip">Mode C · Hành động</span>
+  <span class="modeChip">Chế độ Hành động</span>
   <p class="modeDisclaimer">Hành động trên OS — có thể hoàn tác trong 24 giờ</p>
   <p id="mcSummary" style="margin:8px 0 0;font-size:14px"></p>
   <div class="actions">
@@ -121,6 +121,7 @@ a#navHome{color:var(--link,#E8C86A)}
   </div>
 </div>
 <form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
+<script src="/static/friendly_labels.js"></script>
 <script>
 const log=document.getElementById('log');
 const denyCta=document.getElementById('denyCta');
@@ -253,14 +254,14 @@ document.getElementById('f').onsubmit=async(e)=>{
       showModeCPropose(d);
     }else if(d.mode==='C' && (d.needs_companion_confirm || (d.act_proposal&&d.act_proposal.status==='pending_dual') || d.status==='pending_dual')){
       addModeCBubble(d);
-      add('Chờ đồng kiểm 2 người — mở Điều hành · Đồng kiểm để companion xác nhận.\n→ /app/dual-control','bot muted');
+      add('Chờ đồng kiểm 2 người — mở Điều hành · Đồng kiểm để người đồng hành xác nhận.\n→ Đồng kiểm','bot muted');
     }else{
       const cls='bot '+(d.guardrail_result==='deny'?'deny':(d.mode==='C'?'modeC':'pass'));
       let bubble=d.reply||'Không có phản hồi';
       if(d.guardrail_result==='deny'){
         bubble=bubble+'\nTừ chối cứng';
         if(d.rule==='L-DUAL-CONTROL' || d.mode_c_rule==='L-DUAL-CONTROL' || (d.policy_version||'').indexOf('L-DUAL')>=0){
-          bubble=bubble+'\n→ Gắn companion tại /app/dual-control';
+          bubble=bubble+'\n→ Gắn người đồng hành tại Đồng kiểm';
         }
       }
       if(d.mode==='C' && d.mode_chip){
@@ -288,11 +289,11 @@ function hideUndo(){ if(mcUndo) mcUndo.classList.remove('show'); lastUndo=null; 
 function showModeCPropose(d){
   const p=d.act_proposal; if(!p||!mcBox) return;
   pendingProposal=p;
-  if(mcSummary) mcSummary.textContent=p.summary||'Xác nhận hành động Mode C';
+  if(mcSummary) mcSummary.textContent=p.summary||'Xác nhận hành động';
   mcBox.classList.add('show');
 }
 function addModeCBubble(d){
-  const chip=d.mode_chip||'Mode C · Hành động';
+  const chip=(typeof WeloraLabels!=='undefined'&&WeloraLabels.friendlyModeChip)?WeloraLabels.friendlyModeChip(d.mode_chip):((d.mode_chip&&!/Mode\s*C/i.test(d.mode_chip))?d.mode_chip:'Chế độ Hành động');
   const disc=d.disclaimer||'Hành động trên OS — có thể hoàn tác trong 24 giờ';
   const d2=document.createElement('div');
   d2.className='msg bot modeC';
@@ -305,7 +306,7 @@ function addModeCBubble(d){
   log.appendChild(d2); log.scrollTop=log.scrollHeight;
 }
 if(document.getElementById('mcCancelBtn')){
-  document.getElementById('mcCancelBtn').onclick=()=>{ hideModeC(); add('Đã hủy Mode C.','bot muted'); };
+  document.getElementById('mcCancelBtn').onclick=()=>{ hideModeC(); add('Đã hủy hành động.','bot muted'); };
 }
 if(document.getElementById('mcConfirmBtn')){
   document.getElementById('mcConfirmBtn').onclick=async()=>{
@@ -316,7 +317,7 @@ if(document.getElementById('mcConfirmBtn')){
       const d=await r.json();
       hideModeC();
       if(d.ok){
-        add('Đã xác nhận Mode C — OS đã cập nhật.\n'+((d.result&&d.result.title)||(d.result&&d.result.reminder_kind)||(d.act_kind)||''),'bot modeC');
+        add('Đã xác nhận hành động — OS đã cập nhật.\n'+((d.result&&d.result.title)||(d.result&&d.result.reminder_kind)||(typeof labelActKind==='function'?labelActKind(d.act_kind):'')||''),'bot modeC');
         if(d.undo){ lastUndo={act_id:d.act_id,undo_token:d.undo.token}; if(mcUndo) mcUndo.classList.add('show'); }
       }else{
         add(d.error||d.detail||'Không xác nhận được.','bot deny');
@@ -333,7 +334,7 @@ if(document.getElementById('mcUndoBtn')){
       const r=await fetch('/agent/mode-c/undo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,act_id:lastUndo.act_id,undo_token:lastUndo.undo_token})});
       const d=await r.json();
       hideUndo();
-      if(d.ok) add('Đã hoàn tác Mode C trong 24 giờ.','bot muted');
+      if(d.ok) add('Đã hoàn tác hành động trong 24 giờ.','bot muted');
       else add(d.error||d.detail||'Không hoàn tác được.','bot deny');
     }catch(e){ add('Không hoàn tác được.','bot deny'); }
     finally{ setLoading(false); }

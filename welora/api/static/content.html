@@ -224,7 +224,7 @@ function renderMarkdown(root, md){
       mids.forEach(function(mid){
         const mod=mods[mid]||{};
         const h=document.createElement('p');
-        h.textContent=mod.title||('Module '+mid);
+        h.textContent=mod.title||('Chương '+mid);
         elBody.appendChild(h);
         (mod.items||[]).forEach(renderItem);
       });
@@ -248,7 +248,7 @@ function renderMarkdown(root, md){
   renderMarkdown(elBody, stripFrontmatter(d.body_markdown||''));
   const risk=d.risk_label||'';
   const reviewed=d.last_reviewed_at||'';
-  elGov.textContent=(risk?('Rủi ro: '+risk):'')+(reviewed?(' · Đã review '+reviewed):'');
+  elGov.textContent=(risk?('Rủi ro: '+risk):'')+(reviewed?(' · Đã duyệt '+reviewed):'');
   const ac=document.getElementById('ctaAcademy');
   const pediaKey=d.principle_key||key;
   ac.href='/app/academy?from=pedia&key='+encodeURIComponent(pediaKey);

@@ -360,7 +360,7 @@ class TestP2OsBudgetParity(unittest.TestCase):
 
         html = BUDGET_HTML.read_text(encoding="utf-8")
         self.assertIn("Đóng góp Mục tiêu", html)
-        self.assertIn("auto_overwrite=false", html)
+        self.assertNotIn("auto_overwrite", html)
 
         # CSV parser path still exposes budget block
         parser = PARSER_HTML.read_text(encoding="utf-8")

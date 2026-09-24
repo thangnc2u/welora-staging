@@ -32,30 +32,30 @@ h1{color:var(--text-primary)}
 <p><a id="navHome" href="/app">← Welora</a> · <a href="/app/safety">An Toàn</a> · <a href="/app/chat">Chat</a></p>
 <div class="shell">
   <h1>Đồng kiểm · 2 người</h1>
-  <p class="meta">L-DUAL-CONTROL — khóa / đổi trần phong bì và checklist di sản cần người đồng hành xác nhận trong app.</p>
+  <p class="meta">Khóa / đổi trần phong bì và checklist di sản cần người đồng hành xác nhận trong app.</p>
 
   <div class="section-title">Người dùng hiện tại</div>
   <div class="card">
     <div class="meta" id="uidMeta">Đang tải…</div>
   </div>
 
-  <div class="section-title">Người đồng hành (companion)</div>
+  <div class="section-title">Người đồng hành</div>
   <div class="card" id="companionCard">
-    <div class="meta" id="companionMeta">Chưa gắn companion — Act đồng kiểm sẽ bị từ chối.</div>
-    <label for="companionInput">companion_user_id (thiết bị / user thứ 2)</label>
-    <input id="companionInput" type="text" placeholder="vd. user_companion_01" autocomplete="off"/>
+    <div class="meta" id="companionMeta">Chưa gắn người đồng hành — thao tác đồng kiểm sẽ bị từ chối.</div>
+    <label for="companionInput">Mã người đồng hành</label>
+    <input id="companionInput" type="text" placeholder="Nhập mã từ thiết bị thứ hai" autocomplete="off"/>
     <button id="btnAttach" type="button">Gắn người đồng hành</button>
     <div id="msg"></div>
   </div>
 
-  <div class="section-title">Đề xuất đang chờ (pending_dual)</div>
+  <div class="section-title">Đề xuất đang chờ</div>
   <div id="pendingList" class="card pending">
     <div class="meta">Chưa có đề xuất chờ đồng kiểm.</div>
   </div>
 
   <div class="section-title">Gợi ý Mode C</div>
   <div class="card">
-    <p class="meta">Trong Chat (Mode C), thử: «Khóa phong bì», «Đổi trần phong bì 20000000», «Mở checklist di sản». Thiếu companion → DENY; có companion → chờ xác nhận tại đây.</p>
+    <p class="meta">Trong Chat (Mode C), thử: «Khóa phong bì», «Đổi trần phong bì 20000000», «Mở checklist di sản». Thiếu người đồng hành → bị từ chối; đã gắn → chờ xác nhận tại đây.</p>
     <p><a href="/app/chat">Mở Chat với Agent</a></p>
   </div>
 </div>
@@ -75,12 +75,12 @@ async function ensureUser(){
   if(!d){ d="dev-"+Math.random().toString(36).slice(2,10); localStorage.setItem(KEY,d); }
   const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:d})});
   uid=auth.body.user_id||"";
-  document.getElementById("uidMeta").textContent=uid?("user_id: "+uid):"Không lấy được user";
+  document.getElementById("uidMeta").textContent=uid?"Đã đăng nhập trên thiết bị này":"Chưa đăng nhập — vui lòng thử lại.";
   const q=new URLSearchParams(location.search);
   asCompanionUid=(q.get("as")||"").trim();
   if(asCompanionUid){
     document.getElementById("uidMeta").textContent=
-      "user_id (thiết bị): "+uid+" · đang xem với tư cách companion: "+asCompanionUid;
+      "Đã đăng nhập trên thiết bị này · đang xem với tư cách người đồng hành";
   }
 }
 
@@ -98,11 +98,11 @@ async function loadCompanion(){
   const meta=document.getElementById("companionMeta");
   const card=document.getElementById("companionCard");
   if(cid){
-    meta.textContent="Đã gắn companion: "+cid;
+    meta.textContent="Đã gắn người đồng hành";
     card.className="card ok";
     document.getElementById("companionInput").value=cid;
   }else{
-    meta.textContent="Chưa gắn companion — Act đồng kiểm sẽ bị từ chối (L-DUAL-CONTROL).";
+    meta.textContent="Chưa gắn người đồng hành — thao tác đồng kiểm sẽ bị từ chối.";
     card.className="card warn";
   }
 }
@@ -125,11 +125,11 @@ function renderPending(items){
     div.appendChild(h);
     const pill=document.createElement("span");
     pill.className="pill";
-    pill.textContent="pending_dual · L-DUAL-CONTROL";
+    pill.textContent="Chờ đồng kiểm";
     div.appendChild(pill);
     const meta=document.createElement("div");
     meta.className="meta";
-    meta.textContent="primary: "+(p.user_id||"—")+" · companion: "+(p.companion_user_id||"—");
+    meta.textContent="Chủ · Người đồng hành";
     div.appendChild(meta);
     const btns=document.createElement("div");
     btns.className="row-btns";
@@ -138,7 +138,7 @@ function renderPending(items){
     if(isComp){
       const c=document.createElement("button");
       c.type="button";
-      c.textContent="Companion xác nhận";
+      c.textContent="Xác nhận (người đồng hành)";
       c.onclick=async function(){
         const who=asCompanionUid||uid;
         const res=await api("/agent/mode-c/companion-confirm",{
@@ -187,7 +187,7 @@ async function loadPending(){
 
 document.getElementById("btnAttach").onclick=async function(){
   const cid=document.getElementById("companionInput").value.trim();
-  if(!uid||!cid){ setMsg("Cần user_id và companion_user_id.", false); return; }
+  if(!uid||!cid){ setMsg("Cần đăng nhập và mã người đồng hành.", false); return; }
   const res=await api("/os/companion",{method:"POST",body:JSON.stringify({user_id:uid, companion_user_id:cid})});
   setMsg(res.body.reply||res.body.error||"", res.ok && res.body.ok);
   await loadCompanion();

@@ -255,3 +255,63 @@ nav.ops-tabs a.ops-nav:focus-visible{
   outline:2px solid var(--border-focus, #E8C86A);
   outline-offset:2px;
 }
+
+/* Scope B: top-right Đăng xuất chrome (parity CP) — above ops-tabs / content */
+#weloraTopChrome{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  z-index:50;
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  max-width:480px;
+  margin-inline:auto;
+  padding:8px 12px;
+  padding-top:calc(8px + env(safe-area-inset-top, 0px));
+  box-sizing:border-box;
+  pointer-events:none;
+  background:var(--bg-app, #121A28);
+}
+body.welora-shell.welora-has-logout{
+  padding-top:calc(48px + env(safe-area-inset-top, 0px));
+}
+/* Sticky ops-tabs sit below logout strip when scrolling */
+body.welora-has-logout #opsCluster.ops-tabs,
+body.welora-has-logout nav.ops-tabs{
+  top:calc(40px + env(safe-area-inset-top, 0px));
+}
+#weloraLogout,
+.welora-logout-btn{
+  pointer-events:auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin:0;
+  padding:8px 12px;
+  min-height:36px;
+  border-radius:10px;
+  border:1px solid var(--border-default, #2F3D54);
+  background:var(--bg-surface, #1A2536);
+  color:var(--text-primary, #F4F1E8);
+  font:inherit;
+  font-size:13px;
+  font-weight:600;
+  line-height:1.2;
+  cursor:pointer;
+  text-decoration:none;
+  box-sizing:border-box;
+  white-space:nowrap;
+}
+#weloraLogout:hover,
+.welora-logout-btn:hover{
+  border-color:var(--gold-400, #E8C86A);
+  color:var(--text-primary, #F4F1E8);
+  background:var(--bg-elevated, #243044);
+}
+#weloraLogout:focus-visible,
+.welora-logout-btn:focus-visible{
+  outline:2px solid var(--border-focus, #E8C86A);
+  outline-offset:2px;
+}

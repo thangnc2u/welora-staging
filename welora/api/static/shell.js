@@ -83,6 +83,69 @@
     })();
   }
 
+
+  /* Scope B: Đăng xuất chrome (parity CP) — skip auth pages; no logout query deeplink */
+  (function injectLogout() {
+    var authPaths = {
+      "/app/login": 1,
+      "/app/register": 1,
+      "/app/forgot-password": 1,
+      "/app/reset-password": 1
+    };
+    if (authPaths[path]) return;
+    if (document.getElementById("weloraLogout") || document.getElementById("btnLogout")) return;
+
+    var chrome = document.createElement("div");
+    chrome.id = "weloraTopChrome";
+    chrome.setAttribute("role", "banner");
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "weloraLogout";
+    btn.className = "welora-logout-btn";
+    btn.setAttribute("aria-label", "Đăng xuất");
+    btn.textContent = "Đăng xuất";
+
+    btn.addEventListener("click", function () {
+      var token = "";
+      try {
+        token = localStorage.getItem("welora_token") || "";
+      } catch (_e) {}
+
+      function clearSessionAndRedirect() {
+        try {
+          localStorage.removeItem("welora_token");
+          localStorage.removeItem("welora_dev");
+        } catch (_e2) {}
+        /* keep welora_device_id — device identity, not login session */
+        location.href = "/app/login";
+      }
+
+      if (!token) {
+        clearSessionAndRedirect();
+        return;
+      }
+      var finished = false;
+      function once() {
+        if (finished) return;
+        finished = true;
+        clearSessionAndRedirect();
+      }
+      try {
+        fetch("/auth/logout", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + token }
+        }).then(once, once);
+      } catch (_e3) {
+        once();
+      }
+    });
+
+    chrome.appendChild(btn);
+    document.body.insertBefore(chrome, document.body.firstChild);
+    document.body.classList.add("welora-has-logout");
+  })();
+
   /* P1 ops-tabs: mark active from pathname if missing */
   (function markOpsTabs() {
     var cluster = document.getElementById("opsCluster");

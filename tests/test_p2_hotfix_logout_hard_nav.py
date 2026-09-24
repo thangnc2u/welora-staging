@@ -116,6 +116,41 @@ class TestP2HotfixLogoutHardNav(unittest.TestCase):
         self.assertIn("/auth/logout", js)
         self.assertIn("Bearer", js)
 
+    def test_shell_js_sync_token_remove_before_redirect(self):
+        """Hotfix #3: removeItem(welora_token) must run sync on click before replace."""
+        js = self.shell
+        # Explicit removeItem must appear in source before location.replace("/app/login")
+        # Use the logout-path replace (last occurrence — gate + logout both have replace)
+        rm = 'removeItem("welora_token")'
+        self.assertIn(rm, js)
+        self.assertGreaterEqual(js.count(rm), 2)  # sync clear + belt before redirect
+        replace = 'location.replace("/app/login")'
+        # First removeItem (sync clear) must precede the logout redirect replace.
+        # Find logout click region via clearAuthStorage / keepalive fire-and-forget.
+        self.assertIn("clearAuthStorage", js)
+        self.assertIn("keepalive: true", js)
+        # Sync removeItem on click path — not solely gated behind fetch.then
+        click_i = js.index('btn.addEventListener("click"')
+        logout_region = js[click_i:]
+        self.assertIn(rm, logout_region)
+        first_rm = logout_region.index(rm)
+        replace_i = logout_region.index(replace)
+        self.assertLess(first_rm, replace_i)
+        # Must NOT solely gate clear behind fetch.then(once)
+        self.assertNotIn("function once()", logout_region)
+        self.assertNotIn(".then(once, once)", logout_region)
+        # Fire-and-forget: clearAuthStorage called before fetch
+        clear_i = logout_region.index("clearAuthStorage()")
+        fetch_i = logout_region.index('fetch("/auth/logout"')
+        self.assertLess(clear_i, fetch_i)
+        self.assertLess(fetch_i, replace_i)
+        # belt removeItem again before replace
+        belt_after_fetch = logout_region[fetch_i:].index(rm)
+        self.assertLess(belt_after_fetch, logout_region[fetch_i:].index(replace))
+        # keep device_id; no ?logout=
+        self.assertNotIn('removeItem("welora_device_id")', logout_region)
+        self.assertNotIn("?logout=", logout_region)
+
     def test_health_gate_hard_deny_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)
         r = self.client.get("/health")

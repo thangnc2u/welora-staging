@@ -41,7 +41,9 @@ class TestP2HotfixAppLogoutBtn(unittest.TestCase):
         self.assertIn("sessionStorage.clear()", js)
         self.assertIn('localStorage.setItem("welora_device_id"', js)
         self.assertIn('getItem("welora_device_id")', js)
-        self.assertIn("clearAuthAndRedirect", js)
+        self.assertIn("clearAuthStorage", js)
+        self.assertIn('removeItem("welora_token")', js)
+        self.assertIn("keepalive: true", js)
         self.assertIn('location.replace("/app/login")', js)
         self.assertIn("/auth/logout", js)
         self.assertIn("Authorization", js)
@@ -52,6 +54,13 @@ class TestP2HotfixAppLogoutBtn(unittest.TestCase):
         self.assertNotRegex(js, r"location\.href\s*=\s*['\"][^'\"]*logout=" )
         # keep device identity
         self.assertNotIn('removeItem("welora_device_id")', js)
+        # sync clear — not solely behind fetch.then
+        self.assertNotIn("function once()", js)
+        self.assertNotIn(".then(once, once)", js)
+        click_i = js.index('btn.addEventListener("click"')
+        region = js[click_i:]
+        self.assertLess(region.index('removeItem("welora_token")'), region.index('location.replace("/app/login")'))
+        self.assertLess(region.index("clearAuthStorage()"), region.index('fetch("/auth/logout"'))
         # skip auth pages (logout chrome + gate allowlist)
         for p in ("/app/login", "/app/register", "/app/forgot-password", "/app/reset-password", "/app/otp"):
             self.assertIn(p, js)

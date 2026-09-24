@@ -157,7 +157,7 @@ class TestP2HotfixP1SharedOverflowCss(unittest.TestCase):
             ("/app/budget", ('id="confirmSave"', "check")),
             ("/app/accounts", ('id="consentAck"', "showHidden")),
             ("/app/transactions", ('id="consentAck"', "consent")),
-            ("/app/dual-control", ("row-btns", "L-DUAL-CONTROL")),
+            ("/app/dual-control", ("row-btns", "Đồng kiểm")),
         ]
         for path, needles in cases:
             with self.subTest(path=path):

@@ -83,9 +83,9 @@ class TestP2OsDualControlMvp(unittest.TestCase):
     def test_ui_vi_dual_control_page(self):
         html = DUAL_HTML.read_text(encoding="utf-8")
         self.assertIn("Đồng kiểm", html)
-        self.assertIn("L-DUAL-CONTROL", html)
         self.assertIn("/os/companion", html)
         self.assertIn("companion-confirm", html)
+        self.assertIn("Người đồng hành", html)
         chat = CHAT.read_text(encoding="utf-8")
         self.assertIn("dual-control", chat)
 

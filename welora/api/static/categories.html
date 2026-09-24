@@ -40,7 +40,14 @@ button:disabled{opacity:.55}
 </style>
 </head>
 <body>
-<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/accounts">Tài khoản</a> · <a href="/app/transactions">Giao dịch</a></p>
+  <nav class="ops-tabs" id="opsCluster" aria-label="Điều hành · module">
+    <a class="ops-nav" id="opsNavHub" href="/app">Điều khiển</a>
+    <a class="ops-nav" id="opsNavGoals" href="/app/goals">Mục tiêu</a>
+    <a class="ops-nav" id="opsNavAccounts" href="/app/accounts">Tài khoản</a>
+    <a class="ops-nav" id="opsNavTransactions" href="/app/transactions">Giao dịch</a>
+    <a class="ops-nav is-active" id="opsNavCategories" href="/app/categories" aria-current="page">Danh mục</a>
+    <a class="ops-nav" id="opsNavBudget" href="/app/budget">Ngân sách</a>
+  </nav>
 <h1>Danh mục</h1>
 <p class="muted">Cố định · Biến đổi · Mục tiêu — gắn thẻ ngân sách · vô hiệu hoá có chuyển lịch sử</p>
 

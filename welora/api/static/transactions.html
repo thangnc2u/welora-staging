@@ -40,7 +40,14 @@ button:disabled{opacity:.55}
 </style>
 </head>
 <body>
-<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/accounts">Tài khoản</a> · <a href="/app/parser">Sao kê CSV</a></p>
+  <nav class="ops-tabs" id="opsCluster" aria-label="Điều hành · module">
+    <a class="ops-nav" id="opsNavHub" href="/app">Điều khiển</a>
+    <a class="ops-nav" id="opsNavGoals" href="/app/goals">Mục tiêu</a>
+    <a class="ops-nav" id="opsNavAccounts" href="/app/accounts">Tài khoản</a>
+    <a class="ops-nav is-active" id="opsNavTransactions" href="/app/transactions" aria-current="page">Giao dịch</a>
+    <a class="ops-nav" id="opsNavCategories" href="/app/categories">Danh mục</a>
+    <a class="ops-nav" id="opsNavBudget" href="/app/budget">Ngân sách</a>
+  </nav>
 <h1>Giao dịch</h1>
 <p class="muted">Nhập thủ công · tách dòng (Shopee/Grab/siêu thị) · CSV parser riêng (không ghi đè)</p>
 

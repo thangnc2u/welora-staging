@@ -1,4 +1,4 @@
-"""P2 hotfix — ops nav cluster on /app/safety + /app/goals; shell ops tab; Hard Deny untouched."""
+"""P2 hotfix — ops nav on /app/safety + /app/goals (shared horizontal ops-tabs); shell ops tab; Hard Deny untouched."""
 
 from __future__ import annotations
 
@@ -50,6 +50,9 @@ class TestP2HotfixOpsNavOsModules(unittest.TestCase):
         for lab in OPS_LABELS:
             self.assertIn(lab, r.text)
         self.assertIn('id="opsCluster"', r.text)
+        self.assertIn("ops-tabs", r.text)
+        self.assertIn("Điều khiển", r.text)
+        self.assertIn('href="/app"', r.text)
 
     def test_goals_html_ops_cluster(self):
         r = self.client.get("/app/goals")
@@ -59,6 +62,9 @@ class TestP2HotfixOpsNavOsModules(unittest.TestCase):
         for lab in OPS_LABELS:
             self.assertIn(lab, r.text)
         self.assertIn('id="opsCluster"', r.text)
+        self.assertIn("ops-tabs", r.text)
+        self.assertIn("Điều khiển", r.text)
+        self.assertIn('href="/app"', r.text)
 
     def test_shell_js_ops_tab_paths(self):
         js = SHELL_JS.read_text(encoding="utf-8")

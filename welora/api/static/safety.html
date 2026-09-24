@@ -35,15 +35,12 @@ label{display:block;margin-top:8px;color:var(--text-secondary,#A8B0C0);font-size
 #masteryState[hidden]{display:none}
 h1{color:var(--text-primary,#F4F1E8)}
 #hsScore{color:var(--text-primary,#F4F1E8);font-weight:700}
-.ops-cluster{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
-a.ops-nav{display:block;background:var(--bg-subtle,#0B1220);border:1px solid var(--border-default,#2F3D54);border-radius:10px;padding:10px 12px;color:var(--text-primary,#F4F1E8);text-decoration:none;font-weight:600;font-size:14px}
-a.ops-nav:active{background:var(--bg-elevated,#243247)}
-a.ops-nav:focus-visible{outline:2px solid var(--border-focus,#E8C86A);outline-offset:2px}
 </style></head><body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <div class="shell">
   <h1>An Toàn</h1>
-  <nav class="ops-cluster" id="opsCluster" aria-label="Điều hành · module">
+    <nav class="ops-tabs" id="opsCluster" aria-label="Điều hành · module">
+    <a class="ops-nav" id="opsNavHub" href="/app">Điều khiển</a>
     <a class="ops-nav" id="opsNavGoals" href="/app/goals">Mục tiêu</a>
     <a class="ops-nav" id="opsNavAccounts" href="/app/accounts">Tài khoản</a>
     <a class="ops-nav" id="opsNavTransactions" href="/app/transactions">Giao dịch</a>

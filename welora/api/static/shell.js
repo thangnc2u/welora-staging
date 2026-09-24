@@ -82,4 +82,22 @@
       }
     })();
   }
+
+  /* P1 ops-tabs: mark active from pathname if missing */
+  (function markOpsTabs() {
+    var cluster = document.getElementById("opsCluster");
+    if (!cluster || !cluster.classList.contains("ops-tabs")) return;
+    if (cluster.querySelector("a.ops-nav.is-active, a.ops-nav[aria-current='page']")) return;
+    var p = (location.pathname || "").replace(/\/+$/, "") || "/app";
+    var links = cluster.querySelectorAll("a.ops-nav");
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute("href") || "").replace(/\/+$/, "") || "/app";
+      if (href === p) {
+        links[i].classList.add("is-active");
+        links[i].setAttribute("aria-current", "page");
+        break;
+      }
+    }
+  })();
+
 })();

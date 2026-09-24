@@ -180,7 +180,7 @@
         } catch (_eFetch) {}
       }
 
-      /* Belt: token gone again right before navigation (do not wait on fetch). */
+      /* Belt + assert: token must be gone before replace (do not wait on fetch). */
       try {
         localStorage.removeItem("welora_token");
       } catch (_eBelt) {}
@@ -189,6 +189,11 @@
           localStorage.removeItem("welora_token");
         }
       } catch (_eAssert) {}
+      try {
+        if (localStorage.getItem("welora_token")) {
+          localStorage.removeItem("welora_token");
+        }
+      } catch (_eAssert2) {}
       /* keep welora_device_id — device identity, not login session */
       location.replace("/app/login");
     });

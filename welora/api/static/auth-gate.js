@@ -9,7 +9,15 @@
     "/app/reset-password": 1,
     "/app/otp": 1
   };
-  if (allow[path]) return;
+  if (allow[path]) {
+    /* Hotfix #4 belt: wipe stray token on /app/login entry (keep device_id). */
+    if (path === "/app/login") {
+      try {
+        localStorage.removeItem("welora_token");
+      } catch (_eBelt) {}
+    }
+    return;
+  }
   var tok = "";
   try {
     tok = localStorage.getItem("welora_token") || "";

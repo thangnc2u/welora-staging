@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -303,6 +304,32 @@ def _short_git_sha() -> str:
         pass
     return "unknown"
 
+
+def _shell_js_src() -> str:
+    """Cache-bust query for shell.js — one shared ver for every /app* HTML."""
+    return f"/static/shell.js?v={_short_git_sha()}"
+
+
+_SHELL_JS_SRC_RE = re.compile(r'src=(["\'])/static/shell\.js(?:\?[^"\']*)?\1')
+
+
+def _cache_bust_shell_js(html: str) -> str:
+    """Rewrite shell.js script tags to include ?v=<git_sha|asset_ver>."""
+    src = _shell_js_src()
+
+    def _repl(m: re.Match[str]) -> str:
+        q = m.group(1)
+        return f"src={q}{src}{q}"
+
+    return _SHELL_JS_SRC_RE.sub(_repl, html)
+
+
+def _serve_app_html(static_dir: Path, name: str) -> HTMLResponse:
+    """Serve /app* HTML with consistent shell.js cache-bust query."""
+    html = (static_dir / name).read_text(encoding="utf-8")
+    return HTMLResponse(content=_cache_bust_shell_js(html))
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -318,93 +345,93 @@ def create_app() -> FastAPI:
     @app.get("/app", include_in_schema=False)
     @app.get("/app/", include_in_schema=False)
     def app_home() -> FileResponse:
-        return FileResponse(static_dir / "home.html")
+        return _serve_app_html(static_dir, "home.html")
 
     @app.get("/app/onboarding", include_in_schema=False)
     def onboarding_ui() -> FileResponse:
-        return FileResponse(static_dir / "onboarding.html")
+        return _serve_app_html(static_dir, "onboarding.html")
 
     @app.get("/app/demo", include_in_schema=False)
     def demo_ui() -> FileResponse:
-        return FileResponse(static_dir / "demo.html")
+        return _serve_app_html(static_dir, "demo.html")
 
     @app.get("/app/safety", include_in_schema=False)
     def safety_ui() -> FileResponse:
-        return FileResponse(static_dir / "safety.html")
+        return _serve_app_html(static_dir, "safety.html")
 
     @app.get("/app/chat", include_in_schema=False)
     def chat_ui() -> FileResponse:
-        return FileResponse(static_dir / "chat.html")
+        return _serve_app_html(static_dir, "chat.html")
 
     @app.get("/app/parser", include_in_schema=False)
     def parser_ui() -> FileResponse:
-        return FileResponse(static_dir / "parser.html")
+        return _serve_app_html(static_dir, "parser.html")
 
     @app.get("/app/budget", include_in_schema=False)
     @app.get("/app/budget/", include_in_schema=False)
     def budget_ui() -> FileResponse:
-        return FileResponse(static_dir / "budget.html")
+        return _serve_app_html(static_dir, "budget.html")
 
     @app.get("/app/metrics", include_in_schema=False)
     @app.get("/app/metrics/", include_in_schema=False)
     def metrics_ui() -> FileResponse:
-        return FileResponse(static_dir / "metrics.html")
+        return _serve_app_html(static_dir, "metrics.html")
 
     @app.get("/app/logs", include_in_schema=False)
     @app.get("/app/logs/", include_in_schema=False)
     def logs_ui() -> FileResponse:
-        return FileResponse(static_dir / "logs.html")
+        return _serve_app_html(static_dir, "logs.html")
 
     @app.get("/app/constitution", include_in_schema=False)
     @app.get("/app/constitution/", include_in_schema=False)
     def constitution_ui() -> FileResponse:
-        return FileResponse(static_dir / "constitution.html")
+        return _serve_app_html(static_dir, "constitution.html")
 
     @app.get("/app/core-constitution", include_in_schema=False)
     @app.get("/app/core-constitution/", include_in_schema=False)
     def core_constitution_ui() -> FileResponse:
-        return FileResponse(static_dir / "core-constitution.html")
+        return _serve_app_html(static_dir, "core-constitution.html")
 
     @app.get("/app/academy", include_in_schema=False)
     @app.get("/app/academy/", include_in_schema=False)
     @app.get("/app/learn", include_in_schema=False)
     def academy_ui() -> FileResponse:
-        return FileResponse(static_dir / "academy.html")
+        return _serve_app_html(static_dir, "academy.html")
 
     @app.get("/app/dna", include_in_schema=False)
     @app.get("/app/dna/", include_in_schema=False)
     def dna_ui() -> FileResponse:
-        return FileResponse(static_dir / "dna.html")
+        return _serve_app_html(static_dir, "dna.html")
 
     @app.get("/app/goals", include_in_schema=False)
     @app.get("/app/goals/", include_in_schema=False)
     def goals_ui() -> FileResponse:
-        return FileResponse(static_dir / "goals.html")
+        return _serve_app_html(static_dir, "goals.html")
 
     @app.get("/app/otp", include_in_schema=False)
     @app.get("/app/otp/", include_in_schema=False)
     def otp_ui() -> FileResponse:
-        return FileResponse(static_dir / "otp.html")
+        return _serve_app_html(static_dir, "otp.html")
 
     @app.get("/app/login", include_in_schema=False)
     @app.get("/app/login/", include_in_schema=False)
     def login_ui() -> FileResponse:
-        return FileResponse(static_dir / "login.html")
+        return _serve_app_html(static_dir, "login.html")
 
     @app.get("/app/register", include_in_schema=False)
     @app.get("/app/register/", include_in_schema=False)
     def register_ui() -> FileResponse:
-        return FileResponse(static_dir / "register.html")
+        return _serve_app_html(static_dir, "register.html")
 
     @app.get("/app/forgot-password", include_in_schema=False)
     @app.get("/app/forgot-password/", include_in_schema=False)
     def forgot_password_ui() -> FileResponse:
-        return FileResponse(static_dir / "forgot-password.html")
+        return _serve_app_html(static_dir, "forgot-password.html")
 
     @app.get("/app/reset-password", include_in_schema=False)
     @app.get("/app/reset-password/", include_in_schema=False)
     def reset_password_ui() -> FileResponse:
-        return FileResponse(static_dir / "reset-password.html")
+        return _serve_app_html(static_dir, "reset-password.html")
 
     @app.get("/app/pre-rule", include_in_schema=False)
     @app.get("/app/pre-rule/", include_in_schema=False)
@@ -414,47 +441,47 @@ def create_app() -> FastAPI:
         flag = (os.environ.get("WELORA_DEBUG_PRERULE") or "0").strip().lower()
         if flag not in ("1", "true", "yes", "on"):
             raise HTTPException(status_code=404, detail="Not Found")
-        return FileResponse(static_dir / "prerule.html")
+        return _serve_app_html(static_dir, "prerule.html")
 
     @app.get("/app/health-score", include_in_schema=False)
     @app.get("/app/health-score/", include_in_schema=False)
     def health_score_ui() -> FileResponse:
-        return FileResponse(static_dir / "healthscore.html")
+        return _serve_app_html(static_dir, "healthscore.html")
 
     @app.get("/app/dual-control", include_in_schema=False)
     @app.get("/app/dual-control/", include_in_schema=False)
     def dual_control_ui() -> FileResponse:
-        return FileResponse(static_dir / "dual-control.html")
+        return _serve_app_html(static_dir, "dual-control.html")
 
     @app.get("/app/accounts", include_in_schema=False)
     @app.get("/app/accounts/", include_in_schema=False)
     def accounts_ui() -> FileResponse:
-        return FileResponse(static_dir / "accounts.html")
+        return _serve_app_html(static_dir, "accounts.html")
 
     @app.get("/app/transactions", include_in_schema=False)
     @app.get("/app/transactions/", include_in_schema=False)
     def transactions_ui() -> FileResponse:
-        return FileResponse(static_dir / "transactions.html")
+        return _serve_app_html(static_dir, "transactions.html")
 
 
     @app.get("/app/categories", include_in_schema=False)
     @app.get("/app/categories/", include_in_schema=False)
     def categories_ui() -> FileResponse:
-        return FileResponse(static_dir / "categories.html")
+        return _serve_app_html(static_dir, "categories.html")
 
 
 
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
-        return FileResponse(static_dir / "content.html")
+        return _serve_app_html(static_dir, "content.html")
 
     @app.get("/app/content/module/{module_id}", include_in_schema=False)
     def content_module_ui(module_id: str) -> FileResponse:
-        return FileResponse(static_dir / "content.html")
+        return _serve_app_html(static_dir, "content.html")
 
     @app.get("/app/content", include_in_schema=False)
     def content_ui() -> FileResponse:
-        return FileResponse(static_dir / "content.html")
+        return _serve_app_html(static_dir, "content.html")
 
     @app.get("/app/goal", include_in_schema=False)
     def goal_ui_redirect() -> RedirectResponse:

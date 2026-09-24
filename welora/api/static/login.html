@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<script>
+/* Hotfix #4 belt: wipe stray welora_token on login entry (keep welora_device_id). */
+(function () {
+  try { localStorage.removeItem("welora_token"); } catch (_e) {}
+})();
+</script>
 <script src="/static/auth-gate.js"></script>
 <title>Welora · Đăng nhập</title>
 <link rel="stylesheet" href="/static/welora-tokens.css"/>

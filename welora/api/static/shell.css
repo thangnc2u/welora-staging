@@ -201,3 +201,57 @@ input[type="radio"]{
   flex:1;
   min-width:0;
 }
+
+
+/* P1 ops-tabs CP-style — horizontal sticky top tabs */
+#opsCluster.ops-tabs,
+nav.ops-tabs{
+  display:flex;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  gap:2px;
+  position:sticky;
+  top:0;
+  z-index:30;
+  background:var(--bg-app, #121A28);
+  margin:0 0 12px;
+  padding:4px 0 0;
+  border-bottom:1px solid var(--border-default, #2F3D54);
+  box-sizing:border-box;
+}
+#opsCluster.ops-tabs a.ops-nav,
+nav.ops-tabs a.ops-nav{
+  flex-shrink:0;
+  white-space:nowrap;
+  display:inline-block;
+  padding:10px 12px 8px;
+  margin:0;
+  text-decoration:none;
+  font-size:14px;
+  font-weight:500;
+  color:var(--text-secondary, #A8B0C0);
+  background:transparent;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  box-sizing:border-box;
+}
+#opsCluster.ops-tabs a.ops-nav:hover,
+nav.ops-tabs a.ops-nav:hover{
+  color:var(--text-primary, #F4F1E8);
+}
+#opsCluster.ops-tabs a.ops-nav.is-active,
+nav.ops-tabs a.ops-nav.is-active{
+  font-weight:700;
+  color:var(--text-primary, #F4F1E8);
+  border-bottom-color:var(--gold-400, var(--border-focus, #E8C86A));
+  box-shadow:none;
+  background:transparent;
+}
+#opsCluster.ops-tabs a.ops-nav:focus-visible,
+nav.ops-tabs a.ops-nav:focus-visible{
+  outline:2px solid var(--border-focus, #E8C86A);
+  outline-offset:2px;
+}

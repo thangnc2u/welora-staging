@@ -39,7 +39,14 @@ button:disabled{opacity:.55}
 </style>
 </head>
 <body>
-<p><a id="navHome" href="/app">← Welora</a> · <a href="/app/goals">Mục tiêu</a> · <a href="/app/safety">An Toàn</a></p>
+  <nav class="ops-tabs" id="opsCluster" aria-label="Điều hành · module">
+    <a class="ops-nav" id="opsNavHub" href="/app">Điều khiển</a>
+    <a class="ops-nav" id="opsNavGoals" href="/app/goals">Mục tiêu</a>
+    <a class="ops-nav is-active" id="opsNavAccounts" href="/app/accounts" aria-current="page">Tài khoản</a>
+    <a class="ops-nav" id="opsNavTransactions" href="/app/transactions">Giao dịch</a>
+    <a class="ops-nav" id="opsNavCategories" href="/app/categories">Danh mục</a>
+    <a class="ops-nav" id="opsNavBudget" href="/app/budget">Ngân sách</a>
+  </nav>
 <h1>Tài khoản</h1>
 <p class="muted">Nhập thủ công số dư · ẩn thay vì xoá · không Open Banking</p>
 

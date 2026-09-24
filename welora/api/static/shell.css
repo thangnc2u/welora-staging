@@ -150,3 +150,54 @@ button.danger{
   background:var(--bg-elevated, #243044);
   color:var(--text-primary, #F4F1E8);
 }
+
+/* P1 shared overflow — checkbox/radio must not inherit page input{width:100%}
+   Specificity (type+attr) beats page `input,select{width:100%}` even when page <style> loads after. */
+input[type="checkbox"],
+input[type="radio"]{
+  width:auto;
+  max-width:none;
+  flex-shrink:0;
+  padding:0;
+  margin:0;
+  border:none;
+  background:transparent;
+  border-radius:0;
+}
+
+/* Checkbox / consent rows — flex + wrap so long VN labels stay in ~375px frame.
+   Compatible with page .show-hidden / .show-disabled / .check / .consent (page may add margin/padding). */
+.check,
+.consent,
+.show-hidden,
+.show-disabled{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.check span,
+.consent label,
+.show-hidden span,
+.show-disabled span{
+  min-width:0;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+/* Dual-control Approve/Deny pair — beat page `input,button{width:100%}` via .row-btns button */
+.row-btns{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.row-btns button{
+  width:auto;
+  flex:1;
+  min-width:0;
+}

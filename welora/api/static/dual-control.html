@@ -20,8 +20,8 @@ button{background:var(--cta-primary);color:var(--cta-primary-text);border:0;font
 button.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
 button.danger{background:var(--color-danger);color:#fff} /* Hard Deny — never gold */
 a{color:var(--link)}
-.row-btns{display:flex;gap:8px}
-.row-btns button{margin-top:8px}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;min-width:0;max-width:100%;box-sizing:border-box}
+.row-btns button{margin-top:8px;width:auto;flex:1;min-width:0}
 #msg{font-size:14px;margin-top:8px;color:var(--text-secondary,#A8B0C0);white-space:pre-wrap}
 #msg.ok{color:var(--color-success,#3DB88A)}#msg.err{color:var(--color-danger,#E85D5D)}
 .item{border:1px solid var(--border-default);border-radius:12px;padding:12px;margin:8px 0;background:var(--bg-surface);color:var(--text-primary)}

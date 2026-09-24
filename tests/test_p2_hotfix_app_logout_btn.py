@@ -1,4 +1,4 @@
-"""P2 hotfix — Đăng xuất chrome on /app/* via shell.js (Scope B, no ?logout=1)."""
+"""P2 hotfix — Đăng xuất clears session + auth gate on /app/* (post-#217, no ?logout=1)."""
 
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ class TestP2HotfixAppLogoutBtn(unittest.TestCase):
         self.assertIn("welora-logout-btn", js)
         self.assertIn('localStorage.removeItem("welora_token")', js)
         self.assertIn('localStorage.removeItem("welora_dev")', js)
+        self.assertIn('sessionStorage.removeItem("welora_reset_token")', js)
+        self.assertIn("clearAuthAndRedirect", js)
         self.assertIn('location.href = "/app/login"', js)
         self.assertIn("/auth/logout", js)
         self.assertIn("Authorization", js)
@@ -49,9 +51,23 @@ class TestP2HotfixAppLogoutBtn(unittest.TestCase):
         self.assertNotRegex(js, r"location\.href\s*=\s*['\"][^'\"]*logout=" )
         # keep device identity
         self.assertNotIn('removeItem("welora_device_id")', js)
-        # skip auth pages
-        for p in ("/app/login", "/app/register", "/app/forgot-password", "/app/reset-password"):
+        # skip auth pages (logout chrome + gate allowlist)
+        for p in ("/app/login", "/app/register", "/app/forgot-password", "/app/reset-password", "/app/otp"):
             self.assertIn(p, js)
+
+    def test_shell_js_auth_gate_requires_token(self):
+        """After logout clear, /app shell must redirect to login when no welora_token."""
+        js = self.js
+        self.assertIn("welora_token", js)
+        self.assertIn('localStorage.getItem("welora_token")', js)
+        self.assertIn('location.replace("/app/login")', js)
+        # gate allowlist includes auth pages; no ?logout=
+        self.assertIn("/app/otp", js)
+        self.assertNotIn("?logout=", js)
+        # gate runs before chrome inject (replace present; early return on missing token)
+        gate_idx = js.index('location.replace("/app/login")')
+        logout_idx = js.index("weloraLogout")
+        self.assertLess(gate_idx, logout_idx)
 
     def test_shell_css_logout_styles(self):
         self.assertTrue(SHELL_CSS.is_file())

@@ -8,6 +8,27 @@
     { id: "tabChat", href: "/app/chat", label: "Chat với Agent", ico: "✉", key: "chat", gate: true }
   ];
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";
+
+  /* Auth gate: /app/* requires welora_token; device_id alone is not a login session.
+     Skip auth pages (and OTP). No logout query deeplink. */
+  var _authAllow = {
+    "/app/login": 1,
+    "/app/register": 1,
+    "/app/forgot-password": 1,
+    "/app/reset-password": 1,
+    "/app/otp": 1
+  };
+  if (!_authAllow[path]) {
+    var _tok = "";
+    try {
+      _tok = localStorage.getItem("welora_token") || "";
+    } catch (_eGate) {}
+    if (!_tok) {
+      location.replace("/app/login");
+      return;
+    }
+  }
+
   var active = "home";
   var forced = document.currentScript && document.currentScript.getAttribute("data-shell-tab");
   /* Điều hành cluster — not home (#173 goals→home fixed) */
@@ -112,24 +133,27 @@
         token = localStorage.getItem("welora_token") || "";
       } catch (_e) {}
 
-      function clearSessionAndRedirect() {
+      function clearAuthAndRedirect() {
         try {
           localStorage.removeItem("welora_token");
           localStorage.removeItem("welora_dev");
         } catch (_e2) {}
+        try {
+          sessionStorage.removeItem("welora_reset_token");
+        } catch (_e2b) {}
         /* keep welora_device_id — device identity, not login session */
         location.href = "/app/login";
       }
 
       if (!token) {
-        clearSessionAndRedirect();
+        clearAuthAndRedirect();
         return;
       }
       var finished = false;
       function once() {
         if (finished) return;
         finished = true;
-        clearSessionAndRedirect();
+        clearAuthAndRedirect();
       }
       try {
         fetch("/auth/logout", {

@@ -134,15 +134,31 @@
       } catch (_e) {}
 
       function clearAuthAndRedirect() {
+        /* Clear ALL auth client storage; keep only welora_device_id. */
+        var deviceId = "";
         try {
-          localStorage.removeItem("welora_token");
-          localStorage.removeItem("welora_dev");
+          deviceId = localStorage.getItem("welora_device_id") || "";
+        } catch (_eDev) {}
+        try {
+          localStorage.clear();
+          if (deviceId) localStorage.setItem("welora_device_id", deviceId);
         } catch (_e2) {}
         try {
-          sessionStorage.removeItem("welora_reset_token");
+          sessionStorage.clear();
         } catch (_e2b) {}
+        /* Best-effort clear session-ish cookies (path=/ and path=/app). */
+        try {
+          var parts = (document.cookie || "").split(";");
+          for (var i = 0; i < parts.length; i++) {
+            var name = (parts[i].split("=")[0] || "").trim();
+            if (!name) continue;
+            if (!/welora|token|session|auth/i.test(name)) continue;
+            document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+            document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/app";
+          }
+        } catch (_eCk) {}
         /* keep welora_device_id — device identity, not login session */
-        location.href = "/app/login";
+        location.replace("/app/login");
       }
 
       if (!token) {

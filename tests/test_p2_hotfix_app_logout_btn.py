@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import unittest
 
 from fastapi.testclient import TestClient
@@ -88,6 +89,25 @@ class TestP2HotfixAppLogoutBtn(unittest.TestCase):
         self.assertIn("--border-focus", css)
         # navy/dark friendly — not black text rule for logout btn
         self.assertIn("--text-primary", css)
+
+
+    def test_served_pages_shell_cache_bust(self):
+        prev = os.environ.get("WELORA_GIT_SHA")
+        os.environ["WELORA_GIT_SHA"] = "hotfix4a"
+        try:
+            from welora.api.app import create_app as _ca
+            client = TestClient(_ca())
+            for path in ("/app", "/app/safety", "/app/accounts"):
+                with self.subTest(path=path):
+                    r = client.get(path)
+                    self.assertEqual(r.status_code, 200)
+                    self.assertIn("/static/shell.js?v=hotfix4", r.text)
+        finally:
+            if prev is None:
+                os.environ.pop("WELORA_GIT_SHA", None)
+            else:
+                os.environ["WELORA_GIT_SHA"] = prev
+
 
     def test_health_gate_hard_deny_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

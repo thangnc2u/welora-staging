@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import re
 import unittest
 
 from fastapi.testclient import TestClient
@@ -150,6 +152,71 @@ class TestP2HotfixLogoutHardNav(unittest.TestCase):
         # keep device_id; no ?logout=
         self.assertNotIn('removeItem("welora_device_id")', logout_region)
         self.assertNotIn("?logout=", logout_region)
+
+
+    def test_served_shell_js_cache_bust_query(self):
+        """Hotfix #4: every /app* HTML that loads shell uses ?v=<git_sha>."""
+        prev = os.environ.get("WELORA_GIT_SHA")
+        os.environ["WELORA_GIT_SHA"] = "cafebabe999"
+        try:
+            from welora.api.app import create_app as _ca
+            client = TestClient(_ca())
+            for path in ("/app", "/app/safety", "/app/accounts", "/app/goals", "/app/chat"):
+                with self.subTest(path=path):
+                    r = client.get(path)
+                    self.assertEqual(r.status_code, 200)
+                    self.assertIn("/static/shell.js?v=cafebab", r.text)
+                    # no bare unversioned shell.js src
+                    self.assertNotRegex(
+                        r.text,
+                        r'src=["\']/static/shell\.js["\']',
+                    )
+                    refs = re.findall(r'/static/shell\.js\?v=[^\s"\']+', r.text)
+                    self.assertTrue(refs, path)
+                    self.assertTrue(all(x.startswith("/static/shell.js?v=") for x in refs))
+        finally:
+            if prev is None:
+                os.environ.pop("WELORA_GIT_SHA", None)
+            else:
+                os.environ["WELORA_GIT_SHA"] = prev
+
+    def test_login_belt_wipes_token_keeps_device_id(self):
+        """Hotfix #4: /app/login entry belt-removes welora_token; never device_id."""
+        login_html = (STATIC / "login.html").read_text(encoding="utf-8")
+        self.assertIn('removeItem("welora_token")', login_html)
+        self.assertNotIn('removeItem("welora_device_id")', login_html)
+        g = self.gate
+        self.assertIn('path === "/app/login"', g)
+        # belt remove inside allowlist branch
+        allow_i = g.index("allow[path]")
+        belt_region = g[allow_i : allow_i + 400]
+        self.assertIn('removeItem("welora_token")', belt_region)
+        self.assertNotIn('removeItem("welora_device_id")', g)
+        # served login also includes belt
+        r = self.client.get("/app/login")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('removeItem("welora_token")', r.text)
+        self.assertNotIn("?logout=", r.text)
+
+    def test_shell_js_assert_token_gone_before_replace(self):
+        """Hotfix #4: before location.replace, assert !token then belt remove."""
+        js = self.shell
+        click_i = js.index('btn.addEventListener("click"')
+        region = js[click_i:]
+        replace = 'location.replace("/app/login")'
+        replace_i = region.index(replace)
+        before = region[:replace_i]
+        # getItem check + removeItem must appear before replace (assert belt)
+        self.assertIn('getItem("welora_token")', before)
+        self.assertGreaterEqual(before.count('removeItem("welora_token")'), 2)
+        # last assert pattern: if getItem then removeItem
+        self.assertRegex(
+            before,
+            r'if\s*\(\s*localStorage\.getItem\("welora_token"\)\s*\)\s*\{\s*localStorage\.removeItem\("welora_token"\)',
+        )
+        self.assertNotIn("?logout=", region)
+        self.assertNotIn('removeItem("welora_device_id")', region)
+
 
     def test_health_gate_hard_deny_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

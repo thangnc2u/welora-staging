@@ -738,7 +738,7 @@ def service_reset_password(body: dict) -> tuple[int, dict]:
 
 
 def service_demo_seed() -> tuple[int, dict]:
-    """Seed partner auth + rich P2 OS data; alias demo-p4 for P4 (idempotent)."""
+    """Seed partner auth + rich P1–P6 OS data (idempotent login aliases)."""
     out = seed_partner_demo()
     if not guest_demo_enabled():
         return 200, out
@@ -746,6 +746,7 @@ def service_demo_seed() -> tuple[int, dict]:
         from welora.partner_demo_seed import seed_partner_rich_demo
 
         rich = seed_partner_rich_demo()
+        aliases = rich.get("aliases") or {}
         out["rich"] = {
             "partner_user_id": (rich.get("partner") or {}).get("user_id"),
             "p2_gate": ((rich.get("partner") or {}).get("persona") or {})
@@ -757,6 +758,11 @@ def service_demo_seed() -> tuple[int, dict]:
             .get("safety_gate", {})
             .get("status"),
             "p4_exposure": rich.get("p4_exposure"),
+            "aliases": aliases,
+            "persona_emails": {
+                pid: (aliases.get(pid) or {}).get("email")
+                for pid in ("P1", "P2", "P3", "P4", "P5", "P6")
+            },
         }
         # Prefer stable partner id from rich seed when available
         if (rich.get("partner") or {}).get("user_id"):

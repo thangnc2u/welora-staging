@@ -568,7 +568,7 @@ def create_app() -> FastAPI:
 
     @app.post("/auth/demo/seed", tags=["auth"])
     def auth_demo_seed() -> dict:
-        """Partner walkthrough seed — account + P2/P4 DNA/goals (no gate/Hard Deny bypass)."""
+        """Partner walkthrough seed — P1–P6 login aliases + OS fixtures (no gate/Hard Deny bypass)."""
         code, out = auth_svc.service_demo_seed()
         if not auth_svc.guest_demo_enabled():
             return _respond(code, out)

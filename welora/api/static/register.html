@@ -33,10 +33,8 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 <div class="card">
   <label for="displayName">Tên hiển thị (tuỳ chọn)</label>
   <input id="displayName" type="text" autocomplete="nickname"/>
-  <label for="email">Email (tuỳ chọn nếu có SĐT)</label>
-  <input id="email" type="email" autocomplete="username" placeholder="ban@email.com"/>
-  <label for="phone">Số điện thoại (tuỳ chọn nếu có email)</label>
-  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+84…"/>
+  <label for="identifier">Email hoặc Số điện thoại</label>
+  <input id="identifier" type="text" autocomplete="username" inputmode="email" placeholder="ban@email.com hoặc +84…"/>
   <label for="password">Mật khẩu</label>
   <input id="password" type="password" autocomplete="new-password"/>
   <button type="button" id="btnRegister" class="welora-btn-primary">Tạo tài khoản</button>
@@ -47,17 +45,21 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 const TOKEN_KEY='welora_token';
 function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
 function showOk(m){document.getElementById('ok').textContent=m||'';document.getElementById('err').textContent='';}
+function splitIdentifier(raw){
+  const v=(raw||'').trim();
+  if(!v) return {};
+  if(v.includes('@')) return {email:v};
+  return {phone:v};
+}
 document.getElementById('btnRegister').addEventListener('click', async()=>{
   showErr('');
-  const email=document.getElementById('email').value.trim();
-  const phone=document.getElementById('phone').value.trim();
+  const idRaw=document.getElementById('identifier').value.trim();
   const password=document.getElementById('password').value;
   const display_name=document.getElementById('displayName').value.trim();
-  if(!email && !phone){showErr('Nhập email hoặc số điện thoại');return;}
+  if(!idRaw){showErr('Nhập email hoặc số điện thoại');return;}
   if(password.length<8){showErr('Mật khẩu tối thiểu 8 ký tự');return;}
-  const body={password};
-  if(email) body.email=email;
-  if(phone) body.phone=phone;
+  const parts=splitIdentifier(idRaw);
+  const body={password,...parts};
   if(display_name) body.display_name=display_name;
   try{
     const r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

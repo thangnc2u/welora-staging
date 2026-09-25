@@ -111,6 +111,7 @@ button:disabled{opacity:.55}
   </form>
 </div>
 
+<script src="/static/session.js"></script>
 <script src="/static/money.js"></script>
 <script>
 const KEY='welora_device_id';
@@ -148,8 +149,13 @@ function errText(body, fallback){
 }
 
 async function ensureUser(){
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    uid=await WeloraSession.resolveUserId();
+    return uid;
+  }
   const auth=await api('/auth/device',{method:'POST',body:JSON.stringify({device_id:deviceId()})});
   uid=auth.body.user_id||'';
+  return uid;
 }
 
 function renderList(){

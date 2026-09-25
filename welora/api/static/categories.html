@@ -128,6 +128,7 @@ button:disabled{opacity:.55}
 </div>
 
 <script src="/static/friendly_labels.js"></script>
+<script src="/static/session.js"></script>
 <script>
 const KEY='welora_device_id';
 const KIND_VI={fixed:'Cố định',variable:'Biến đổi',goals:'Mục tiêu'};
@@ -152,8 +153,13 @@ function errText(body, fallback){
   return body.error||body.message||fallback;
 }
 async function ensureUser(){
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    uid=await WeloraSession.resolveUserId();
+    return uid;
+  }
   const auth=await api('/auth/device',{method:'POST',body:JSON.stringify({device_id:deviceId()})});
   uid=auth.body.user_id||'';
+  return uid;
 }
 function parseTags(s){
   return String(s||'').split(/[,;]+/).map(function(x){

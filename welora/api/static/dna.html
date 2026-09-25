@@ -22,6 +22,7 @@ a{color:var(--link);text-decoration:none}
 <h1>DNA tài chính</h1>
 <p class="muted">Hồ sơ bạn khai khi Bắt đầu</p>
 <div id="dna"></div>
+<script src="/static/session.js"></script>
 <script>
 const KEY='welora_device_id';
 const ENUM_VI={
@@ -112,9 +113,9 @@ function render(data){
 }
 (async()=>{
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    const uid=a.user_id||a.user||'';
+    const uid=(window.WeloraSession&&WeloraSession.resolveUserId)
+      ?(await WeloraSession.resolveUserId())
+      :((await (await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})})).json()).user_id||'');
     const dr=await fetch('/users/'+encodeURIComponent(uid)+'/dna');
     if(dr.status===404||!dr.ok){showEmpty();return;}
     const data=await dr.json();

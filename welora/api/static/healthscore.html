@@ -29,6 +29,7 @@ a{color:var(--link);text-decoration:none}
 </div>
 <div class="card" id="hsComponents"></div>
 <p class="err" id="hsErr"></p>
+<script src="/static/session.js"></script>
 <script>
 const KEY='welora_device_id';
 const LABELS={
@@ -57,9 +58,9 @@ function addRow(parent,label,val){
 }
 (async()=>{
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    const uid=a.user_id||'';
+    const uid=(window.WeloraSession&&WeloraSession.resolveUserId)
+      ?(await WeloraSession.resolveUserId())
+      :((await (await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})})).json()).user_id||'');
     const r=await fetch('/users/'+encodeURIComponent(uid)+'/health-score');
     const j=await r.json();
     const score=j.score;

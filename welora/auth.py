@@ -294,6 +294,7 @@ DEMO_EMAIL = "partner@welora.demo"
 DEMO_PHONE = "+84900000000"
 DEMO_PASSWORD = "WeloraDemo1!"
 DEMO_DISPLAY = "Partner Demo"
+PARTNER_USER_ID = "bc25f9aa-9af4-45ea-b981-adbc41133439"  # Founder tip stable id
 
 
 def guest_demo_enabled() -> bool:
@@ -630,7 +631,7 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
                 "role": row["role"] or "demo",
                 "password_hint": DEMO_PASSWORD,
             }
-        user_id = _new_user_id()
+        user_id = PARTNER_USER_ID
         device_key = "demo:" + hashlib.sha256(DEMO_EMAIL.encode()).hexdigest()[:16]
         conn.execute(
             "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
@@ -737,7 +738,31 @@ def service_reset_password(body: dict) -> tuple[int, dict]:
 
 
 def service_demo_seed() -> tuple[int, dict]:
+    """Seed partner auth + rich P2 OS data; alias demo-p4 for P4 (idempotent)."""
     out = seed_partner_demo()
+    if not guest_demo_enabled():
+        return 200, out
+    try:
+        from welora.partner_demo_seed import seed_partner_rich_demo
+
+        rich = seed_partner_rich_demo()
+        out["rich"] = {
+            "partner_user_id": (rich.get("partner") or {}).get("user_id"),
+            "p2_gate": ((rich.get("partner") or {}).get("persona") or {})
+            .get("safety_gate", {})
+            .get("status"),
+            "demo_p4_email": rich.get("p4_login"),
+            "demo_p4_user_id": (rich.get("demo_p4") or {}).get("user_id"),
+            "p4_gate": ((rich.get("demo_p4") or {}).get("persona") or {})
+            .get("safety_gate", {})
+            .get("status"),
+            "p4_exposure": rich.get("p4_exposure"),
+        }
+        # Prefer stable partner id from rich seed when available
+        if (rich.get("partner") or {}).get("user_id"):
+            out["user_id"] = rich["partner"]["user_id"]
+    except Exception as exc:  # pragma: no cover
+        out["rich_error"] = str(exc)
     return 200, out
 
 

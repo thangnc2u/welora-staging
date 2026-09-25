@@ -80,19 +80,24 @@
   if (chatLink) {
     (async function () {
       try {
-        var KEY = "welora_device_id";
-        var d = localStorage.getItem(KEY);
-        if (!d) {
-          d = "dev-" + Math.random().toString(36).slice(2, 10);
-          localStorage.setItem(KEY, d);
+        var uid = "";
+        if (window.WeloraSession && WeloraSession.resolveUserId) {
+          uid = await WeloraSession.resolveUserId();
+        } else {
+          var KEY = "welora_device_id";
+          var d = localStorage.getItem(KEY);
+          if (!d) {
+            d = "dev-" + Math.random().toString(36).slice(2, 10);
+            localStorage.setItem(KEY, d);
+          }
+          var auth = await fetch("/auth/device", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device_id: d })
+          });
+          var a = await auth.json();
+          uid = a.user_id || "";
         }
-        var auth = await fetch("/auth/device", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device_id: d })
-        });
-        var a = await auth.json();
-        var uid = a.user_id || "";
         if (!uid) return;
         var gR = await fetch("/users/" + encodeURIComponent(uid) + "/safety-gate");
         var gate = await gR.json();
@@ -139,6 +144,9 @@
         try {
           localStorage.removeItem("welora_token");
         } catch (_eRm) {}
+        try {
+          if (window.WeloraSession && WeloraSession.clearCache) WeloraSession.clearCache();
+        } catch (_eCache) {}
         try {
           localStorage.removeItem("welora_dev");
         } catch (_eDevKey) {}

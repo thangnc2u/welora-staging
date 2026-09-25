@@ -92,6 +92,7 @@ h1{color:var(--text-primary,#F4F1E8)}
     <p><a id="ctaGoalsDebt" href="/app/goals?focus=debt">Mở Mục tiêu · Trả nợ</a></p>
   </div>
 </div>
+<script src="/static/session.js"></script>
 <script src="/static/money.js"></script>
 <script>
 const HS_LABELS={
@@ -120,10 +121,14 @@ WeloraMoney.bindMoneyInput(document.getElementById('amount'));
 WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementById('essential'));
 WeloraMoney.bindChips(document.getElementById('amtChips'), document.getElementById('amount'));
 async function load(){
-  const id=localStorage.getItem("welora_device_id")||("web-"+Math.random().toString(36).slice(2,10));
-  localStorage.setItem("welora_device_id",id);
-  const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:id})});
-  state.userId=auth.user_id;
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    state.userId=await WeloraSession.resolveUserId();
+  }else{
+    const id=localStorage.getItem("welora_device_id")||("web-"+Math.random().toString(36).slice(2,10));
+    localStorage.setItem("welora_device_id",id);
+    const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:id})});
+    state.userId=auth.user_id;
+  }
   const list=await api("/goals?user_id="+encodeURIComponent(state.userId)+"&type=emergency_fund");
   state.goal=(list.items&&list.items[0])||null;
   const debts=await api("/goals?user_id="+encodeURIComponent(state.userId)+"&type=debt_payoff");

@@ -85,6 +85,7 @@ button:hover{background:var(--cta-primary-hover)}button:disabled{opacity:.55}
     <p class="err" id="addErr" role="alert" aria-live="polite"></p>
   </form>
 </div>
+<script src="/static/session.js"></script>
 <script src="/static/money.js"></script>
 <script>
 const KEY='welora_device_id';
@@ -455,9 +456,13 @@ function applyDebtFocus(){
 }
 (async()=>{
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    uid=a.user_id||a.user||'';
+    if(window.WeloraSession&&WeloraSession.resolveUserId){
+      uid=await WeloraSession.resolveUserId();
+    }else{
+      const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+      const a=await auth.json();
+      uid=a.user_id||a.user||'';
+    }
     await loadList();
     applyDebtFocus();
   }catch(e){

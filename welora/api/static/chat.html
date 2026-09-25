@@ -123,6 +123,7 @@ a#navHome{color:var(--link,#E8C86A)}
 </div>
 <form id="f" hidden><input id="q" placeholder="Hỏi Welora…" autocomplete="off"/><button id="sendBtn" type="submit">Gửi</button></form>
 <script src="/static/friendly_labels.js"></script>
+<script src="/static/session.js"></script>
 <script>
 const log=document.getElementById('log');
 const denyCta=document.getElementById('denyCta');
@@ -218,8 +219,12 @@ function hideUnlockWall(){
   if(chatForm) chatForm.hidden=false;
 }
 (async()=>{
-  const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
-  const d=await r.json(); uid=d.user_id;
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    uid=await WeloraSession.resolveUserId();
+  }else{
+    const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
+    const d=await r.json(); uid=d.user_id;
+  }
   try{
     const g=await fetch('/users/'+encodeURIComponent(uid)+'/safety-gate');
     const gate=await g.json();

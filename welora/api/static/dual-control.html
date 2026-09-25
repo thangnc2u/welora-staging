@@ -61,6 +61,7 @@ h1{color:var(--text-primary)}
   </div>
 </div>
 <script src="/static/friendly_labels.js"></script>
+<script src="/static/session.js"></script>
 <script>
 const KEY="welora_device_id";
 let uid="";
@@ -73,10 +74,14 @@ async function api(url, opts){
 }
 
 async function ensureUser(){
-  let d=localStorage.getItem(KEY);
-  if(!d){ d="dev-"+Math.random().toString(36).slice(2,10); localStorage.setItem(KEY,d); }
-  const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:d})});
-  uid=auth.body.user_id||"";
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    uid=await WeloraSession.resolveUserId();
+  }else{
+    let d=localStorage.getItem(KEY);
+    if(!d){ d="dev-"+Math.random().toString(36).slice(2,10); localStorage.setItem(KEY,d); }
+    const auth=await api("/auth/device",{method:"POST",body:JSON.stringify({device_id:d})});
+    uid=auth.body.user_id||"";
+  }
   document.getElementById("uidMeta").textContent=uid?"Đã đăng nhập trên thiết bị này":"Chưa đăng nhập — vui lòng thử lại.";
   const q=new URLSearchParams(location.search);
   asCompanionUid=(q.get("as")||"").trim();

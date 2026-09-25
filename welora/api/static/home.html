@@ -143,6 +143,7 @@ a.pillar:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
   <a class="nav" id="navDual" href="/app/dual-control">Đồng kiểm · 2 người</a>
 </nav>
 
+<script src="/static/session.js"></script>
 <script src="/static/money.js"></script>
 <script>
 const KEY='welora_device_id';
@@ -179,9 +180,9 @@ document.getElementById('toggleTools').addEventListener('click',function(e){
 });
 (async()=>{
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    const uid=a.user_id||'';
+    const uid=(window.WeloraSession&&WeloraSession.resolveUserId)
+      ?(await WeloraSession.resolveUserId())
+      :((await (await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})})).json()).user_id||'');
     const [hsR,gR,debtR]=await Promise.all([
       fetch('/users/'+encodeURIComponent(uid)+'/health-score'),
       fetch('/users/'+encodeURIComponent(uid)+'/safety-gate'),

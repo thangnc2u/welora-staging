@@ -87,6 +87,7 @@ li{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-botto
 </div>
 
 <script src="/static/friendly_labels.js"></script>
+<script src="/static/session.js"></script>
 <script src="/static/shell.js" data-shell-tab="ops"></script>
 <script>
 const KEY = 'welora_device_id';
@@ -99,6 +100,9 @@ function deviceId(){
 }
 function vnd(n){ return Number(n||0).toLocaleString('vi-VN') + ' đ'; }
 async function ensureUser(){
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    return await WeloraSession.resolveUserId();
+  }
   const auth = await fetch('/auth/device', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

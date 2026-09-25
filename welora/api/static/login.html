@@ -34,16 +34,17 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 <body class="welora-shell">
 <p><a id="navHome" class="welora-link" href="/app">← Welora</a></p>
 <h1>Đăng nhập</h1>
-<p class="muted">Khách / demo · email hoặc số điện thoại + mật khẩu</p>
+<p class="muted">Khách / demo · chỉ cần email hoặc SĐT + mật khẩu</p>
 <nav class="tabs" aria-label="Thẻ đăng nhập">
   <a id="tabLogin" class="on" href="/app/login">Đăng nhập</a>
   <a id="tabRegister" href="/app/register">Đăng ký</a>
 </nav>
 <div class="card">
-  <label for="email">Email (tuỳ chọn nếu có SĐT)</label>
+  <label for="email">Email</label>
   <input id="email" type="email" autocomplete="username" placeholder="ban@email.com"/>
-  <label for="phone">Số điện thoại (tuỳ chọn nếu có email)</label>
+  <label for="phone">Số điện thoại</label>
   <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+84…"/>
+  <p class="muted" id="emailPhoneHint" style="margin-top:8px;font-size:12px">Chỉ cần điền một trong hai</p>
   <label for="password">Mật khẩu</label>
   <input id="password" type="password" autocomplete="current-password"/>
   <button type="button" id="btnLogin" class="welora-btn-primary">Đăng nhập</button>

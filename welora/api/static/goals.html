@@ -200,11 +200,38 @@ function typeLabel(t){
   if(t==='emergency_fund') return 'Quỹ khẩn cấp';
   return t||'—';
 }
+function stripFrontmatter(md){
+  var s=String(md||'').replace(/^\uFEFF/,'');
+  var idx=s.search(/\n---\s*\n/);
+  if(idx>=0){
+    var head=s.slice(0,idx);
+    if(/principle_key|Module:|M\u1ee9c r\u1ee7i ro|Version:|Status:|^#\s*W[AP]-/m.test(head)){
+      s=s.slice(idx).replace(/^\n---\s*\n/,'');
+    }
+  }
+  var lines=s.split('\n');
+  while(lines.length){
+    var t=lines[0].trim();
+    if(!t){ lines.shift(); continue; }
+    if(/^#\s*W[AP]-/.test(t)){ lines.shift(); continue; }
+    if(/^\*\*(Module|M\u1ee9c r\u1ee7i ro|Version|Status|principle_key|secondary_keys):/i.test(t)){ lines.shift(); continue; }
+    break;
+  }
+  return lines.join('\n').replace(/^\s+/,'');
+}
+function scrubInternalCodes(text){
+  var s=String(text||'');
+  s=s.replace(/\*{0,2}\s*(?:principle[_ ]?key|secondary[_ ]?keys)\s*:[^*\n]*/gi,' ');
+  s=s.replace(/\b(?:CORE|SAFE|DEBT)-\d+\b/g,'');
+  return s.replace(/\s{2,}/g,' ').replace(/^[\s.,;:\-]+|[\s.,;:\-]+$/g,'').trim();
+}
 function excerpt(md){
-  let s=String(md||'').replace(/^#+\s*/gm,'').replace(/[*_`]/g,' ');
+  let s=stripFrontmatter(md||'');
+  s=s.replace(/^#+\s*/gm,'').replace(/[*_`]/g,' ');
   s=s.replace(/\s+/g,' ').trim();
+  s=scrubInternalCodes(s);
   if(s.length<=220) return s;
-  return s.slice(0,220).replace(/\s+\S*$/,'')+'…';
+  return scrubInternalCodes(s.slice(0,220).replace(/\s+\S*$/,'')+'…');
 }
 function fillPedia(box, keys){
   box.textContent='';

@@ -40,11 +40,8 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
   <a id="tabRegister" href="/app/register">Đăng ký</a>
 </nav>
 <div class="card">
-  <label for="email">Email</label>
-  <input id="email" type="email" autocomplete="username" placeholder="ban@email.com"/>
-  <label for="phone">Số điện thoại</label>
-  <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+84…"/>
-  <p class="muted" id="emailPhoneHint" style="margin-top:8px;font-size:12px">Chỉ cần điền một trong hai</p>
+  <label for="identifier">Email hoặc Số điện thoại</label>
+  <input id="identifier" type="text" autocomplete="username" inputmode="email" placeholder="ban@email.com hoặc +84…"/>
   <label for="password">Mật khẩu</label>
   <input id="password" type="password" autocomplete="current-password"/>
   <button type="button" id="btnLogin" class="welora-btn-primary">Đăng nhập</button>
@@ -59,16 +56,20 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 const TOKEN_KEY='welora_token';
 function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
 function showOk(m){document.getElementById('ok').textContent=m||'';document.getElementById('err').textContent='';}
+function splitIdentifier(raw){
+  const v=(raw||'').trim();
+  if(!v) return {};
+  if(v.includes('@')) return {email:v};
+  return {phone:v};
+}
 document.getElementById('btnLogin').addEventListener('click', async()=>{
   showErr('');
-  const email=document.getElementById('email').value.trim();
-  const phone=document.getElementById('phone').value.trim();
+  const idRaw=document.getElementById('identifier').value.trim();
   const password=document.getElementById('password').value;
-  if(!email && !phone){showErr('Nhập email hoặc số điện thoại');return;}
+  if(!idRaw){showErr('Nhập email hoặc số điện thoại');return;}
   if(!password){showErr('Nhập mật khẩu');return;}
-  const body={password};
-  if(email) body.email=email;
-  if(phone) body.phone=phone;
+  const parts=splitIdentifier(idRaw);
+  const body={password,...parts};
   try{
     const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json().catch(()=>({}));

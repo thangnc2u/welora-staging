@@ -32,6 +32,7 @@ class TestP1OsFlow3PediaInline(unittest.TestCase):
         self.assertEqual(len(fund), 1)
         self.assertEqual(fund[0]["principle_key"], "SAFE-01")
         self.assertTrue(fund[0]["excerpt"])
+        self.assertNotRegex(fund[0]["excerpt"], r"\b(?:CORE|SAFE|DEBT)-\d+\b")
         self.assertEqual(fund[0]["href"], "/app/content?key=SAFE-01")
         self.assertIn("Welorademy", fund[0]["academy_label"])
         self.assertEqual(fund[0]["linked_module_id"], "M02")
@@ -53,6 +54,8 @@ class TestP1OsFlow3PediaInline(unittest.TestCase):
     def test_goals_html_inline_block(self):
         html = HTML.read_text(encoding="utf-8")
         self.assertIn("Học thêm", html)
+        self.assertIn("stripFrontmatter", html)
+        self.assertIn("scrubInternalCodes", html)
         self.assertIn("/content/", html)
         self.assertIn("/app/content?key=", html)
         self.assertIn("Welorademy", html)

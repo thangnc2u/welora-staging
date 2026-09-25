@@ -1,12 +1,18 @@
-"""Idempotent rich demo seed for partner@welora.demo (P2) + demo-p4@welora.demo (P4).
+"""Idempotent rich demo seed for all 6 personas (P1–P6) with stable login aliases.
 
-CP parity amounts (Welora_Claude os-demo-personas demo_2 / demo_4).
+CP parity amounts for P2/P4 (Welora_Claude os-demo-personas demo_2 / demo_4).
+P1/P3/P5/P6 use round PRD Inf demo numbers. Goals only emergency_fund | debt_payoff.
+
 Does not touch Hard Deny, TARGET_MONTHS, logout Hotfix #4, Pre-Rule, Open Banking,
 Investments, or Agent product code beyond demo seed data.
 
-P2 on partner: young_family, emergency_fund + debt_payoff (completed so gate can pass),
-non-zero accounts, categories, sample txs, safety_gate=passed.
-P4 via alias demo-p4@welora.demo: sandwich_3gen, thin EF + active debt, gate not_passed.
+Aliases (password WeloraDemo1!):
+  P1 demo-p1@welora.demo · solo · EF~3× + optional card debt · gate early/not_passed
+  P2 partner@welora.demo · young_family · EF + completed debt · gate passed
+  P3 demo-p3@welora.demo · couple_no_kids · EF + ho-tro-gia-dinh tag
+  P4 demo-p4@welora.demo · sandwich_3gen · debt_payoff first · gate not_passed
+  P5 demo-p5@welora.demo · pre_retire · EF (+ optional debt_payoff)
+  P6 demo-p6@welora.demo · retire_companion · EF y tế · no debt
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from welora.os_transactions import (
     Transaction,
     STORE as TX_STORE,
 )
+from welora.personas import default_family_context
 from welora.safety_gate import TARGET_MONTHS, compute_safety_gate_from_amounts
 
 PARTNER_USER_ID = "bc25f9aa-9af4-45ea-b981-adbc41133439"
@@ -96,6 +103,133 @@ P4_TX_IDS = (
     "b4000001-0000-4000-8000-000000000102",
     "b4000001-0000-4000-8000-000000000103",
 )
+
+# --- P1 solo ---------------------------------------------------------------
+DEMO_P1_EMAIL = "demo-p1@welora.demo"
+DEMO_P1_PHONE = "+84900000001"
+DEMO_P1_USER_ID = "a1b2c3d4-e5f6-4012-8456-7e8f90112211"
+DEMO_P1_DISPLAY = "Demo P1 Solo"
+DEMO_P1_ESSENTIAL_VND = 12_000_000
+DEMO_P1_EF_CURRENT_VND = 8_000_000  # < 3× → early / not_passed
+DEMO_P1_CHI_TIEU_VND = 5_000_000
+DEMO_P1_QUY_DP_VND = 8_000_000
+DEMO_P1_DEBT_VND = 5_000_000
+DEMO_P1_DEBT_PAID_VND = 1_000_000
+P1_ACC_CHI = "b1000001-0000-4000-8000-000000000001"
+P1_ACC_QUY = "b1000001-0000-4000-8000-000000000002"
+P1_ACC_NO = "b1000001-0000-4000-8000-000000000003"
+P1_GOAL_EF = "b1000001-0000-4000-8000-0000000000ef"
+P1_GOAL_DEBT = "b1000001-0000-4000-8000-0000000000d1"
+P1_TX_IDS = (
+    "b1000001-0000-4000-8000-000000000101",
+    "b1000001-0000-4000-8000-000000000102",
+    "b1000001-0000-4000-8000-000000000103",
+)
+
+# --- P3 couple_no_kids (hỗ trợ GM) ----------------------------------------
+DEMO_P3_EMAIL = "demo-p3@welora.demo"
+DEMO_P3_PHONE = "+84900000003"
+DEMO_P3_USER_ID = "a3b4c5d6-e7f8-4012-8456-7e8f90112233"
+DEMO_P3_DISPLAY = "Demo P3 Couple"
+DEMO_P3_ESSENTIAL_VND = 15_000_000
+DEMO_P3_EF_CURRENT_VND = 48_000_000  # ≥ 3× gate; narrative ~6×
+DEMO_P3_CHI_TIEU_VND = 6_000_000
+DEMO_P3_HO_TRO_VND = 10_000_000
+DEMO_P3_QUY_DP_VND = 20_000_000
+P3_ACC_CHI = "b3000001-0000-4000-8000-000000000001"
+P3_ACC_HOTRO = "b3000001-0000-4000-8000-000000000002"
+P3_ACC_QUY = "b3000001-0000-4000-8000-000000000003"
+P3_GOAL_EF = "b3000001-0000-4000-8000-0000000000ef"
+P3_TX_IDS = (
+    "b3000001-0000-4000-8000-000000000101",
+    "b3000001-0000-4000-8000-000000000102",
+    "b3000001-0000-4000-8000-000000000103",
+)
+
+# --- P5 pre_retire ---------------------------------------------------------
+DEMO_P5_EMAIL = "demo-p5@welora.demo"
+DEMO_P5_PHONE = "+84900000005"
+DEMO_P5_USER_ID = "a5b6c7d8-e9f0-4012-8456-7e8f90112255"
+DEMO_P5_DISPLAY = "Demo P5 Pre-retire"
+DEMO_P5_ESSENTIAL_VND = 18_000_000
+DEMO_P5_EF_CURRENT_VND = 60_000_000  # ≥ 3× OS gate; narrative 6–12m
+DEMO_P5_CHI_TIEU_VND = 7_000_000
+DEMO_P5_TIET_KIEM_VND = 40_000_000
+DEMO_P5_DEBT_VND = 12_000_000
+DEMO_P5_DEBT_PAID_VND = 4_000_000
+P5_ACC_CHI = "b5000001-0000-4000-8000-000000000001"
+P5_ACC_TIET = "b5000001-0000-4000-8000-000000000002"
+P5_ACC_NO = "b5000001-0000-4000-8000-000000000003"
+P5_GOAL_EF = "b5000001-0000-4000-8000-0000000000ef"
+P5_GOAL_DEBT = "b5000001-0000-4000-8000-0000000000d1"
+P5_TX_IDS = (
+    "b5000001-0000-4000-8000-000000000101",
+    "b5000001-0000-4000-8000-000000000102",
+    "b5000001-0000-4000-8000-000000000103",
+)
+
+# --- P6 retire_companion ---------------------------------------------------
+DEMO_P6_EMAIL = "demo-p6@welora.demo"
+DEMO_P6_PHONE = "+84900000006"
+DEMO_P6_USER_ID = "a6b7c8d9-e0f1-4012-8456-7e8f90112266"
+DEMO_P6_DISPLAY = "Demo P6 Retire"
+DEMO_P6_ESSENTIAL_VND = 10_000_000
+DEMO_P6_EF_CURRENT_VND = 40_000_000  # y tế cushion ≥ 3×
+DEMO_P6_CHI_TIEU_VND = 4_000_000
+DEMO_P6_TIET_KIEM_VND = 25_000_000
+P6_ACC_CHI = "b6000001-0000-4000-8000-000000000001"
+P6_ACC_TIET = "b6000001-0000-4000-8000-000000000002"
+P6_GOAL_EF = "b6000001-0000-4000-8000-0000000000ef"
+P6_TX_IDS = (
+    "b6000001-0000-4000-8000-000000000101",
+    "b6000001-0000-4000-8000-000000000102",
+)
+
+# Stable login map (extend — do not fork). P2 stays on partner@ alias.
+DEMO_PERSONA_ALIASES: dict[str, dict[str, str]] = {
+    "P1": {
+        "email": DEMO_P1_EMAIL,
+        "user_id": DEMO_P1_USER_ID,
+        "phone": DEMO_P1_PHONE,
+        "display_name": DEMO_P1_DISPLAY,
+        "household": "solo",
+    },
+    "P2": {
+        "email": DEMO_EMAIL,
+        "user_id": PARTNER_USER_ID,
+        "phone": DEMO_PHONE,
+        "display_name": DEMO_DISPLAY,
+        "household": "young_family",
+    },
+    "P3": {
+        "email": DEMO_P3_EMAIL,
+        "user_id": DEMO_P3_USER_ID,
+        "phone": DEMO_P3_PHONE,
+        "display_name": DEMO_P3_DISPLAY,
+        "household": "couple_no_kids",
+    },
+    "P4": {
+        "email": DEMO_P4_EMAIL,
+        "user_id": DEMO_P4_USER_ID,
+        "phone": DEMO_P4_PHONE,
+        "display_name": DEMO_P4_DISPLAY,
+        "household": "sandwich_3gen",
+    },
+    "P5": {
+        "email": DEMO_P5_EMAIL,
+        "user_id": DEMO_P5_USER_ID,
+        "phone": DEMO_P5_PHONE,
+        "display_name": DEMO_P5_DISPLAY,
+        "household": "pre_retire",
+    },
+    "P6": {
+        "email": DEMO_P6_EMAIL,
+        "user_id": DEMO_P6_USER_ID,
+        "phone": DEMO_P6_PHONE,
+        "display_name": DEMO_P6_DISPLAY,
+        "household": "retire_companion",
+    },
+}
 
 
 def _now() -> str:
@@ -254,7 +388,7 @@ def _run_onboarding(
             "household": household,
             "life_stage": household,
             "income_stability": "stable",
-            "family_context": "with_family",
+            "family_context": default_family_context(household),
         },
     )
     ob.patch_step(
@@ -621,43 +755,485 @@ def seed_p4_on_user(user_id: str) -> dict[str, Any]:
     }
 
 
+
+def seed_p1_on_user(user_id: str) -> dict[str, Any]:
+    """P1 solo — EF early + optional card debt; safety not_passed."""
+    essential = float(DEMO_P1_ESSENTIAL_VND)
+    _clear_user_demo_data(user_id)
+    completed = _run_onboarding(
+        user_id,
+        essential=essential,
+        has_dangerous_debt=True,
+        household="solo",
+        near_term_priority="safety",
+    )
+
+    ef = create_emergency_fund_goal(
+        user_id=user_id,
+        essential_expense_monthly=essential,
+        current_amount=float(DEMO_P1_EF_CURRENT_VND),
+        linked_from_onboarding=True,
+    )
+    ef.goal_id = P1_GOAL_EF
+    _save_goal(ef)
+
+    debt = create_debt_payoff_goal(
+        user_id=user_id,
+        target_amount=float(DEMO_P1_DEBT_VND),
+        current_amount=float(DEMO_P1_DEBT_PAID_VND),
+        title="Trả nợ thẻ (demo P1)",
+        subtype="the_tin_dung",
+        monthly_contribution=1_000_000,
+        plan_method="avalanche",
+    )
+    debt.goal_id = P1_GOAL_DEBT
+    _save_goal(debt)
+
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=True,
+        debt_on_track=False,
+        mastery_no_efund_invest="learning",
+    )
+    set_persona(user_id=user_id, persona="P1")
+
+    _save_account(
+        account_id=P1_ACC_CHI,
+        user_id=user_id,
+        name="Chi tiêu hàng ngày",
+        type="chi_tieu_hang_ngay",
+        balance=DEMO_P1_CHI_TIEU_VND,
+    )
+    _save_account(
+        account_id=P1_ACC_QUY,
+        user_id=user_id,
+        name="Quỹ dự phòng",
+        type="tiet_kiem",
+        balance=DEMO_P1_QUY_DP_VND,
+    )
+    _save_account(
+        account_id=P1_ACC_NO,
+        user_id=user_id,
+        name="Thẻ tín dụng",
+        type="no",
+        balance=float(DEMO_P1_DEBT_VND),
+    )
+
+    cats = _seed_categories(user_id)
+    _save_tx(
+        transaction_id=P1_TX_IDS[0],
+        user_id=user_id,
+        account_id=P1_ACC_CHI,
+        amount=-800_000,
+        category="Ăn uống",
+        date="2026-09-02",
+        note="Chi tiêu solo",
+        merchant="GrabFood",
+    )
+    _save_tx(
+        transaction_id=P1_TX_IDS[1],
+        user_id=user_id,
+        account_id=P1_ACC_QUY,
+        amount=2_000_000,
+        category="Quỹ khẩn cấp",
+        date="2026-09-08",
+        note="Gửi quỹ DP",
+    )
+    _save_tx(
+        transaction_id=P1_TX_IDS[2],
+        user_id=user_id,
+        account_id=P1_ACC_CHI,
+        amount=-1_000_000,
+        category="Trả nợ",
+        date="2026-09-10",
+        note="Trả tối thiểu thẻ",
+        merchant="Ngân hàng",
+    )
+
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=float(DEMO_P1_EF_CURRENT_VND),
+        essential_expense_monthly=essential,
+        has_dangerous_debt=True,
+        debt_on_track=False,
+        mastery_no_efund_invest="learning",
+    )
+    return {
+        "persona_id": "P1",
+        "household": "solo",
+        "user_id": user_id,
+        "dna": completed.get("dna"),
+        "goals": {
+            "emergency_fund": ef.to_dict(),
+            "debt_payoff": debt.to_dict(),
+        },
+        "accounts": [P1_ACC_CHI, P1_ACC_QUY, P1_ACC_NO],
+        "transactions": list(P1_TX_IDS),
+        "categories": cats,
+        "safety_gate": gate.to_dict(),
+        "target_months": TARGET_MONTHS,
+    }
+
+
+def seed_p3_on_user(user_id: str) -> dict[str, Any]:
+    """P3 couple_no_kids — EF + hỗ trợ GM category tag; no debt preferred."""
+    essential = float(DEMO_P3_ESSENTIAL_VND)
+    _clear_user_demo_data(user_id)
+    completed = _run_onboarding(
+        user_id,
+        essential=essential,
+        has_dangerous_debt=False,
+        household="couple_no_kids",
+        near_term_priority="safety",
+    )
+
+    ef = create_emergency_fund_goal(
+        user_id=user_id,
+        essential_expense_monthly=essential,
+        current_amount=float(DEMO_P3_EF_CURRENT_VND),
+        linked_from_onboarding=True,
+    )
+    ef.goal_id = P3_GOAL_EF
+    _save_goal(ef)
+
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=False,
+        debt_on_track=True,
+        mastery_no_efund_invest="apply",
+    )
+    set_persona(user_id=user_id, persona="P3")
+
+    _save_account(
+        account_id=P3_ACC_CHI,
+        user_id=user_id,
+        name="Chi tiêu",
+        type="chi_tieu_hang_ngay",
+        balance=DEMO_P3_CHI_TIEU_VND,
+    )
+    _save_account(
+        account_id=P3_ACC_HOTRO,
+        user_id=user_id,
+        name="Tiết kiệm hỗ trợ GM",
+        type="tiet_kiem",
+        balance=DEMO_P3_HO_TRO_VND,
+    )
+    _save_account(
+        account_id=P3_ACC_QUY,
+        user_id=user_id,
+        name="Quỹ dự phòng",
+        type="tiet_kiem",
+        balance=DEMO_P3_QUY_DP_VND,
+    )
+
+    cats = _seed_categories(user_id)
+    _save_tx(
+        transaction_id=P3_TX_IDS[0],
+        user_id=user_id,
+        account_id=P3_ACC_CHI,
+        amount=-3_000_000,
+        category="Hỗ trợ gia đình",
+        date="2026-09-01",
+        note="Hỗ trợ cha mẹ",
+    )
+    _save_tx(
+        transaction_id=P3_TX_IDS[1],
+        user_id=user_id,
+        account_id=P3_ACC_HOTRO,
+        amount=2_000_000,
+        category="Hỗ trợ gia đình",
+        date="2026-09-05",
+        note="Gửi quỹ hỗ trợ GM",
+    )
+    _save_tx(
+        transaction_id=P3_TX_IDS[2],
+        user_id=user_id,
+        account_id=P3_ACC_QUY,
+        amount=3_000_000,
+        category="Quỹ khẩn cấp",
+        date="2026-09-12",
+        note="Gửi quỹ DP",
+    )
+
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=float(DEMO_P3_EF_CURRENT_VND),
+        essential_expense_monthly=essential,
+        has_dangerous_debt=False,
+        debt_on_track=True,
+        mastery_no_efund_invest="apply",
+    )
+    return {
+        "persona_id": "P3",
+        "household": "couple_no_kids",
+        "user_id": user_id,
+        "dna": completed.get("dna"),
+        "goals": {
+            "emergency_fund": ef.to_dict(),
+        },
+        "accounts": [P3_ACC_CHI, P3_ACC_HOTRO, P3_ACC_QUY],
+        "transactions": list(P3_TX_IDS),
+        "categories": cats,
+        "safety_gate": gate.to_dict(),
+        "target_months": TARGET_MONTHS,
+    }
+
+
+def seed_p5_on_user(user_id: str) -> dict[str, Any]:
+    """P5 pre_retire — EF (narrative 6–12m) + optional debt_payoff trước hưu."""
+    essential = float(DEMO_P5_ESSENTIAL_VND)
+    _clear_user_demo_data(user_id)
+    completed = _run_onboarding(
+        user_id,
+        essential=essential,
+        has_dangerous_debt=True,
+        household="pre_retire",
+        near_term_priority="debt",
+    )
+
+    ef = create_emergency_fund_goal(
+        user_id=user_id,
+        essential_expense_monthly=essential,
+        current_amount=float(DEMO_P5_EF_CURRENT_VND),
+        linked_from_onboarding=True,
+    )
+    ef.goal_id = P5_GOAL_EF
+    _save_goal(ef)
+
+    debt = create_debt_payoff_goal(
+        user_id=user_id,
+        target_amount=float(DEMO_P5_DEBT_VND),
+        current_amount=float(DEMO_P5_DEBT_PAID_VND),
+        title="Trả nợ trước hưu (demo P5)",
+        subtype="tin_dung",
+        monthly_contribution=2_000_000,
+        plan_method="avalanche",
+    )
+    debt.goal_id = P5_GOAL_DEBT
+    _save_goal(debt)
+
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=True,
+        debt_on_track=True,
+        mastery_no_efund_invest="learning",
+    )
+    set_persona(user_id=user_id, persona="P5")
+
+    _save_account(
+        account_id=P5_ACC_CHI,
+        user_id=user_id,
+        name="Chi tiêu",
+        type="chi_tieu_hang_ngay",
+        balance=DEMO_P5_CHI_TIEU_VND,
+    )
+    _save_account(
+        account_id=P5_ACC_TIET,
+        user_id=user_id,
+        name="Tiết kiệm hưu",
+        type="tiet_kiem",
+        balance=DEMO_P5_TIET_KIEM_VND,
+    )
+    _save_account(
+        account_id=P5_ACC_NO,
+        user_id=user_id,
+        name="Nợ trước hưu",
+        type="no",
+        balance=float(DEMO_P5_DEBT_VND - DEMO_P5_DEBT_PAID_VND),
+    )
+
+    cats = _seed_categories(user_id)
+    _save_tx(
+        transaction_id=P5_TX_IDS[0],
+        user_id=user_id,
+        account_id=P5_ACC_CHI,
+        amount=-2_000_000,
+        category="Trả nợ",
+        date="2026-09-03",
+        note="Trả nợ trước hưu",
+        merchant="Ngân hàng",
+    )
+    _save_tx(
+        transaction_id=P5_TX_IDS[1],
+        user_id=user_id,
+        account_id=P5_ACC_TIET,
+        amount=3_000_000,
+        category="Quỹ khẩn cấp",
+        date="2026-09-07",
+        note="Bổ sung đệm",
+    )
+    _save_tx(
+        transaction_id=P5_TX_IDS[2],
+        user_id=user_id,
+        account_id=P5_ACC_CHI,
+        amount=-1_500_000,
+        category="Bảo hiểm",
+        date="2026-09-09",
+        note="BH y tế",
+    )
+
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=float(DEMO_P5_EF_CURRENT_VND),
+        essential_expense_monthly=essential,
+        has_dangerous_debt=True,
+        debt_on_track=True,
+        mastery_no_efund_invest="learning",
+    )
+    return {
+        "persona_id": "P5",
+        "household": "pre_retire",
+        "user_id": user_id,
+        "dna": completed.get("dna"),
+        "goals": {
+            "emergency_fund": ef.to_dict(),
+            "debt_payoff": debt.to_dict(),
+        },
+        "accounts": [P5_ACC_CHI, P5_ACC_TIET, P5_ACC_NO],
+        "transactions": list(P5_TX_IDS),
+        "categories": cats,
+        "safety_gate": gate.to_dict(),
+        "target_months": TARGET_MONTHS,
+    }
+
+
+def seed_p6_on_user(user_id: str) -> dict[str, Any]:
+    """P6 retire_companion — EF y tế; prefer no debt."""
+    essential = float(DEMO_P6_ESSENTIAL_VND)
+    _clear_user_demo_data(user_id)
+    completed = _run_onboarding(
+        user_id,
+        essential=essential,
+        has_dangerous_debt=False,
+        household="retire_companion",
+        near_term_priority="safety",
+    )
+
+    ef = create_emergency_fund_goal(
+        user_id=user_id,
+        essential_expense_monthly=essential,
+        current_amount=float(DEMO_P6_EF_CURRENT_VND),
+        linked_from_onboarding=True,
+    )
+    ef.goal_id = P6_GOAL_EF
+    _save_goal(ef)
+
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=False,
+        debt_on_track=True,
+        mastery_no_efund_invest="apply",
+    )
+    set_persona(user_id=user_id, persona="P6")
+
+    _save_account(
+        account_id=P6_ACC_CHI,
+        user_id=user_id,
+        name="Chi tiêu",
+        type="chi_tieu_hang_ngay",
+        balance=DEMO_P6_CHI_TIEU_VND,
+    )
+    _save_account(
+        account_id=P6_ACC_TIET,
+        user_id=user_id,
+        name="Tiết kiệm thanh khoản",
+        type="tiet_kiem",
+        balance=DEMO_P6_TIET_KIEM_VND,
+    )
+
+    cats = _seed_categories(user_id)
+    _save_tx(
+        transaction_id=P6_TX_IDS[0],
+        user_id=user_id,
+        account_id=P6_ACC_CHI,
+        amount=-1_200_000,
+        category="Bảo hiểm",
+        date="2026-09-04",
+        note="Chi y tế / BH",
+    )
+    _save_tx(
+        transaction_id=P6_TX_IDS[1],
+        user_id=user_id,
+        account_id=P6_ACC_TIET,
+        amount=1_500_000,
+        category="Quỹ khẩn cấp",
+        date="2026-09-11",
+        note="Đệm y tế",
+    )
+
+    gate = compute_safety_gate_from_amounts(
+        current_efund_amount=float(DEMO_P6_EF_CURRENT_VND),
+        essential_expense_monthly=essential,
+        has_dangerous_debt=False,
+        debt_on_track=True,
+        mastery_no_efund_invest="apply",
+    )
+    return {
+        "persona_id": "P6",
+        "household": "retire_companion",
+        "user_id": user_id,
+        "dna": completed.get("dna"),
+        "goals": {
+            "emergency_fund": ef.to_dict(),
+        },
+        "accounts": [P6_ACC_CHI, P6_ACC_TIET],
+        "transactions": list(P6_TX_IDS),
+        "categories": cats,
+        "safety_gate": gate.to_dict(),
+        "target_months": TARGET_MONTHS,
+    }
+
+
 def seed_partner_rich_demo(*, url: Optional[str] = None) -> dict[str, Any]:
+    """Idempotent seed for all 6 persona login aliases (P1–P6).
+
+    Keeps P2 on partner@welora.demo and P4 on demo-p4@; adds demo-p1/3/5/6.
+    Calling twice does not duplicate accounts/goals/users (clear + upsert).
+    """
     if not guest_demo_enabled():
         return {"seeded": False, "reason": "demo_seed_disabled"}
 
-    partner_auth = _upsert_demo_user(
-        user_id=PARTNER_USER_ID,
-        email=DEMO_EMAIL,
-        phone=DEMO_PHONE,
-        display_name=DEMO_DISPLAY,
-        password=DEMO_PASSWORD,
-        url=url,
-    )
-    p2 = seed_p2_on_user(partner_auth["user_id"])
+    seeders = {
+        "P1": seed_p1_on_user,
+        "P2": seed_p2_on_user,
+        "P3": seed_p3_on_user,
+        "P4": seed_p4_on_user,
+        "P5": seed_p5_on_user,
+        "P6": seed_p6_on_user,
+    }
 
-    p4_auth = _upsert_demo_user(
-        user_id=DEMO_P4_USER_ID,
-        email=DEMO_P4_EMAIL,
-        phone=DEMO_P4_PHONE,
-        display_name=DEMO_P4_DISPLAY,
-        password=DEMO_PASSWORD,
-        url=url,
-    )
-    p4 = seed_p4_on_user(p4_auth["user_id"])
+    personas_out: dict[str, Any] = {}
+    aliases_out: dict[str, Any] = {}
+    for pid in ("P1", "P2", "P3", "P4", "P5", "P6"):
+        meta = DEMO_PERSONA_ALIASES[pid]
+        auth = _upsert_demo_user(
+            user_id=meta["user_id"],
+            email=meta["email"],
+            phone=meta["phone"],
+            display_name=meta["display_name"],
+            password=DEMO_PASSWORD,
+            url=url,
+        )
+        persona = seeders[pid](auth["user_id"])
+        block = {
+            **auth,
+            "email": meta["email"],
+            "password_hint": DEMO_PASSWORD,
+            "persona": persona,
+        }
+        personas_out[pid] = block
+        aliases_out[pid] = {
+            "email": meta["email"],
+            "user_id": auth["user_id"],
+            "household": meta["household"],
+            "gate": (persona.get("safety_gate") or {}).get("status"),
+        }
 
+    partner = personas_out["P2"]
+    demo_p4 = personas_out["P4"]
     return {
         "seeded": True,
-        "partner": {
-            **partner_auth,
-            "password_hint": DEMO_PASSWORD,
-            "persona": p2,
-        },
-        "demo_p4": {
-            **p4_auth,
-            "email": DEMO_P4_EMAIL,
-            "password_hint": DEMO_PASSWORD,
-            "persona": p4,
-        },
+        "partner": partner,
+        "demo_p4": demo_p4,
+        "personas": personas_out,
+        "aliases": aliases_out,
         "p4_exposure": "alias",
         "p4_login": DEMO_P4_EMAIL,
         "target_months": TARGET_MONTHS,

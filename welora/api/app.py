@@ -26,6 +26,7 @@ from welora import os_transactions as tx_svc
 from welora import os_categories as categories_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
+from welora import entitlements as entitlements_svc
 from welora import core_constitution as core_const_svc
 from welora.api.security_headers import SecurityHeadersMiddleware
 
@@ -330,6 +331,18 @@ def _serve_app_html(static_dir: Path, name: str) -> HTMLResponse:
     return HTMLResponse(content=_cache_bust_shell_js(html))
 
 
+
+class EntitlementTrialStartBody(BaseModel):
+    phone: str = Field(..., min_length=8)
+    otp_code: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class EntitlementEventBody(BaseModel):
+    event: str = Field(..., min_length=1)
+    payload: Optional[dict] = None
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -493,6 +506,18 @@ def create_app() -> FastAPI:
         """WeloraOS entry alias — shell lives at /app (+ goals / dual-control /os/*)."""
         return RedirectResponse(url="/app", status_code=302)
 
+
+    @app.get("/pricing", include_in_schema=False)
+    @app.get("/pricing/", include_in_schema=False)
+    def pricing_ui() -> FileResponse:
+        """P9 public pricing page — deep-link friendly (not under /app auth gate)."""
+        return _serve_app_html(static_dir, "pricing.html")
+
+    @app.get("/app/pricing", include_in_schema=False)
+    @app.get("/app/pricing/", include_in_schema=False)
+    def app_pricing_ui() -> FileResponse:
+        return _serve_app_html(static_dir, "pricing.html")
+
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
@@ -502,7 +527,7 @@ def create_app() -> FastAPI:
             dialect = detect_dialect()
         except Exception:
             pass
-        return {
+        body = {
             "status": "ok",
             "service": "welora",
             "phase": "2",
@@ -514,6 +539,11 @@ def create_app() -> FastAPI:
             "hard_deny": True,
             "git_sha": _short_git_sha(),
         }
+        try:
+            body["entitlements"] = entitlements_svc.health_fields()
+        except Exception:
+            body["entitlements"] = {"checkout_enabled": False, "pricing_module": False}
+        return body
 
     @app.get("/healthz", tags=["system"], include_in_schema=False)
     def healthz() -> dict:
@@ -985,6 +1015,62 @@ def create_app() -> FastAPI:
         if code >= 400 and out.get("reassign_required"):
             raise HTTPException(status_code=code, detail=out)
         return _respond(code, out)
+
+
+
+    # --- MVP Pricing & Entitlements (P1–P3 · P8 · P9) ---
+    @app.get("/api/core/v1/entitlements/pricing", tags=["entitlements"])
+    def entitlements_pricing() -> dict:
+        return entitlements_svc.get_pricing_public()
+
+    @app.get("/api/core/v1/entitlements/checkout/config", tags=["entitlements"])
+    def entitlements_checkout_config() -> dict:
+        return entitlements_svc.get_checkout_config()
+
+    @app.get("/api/core/v1/entitlements/me", tags=["entitlements"])
+    def entitlements_me(
+        user_id: Optional[str] = Query(None),
+        authorization: Optional[str] = Header(None),
+    ) -> dict:
+        uid = (user_id or "").strip() or None
+        if not uid and authorization and authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+            try:
+                me = auth_svc.service_me(token)
+                if isinstance(me, tuple):
+                    _code, payload = me
+                    if isinstance(payload, dict):
+                        uid = payload.get("user_id") or payload.get("id")
+                elif isinstance(me, dict):
+                    uid = me.get("user_id") or me.get("id")
+            except Exception:
+                uid = None
+        return entitlements_svc.get_me(uid)
+
+    @app.get("/api/core/v1/entitlements/has", tags=["entitlements"])
+    def entitlements_has(
+        key: str = Query(..., min_length=1),
+        user_id: Optional[str] = Query(None),
+    ) -> dict:
+        ok = entitlements_svc.has_entitlement(user_id, key)
+        return {"key": key, "allowed": ok, "user_id": user_id or "anonymous"}
+
+    @app.post("/api/core/v1/entitlements/trial/aca/start", tags=["entitlements"])
+    def entitlements_trial_aca_start(body: EntitlementTrialStartBody) -> dict:
+        return _respond(*entitlements_svc.start_aca_trial(
+            user_id=body.user_id,
+            phone=body.phone,
+            otp_code=body.otp_code,
+        ))
+
+    @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
+    def entitlements_events(body: EntitlementEventBody) -> dict:
+        return entitlements_svc.emit_event(body.event, body.payload)
+
+    @app.get("/api/core/v1/entitlements/experiments/aca_price_ab", tags=["entitlements"])
+    def entitlements_experiment_aca() -> dict:
+        return entitlements_svc.assign_experiment("aca_price_ab")
+
 
 
     return app

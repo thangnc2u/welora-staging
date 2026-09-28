@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pyproject.toml README.md ./
 COPY welora ./welora
+COPY config ./config
 COPY tests ./tests
 COPY demo_e2e.py run_tests.sh ./
 

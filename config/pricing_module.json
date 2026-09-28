@@ -1,0 +1,60 @@
+{
+  "currency": "VND",
+  "plans": [
+    {
+      "code": "FREE",
+      "name": "Welora Free",
+      "description": "Đọc Từ điển miễn phí và học thử 5 bài trong Học viện.",
+      "sellable": true,
+      "seat_limit": 1,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "academy.lesson.sample", "limit": 5}
+      ],
+      "trial": null,
+      "prices": [
+        {"price_id": "FREE", "interval": "free", "amount": 0}
+      ]
+    },
+    {
+      "code": "ACA",
+      "name": "Academy",
+      "description": "Mở toàn bộ lộ trình bài học trong Học viện.",
+      "sellable": true,
+      "seat_limit": 1,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "academy.lesson.full"}
+      ],
+      "trial": {"days": 30, "verification": "phone_otp"},
+      "prices": [
+        {"price_id": "ACA_MONTHLY", "interval": "month", "amount": 69000},
+        {"price_id": "ACA_YEARLY", "interval": "year", "amount": 490000}
+      ]
+    },
+    {
+      "code": "OS1",
+      "name": "OS Cá nhân",
+      "description": "WeloraOS cho 1 người: giao dịch, ngân sách và mục tiêu tài chính.",
+      "sellable": true,
+      "seat_limit": 1,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "academy.lesson.sample", "limit": 5},
+        {"key": "os.personal"}
+      ],
+      "trial": null,
+      "prices": [
+        {"price_id": "OS1_MONTHLY", "interval": "month", "amount": 99000},
+        {"price_id": "OS1_YEARLY", "interval": "year", "amount": 690000}
+      ]
+    }
+  ],
+  "checkout_enabled": false,
+  "checkout_providers": ["momo", "zalopay", "vnpay", "vietqr"],
+  "checkout_banner": "Sắp mở thanh toán",
+  "experiments": [
+    {"key": "aca_price_ab", "active": false, "variant": "A"}
+  ],
+  "disclaimer": "Welora cung cấp thông tin và công cụ quản lý tài chính cá nhân, không tư vấn đầu tư, không nhận hoa hồng hay liên kết tiếp thị (affiliate) với bất kỳ sản phẩm tài chính nào."
+}

@@ -1,10 +1,9 @@
-"""MVP Pricing & Entitlements — P1–P3 · P8 · P9 (FREE/ACA/OS1)."""
+"""Pricing & Entitlements — P1–P3 · P8 · P9 (+ listed P4–P7 plans on config/API)."""
 
 from __future__ import annotations
 
 import json
 import os
-import re
 import unittest
 from pathlib import Path
 
@@ -17,6 +16,9 @@ from welora.safety_gate import TARGET_MONTHS
 ROOT = Path(__file__).resolve().parents[1]
 PRICING_HTML = ROOT / "welora" / "api" / "static" / "pricing.html"
 CONFIG_JSON = ROOT / "config" / "pricing_module.json"
+CONFIG_PKG = ROOT / "welora" / "config" / "pricing_module.json"
+
+EXPECTED_CODES = ["FREE", "ACA", "ACA_SV", "OS1", "OS2", "OS2G", "OS3G"]
 
 
 class TestPricingEntitlementsMvp(unittest.TestCase):
@@ -40,11 +42,14 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
             else:
                 os.environ[k] = v
 
-    def test_config_json_sellable_mvp_only(self):
+    def test_config_json_plans_and_checkout_off(self):
         raw = json.loads(CONFIG_JSON.read_text(encoding="utf-8"))
+        pkg = json.loads(CONFIG_PKG.read_text(encoding="utf-8"))
+        self.assertEqual(raw, pkg)
         codes = [p["code"] for p in raw["plans"]]
-        self.assertEqual(codes, ["FREE", "ACA", "OS1"])
+        self.assertEqual(codes, EXPECTED_CODES)
         self.assertFalse(raw["checkout_enabled"])
+        self.assertFalse(raw["lifetime"]["enabled"])
         amounts = {
             (p["code"], pr["interval"]): pr["amount"]
             for p in raw["plans"]
@@ -70,16 +75,18 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
         self.assertEqual(body["currency"], "VND")
         self.assertFalse(body["checkout_enabled"])
         codes = [p["code"] for p in body["plans"]]
-        self.assertEqual(codes, ["FREE", "ACA", "OS1"])
+        self.assertEqual(codes, EXPECTED_CODES)
         for p in body["plans"]:
             self.assertTrue(p["sellable"])
         aca = next(p for p in body["plans"] if p["code"] == "ACA")
-        self.assertEqual(aca["prices"][0]["amount"], 69000)
+        month = next(pr for pr in aca["prices"] if pr["interval"] == "month")
+        self.assertEqual(month["amount"], 69000)
         self.assertEqual(aca["trial"]["days"], 30)
         self.assertIn("không tư vấn đầu tư", body["disclaimer"])
         self.assertIn("affiliate", body["disclaimer"])
         exps = body["experiments"]
         self.assertTrue(any(e["key"] == "aca_price_ab" and e["active"] is False for e in exps))
+        self.assertFalse(body["lifetime"]["enabled"])
 
     def test_checkout_config_disabled(self):
         r = self.client.get("/api/core/v1/entitlements/checkout/config")
@@ -160,10 +167,10 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
         html = PRICING_HTML.read_text(encoding="utf-8")
         self.assertIn("firewallDisclaimer", html)
         self.assertIn("/api/core/v1/entitlements/pricing", html)
-        for amt in ("69000", "49.000", "490000", "99000", "690000", "69.000"):
+        for amt in ("69000", "49.000", "490000", "99000", "690000", "69.000", "29000", "19000"):
             self.assertNotIn(amt, html)
-        # amounts must come from API render path
         self.assertIn("formatVnd", html)
+        self.assertIn("plan-change/preview", html)
 
     def test_health_gate_months_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)
@@ -176,7 +183,8 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
         self.assertTrue(b["hard_deny"])
         self.assertIn("entitlements", b)
         self.assertFalse(b["entitlements"]["checkout_enabled"])
-        self.assertEqual(sorted(b["entitlements"]["sellable_plans"]), ["ACA", "FREE", "OS1"])
+        self.assertEqual(sorted(b["entitlements"]["sellable_plans"]), sorted(EXPECTED_CODES))
+        self.assertFalse(b["entitlements"].get("lifetime_enabled", True))
 
     def test_helper_has_entitlement(self):
         self.assertTrue(ent.has_entitlement(None, "pedia.read"))

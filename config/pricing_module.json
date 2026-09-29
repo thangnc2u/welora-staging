@@ -7,6 +7,7 @@
       "description": "Đọc Từ điển miễn phí và học thử 5 bài trong Học viện.",
       "sellable": true,
       "seat_limit": 1,
+      "family": "free",
       "entitlements": [
         {"key": "pedia.read"},
         {"key": "academy.lesson.sample", "limit": 5}
@@ -22,6 +23,7 @@
       "description": "Mở toàn bộ lộ trình bài học trong Học viện.",
       "sellable": true,
       "seat_limit": 1,
+      "family": "academy",
       "entitlements": [
         {"key": "pedia.read"},
         {"key": "academy.lesson.full"}
@@ -29,7 +31,34 @@
       "trial": {"days": 30, "verification": "phone_otp"},
       "prices": [
         {"price_id": "ACA_MONTHLY", "interval": "month", "amount": 69000},
-        {"price_id": "ACA_YEARLY", "interval": "year", "amount": 490000}
+        {"price_id": "ACA_YEARLY", "interval": "year", "amount": 490000},
+        {"price_id": "ACA_LIFETIME", "interval": "lifetime", "amount": 1290000, "sellable": false}
+      ]
+    },
+    {
+      "code": "ACA_SV",
+      "name": "Academy Sinh viên",
+      "description": "Ưu đãi sinh viên: 12 tháng miễn phí sau xác thực, rồi giá SV. Không bán Trọn đời; không gồm OS.",
+      "sellable": true,
+      "seat_limit": 1,
+      "family": "academy",
+      "student": true,
+      "blocks_os": true,
+      "lifetime_available": false,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "academy.lesson.full"}
+      ],
+      "trial": null,
+      "student_offer": {
+        "free_days": 365,
+        "verification": ["edu_vn_email_otp", "student_card_manual"],
+        "no_lifetime": true,
+        "blocks_os": true
+      },
+      "prices": [
+        {"price_id": "ACA_SV_MONTHLY", "interval": "month", "amount": 29000},
+        {"price_id": "ACA_SV_YEARLY", "interval": "year", "amount": 249000}
       ]
     },
     {
@@ -38,21 +67,133 @@
       "description": "WeloraOS cho 1 người: giao dịch, ngân sách và mục tiêu tài chính.",
       "sellable": true,
       "seat_limit": 1,
+      "family": "os",
       "entitlements": [
         {"key": "pedia.read"},
         {"key": "academy.lesson.sample", "limit": 5},
-        {"key": "os.personal"}
+        {"key": "os.personal"},
+        {"key": "os.core"}
       ],
       "trial": null,
       "prices": [
         {"price_id": "OS1_MONTHLY", "interval": "month", "amount": 99000},
-        {"price_id": "OS1_YEARLY", "interval": "year", "amount": 690000}
+        {"price_id": "OS1_YEARLY", "interval": "year", "amount": 690000},
+        {"price_id": "OS1_LIFETIME", "interval": "lifetime", "amount": 2490000, "sellable": false}
+      ]
+    },
+    {
+      "code": "OS2",
+      "name": "OS Đôi",
+      "description": "WeloraOS cho vợ + chồng (2 chỗ ngồi). Founding Family pre-order đến OS 3.10.",
+      "sellable": true,
+      "seat_limit": 2,
+      "family": "os",
+      "founding_family": true,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "pedia.save"},
+        {"key": "academy.lesson.full"},
+        {"key": "os.personal"},
+        {"key": "os.core"},
+        {"key": "os.household"}
+      ],
+      "trial": null,
+      "prices": [
+        {"price_id": "OS2_MONTHLY", "interval": "month", "amount": 139000},
+        {"price_id": "OS2_YEARLY", "interval": "year", "amount": 990000},
+        {"price_id": "OS2_LIFETIME", "interval": "lifetime", "amount": 3490000, "sellable": false}
+      ]
+    },
+    {
+      "code": "OS2G",
+      "name": "OS 2 thế hệ",
+      "description": "WeloraOS gia đình 2 thế hệ (5 chỗ: 2 + 3 con). Founding Family pre-order đến OS 3.10.",
+      "sellable": true,
+      "seat_limit": 5,
+      "family": "os",
+      "founding_family": true,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "pedia.save"},
+        {"key": "academy.lesson.full"},
+        {"key": "os.personal"},
+        {"key": "os.core"},
+        {"key": "os.household"},
+        {"key": "os.child_profile"}
+      ],
+      "trial": null,
+      "prices": [
+        {"price_id": "OS2G_MONTHLY", "interval": "month", "amount": 179000},
+        {"price_id": "OS2G_YEARLY", "interval": "year", "amount": 1290000},
+        {"price_id": "OS2G_LIFETIME", "interval": "lifetime", "amount": 4490000, "sellable": false}
+      ]
+    },
+    {
+      "code": "OS3G",
+      "name": "OS 3 thế hệ",
+      "description": "WeloraOS gia đình 3 thế hệ (9 chỗ: + 4 ông bà). Founding Family pre-order đến OS 3.10.",
+      "sellable": true,
+      "seat_limit": 9,
+      "family": "os",
+      "founding_family": true,
+      "entitlements": [
+        {"key": "pedia.read"},
+        {"key": "pedia.save"},
+        {"key": "academy.lesson.full"},
+        {"key": "os.personal"},
+        {"key": "os.core"},
+        {"key": "os.household"},
+        {"key": "os.child_profile"},
+        {"key": "os.parent_profile"}
+      ],
+      "trial": null,
+      "prices": [
+        {"price_id": "OS3G_MONTHLY", "interval": "month", "amount": 229000},
+        {"price_id": "OS3G_YEARLY", "interval": "year", "amount": 1690000},
+        {"price_id": "OS3G_LIFETIME", "interval": "lifetime", "amount": 5990000, "sellable": false}
       ]
     }
   ],
   "checkout_enabled": false,
   "checkout_providers": ["momo", "zalopay", "vnpay", "vietqr"],
   "checkout_banner": "Sắp mở thanh toán",
+  "seat_addon": {
+    "amount_monthly": 19000,
+    "currency": "VND",
+    "unit": "person",
+    "description": "Thành viên thêm vượt hạn mức gói"
+  },
+  "lifetime": {
+    "enabled": false,
+    "flag": "lifetime_enabled",
+    "sellable": false,
+    "unlock_at": "M3.2",
+    "inventory_per_plan": 1000,
+    "early_bird_slots": 200,
+    "early_bird_discount_pct": 30,
+    "banner": "Founding Lifetime sắp mở (chưa bán)"
+  },
+  "founding_family": {
+    "preorder_enabled": true,
+    "until": "OS 3.10",
+    "activates_as": "OS1",
+    "plans": ["OS2", "OS2G", "OS3G"],
+    "banner": "Founding Family pre-order — kích hoạt OS1 cho owner đến khi OS 3.10"
+  },
+  "student": {
+    "plan": "ACA_SV",
+    "free_days": 365,
+    "blocks_os": true,
+    "no_lifetime": true,
+    "no_os_sell_path": true
+  },
+  "plan_change": {
+    "upgrade_immediate": true,
+    "downgrade_next_period": true,
+    "prorate": true,
+    "aca_credit_toward_os": true,
+    "checkout_required_for_charge": true
+  },
   "experiments": [
     {"key": "aca_price_ab", "active": false, "variant": "A"}
   ],

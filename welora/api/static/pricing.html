@@ -9,18 +9,25 @@
 <style>
 body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:560px;margin-inline:auto}
 h1{font-size:1.35rem;margin:4px 0 8px}
+h2.section{font-size:1rem;margin:20px 0 8px;color:var(--link,#E8C86A)}
 .muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
 a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 .banner{background:#3A2E12;border:1px solid #E8C86A;color:#F4F1E8;border-radius:12px;padding:12px 14px;margin:12px 0;font-weight:700;font-size:14px}
+.banner.info{background:#1A2536;border-color:#6B8CFF;font-weight:600}
+.banner.lock{background:#2A1A22;border-color:#C47A8A;font-weight:600}
 .card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:12px 0}
 .plan-name{font-size:1.1rem;font-weight:700;margin:0 0 4px}
 .plan-code{font-size:12px;color:var(--text-secondary);font-weight:600;letter-spacing:.02em}
 .plan-desc{font-size:13px;color:var(--text-secondary);margin:8px 0 12px;line-height:1.45}
 .price-row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--border-default);font-size:14px}
 .price-row:first-of-type{border-top:0}
+.price-row.locked .amount{opacity:.55;text-decoration:line-through}
 .amount{font-weight:700;color:var(--link,#E8C86A)}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--border-default);margin-left:6px}
 .badge.trial{border-color:#6B8CFF;color:#6B8CFF}
+.badge.sv{border-color:#7DCEA0;color:#7DCEA0}
+.badge.ff{border-color:#E8C86A;color:#E8C86A}
+.badge.lock{border-color:#C47A8A;color:#C47A8A}
 .ents{margin:0;padding-left:18px;font-size:13px;color:var(--text-secondary)}
 .ents li{margin:4px 0}
 .disclaimer{font-size:12px;line-height:1.5;color:var(--text-secondary);border-left:3px solid var(--border-default);padding:8px 12px;margin:16px 0;background:var(--bg-subtle,#162033);border-radius:0 10px 10px 0}
@@ -28,6 +35,12 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 .cta[disabled]{opacity:.55;cursor:not-allowed}
 .err{color:#ff6b6b;font-size:13px}
 .exp{font-size:11px;color:var(--text-secondary);margin-top:8px}
+.panel{background:var(--bg-subtle,#162033);border:1px solid var(--border-default);border-radius:12px;padding:12px 14px;margin:12px 0;font-size:13px}
+.panel label{display:block;margin:8px 0 4px;font-weight:600}
+.panel select,.panel input{width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-size:13px;box-sizing:border-box}
+.panel .row{display:flex;gap:8px;flex-wrap:wrap}
+.panel .row > *{flex:1;min-width:120px}
+.preview-out{margin-top:10px;font-size:13px;line-height:1.45;white-space:pre-wrap}
 </style>
 </head>
 <body class="welora-shell">
@@ -36,8 +49,47 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 <p class="muted" id="pageLead">Gói Welora — giá tải từ máy chủ, không ghi cứng trên trang.</p>
 
 <div class="banner" id="checkoutBanner" hidden role="status">Sắp mở thanh toán</div>
+<div class="banner lock" id="lifetimeBanner" hidden role="status"></div>
+<div class="banner info" id="foundingBanner" hidden role="status"></div>
+<div class="banner info" id="seatBanner" hidden role="status"></div>
 <p class="err" id="loadErr" hidden></p>
 <div id="plans" aria-live="polite"></div>
+
+<h2 class="section" id="studentHeading">Ưu đãi sinh viên (ACA_SV)</h2>
+<div class="panel" id="studentPanel">
+  <p class="muted" id="studentLead">12 tháng miễn phí sau xác thực → giá SV. Không bán Trọn đời; không bán OS qua đường SV.</p>
+  <p class="muted" id="studentAmounts"></p>
+</div>
+
+<h2 class="section">Xem trước nâng / hạ gói</h2>
+<div class="panel" id="planChangePanel">
+  <p class="muted">Chỉ xem trước phần chênh lệch — không thu tiền (checkout tắt).</p>
+  <div class="row">
+    <div>
+      <label for="fromPlan">Từ gói</label>
+      <select id="fromPlan"></select>
+    </div>
+    <div>
+      <label for="toPlan">Sang gói</label>
+      <select id="toPlan"></select>
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label for="intervalSel">Kỳ</label>
+      <select id="intervalSel">
+        <option value="month">Tháng</option>
+        <option value="year">Năm</option>
+      </select>
+    </div>
+    <div>
+      <label for="daysRemain">Ngày còn lại</label>
+      <input id="daysRemain" type="number" min="0" max="366" value="15"/>
+    </div>
+  </div>
+  <button type="button" class="cta" id="previewBtn">Xem trước</button>
+  <div class="preview-out" id="previewOut" aria-live="polite"></div>
+</div>
 
 <section class="disclaimer" id="firewallDisclaimer" aria-label="Tuyên bố Firewall">
   Welora cung cấp thông tin và công cụ quản lý tài chính cá nhân, không tư vấn đầu tư,
@@ -50,9 +102,17 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 (function () {
   var plansEl = document.getElementById("plans");
   var bannerEl = document.getElementById("checkoutBanner");
+  var lifeEl = document.getElementById("lifetimeBanner");
+  var ffEl = document.getElementById("foundingBanner");
+  var seatEl = document.getElementById("seatBanner");
   var errEl = document.getElementById("loadErr");
   var discEl = document.getElementById("firewallDisclaimer");
   var expEl = document.getElementById("expNote");
+  var studentAmounts = document.getElementById("studentAmounts");
+  var fromSel = document.getElementById("fromPlan");
+  var toSel = document.getElementById("toPlan");
+  var previewOut = document.getElementById("previewOut");
+  var cachedPlans = [];
 
   function formatVnd(n) {
     try {
@@ -65,6 +125,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   function intervalLabel(iv) {
     if (iv === "month") return "Tháng";
     if (iv === "year") return "Năm";
+    if (iv === "lifetime") return "Trọn đời";
     if (iv === "free") return "Miễn phí";
     return iv || "";
   }
@@ -73,6 +134,25 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
     var k = (e && e.key) || "";
     var lim = e && e.limit != null ? " (tối đa " + e.limit + ")" : "";
     return k + lim;
+  }
+
+  function fillPlanSelects(plans) {
+    while (fromSel.firstChild) fromSel.removeChild(fromSel.firstChild);
+    while (toSel.firstChild) toSel.removeChild(toSel.firstChild);
+    plans.forEach(function (p) {
+      var o1 = document.createElement("option");
+      o1.value = p.code;
+      o1.textContent = (p.name || p.code) + " (" + p.code + ")";
+      fromSel.appendChild(o1);
+      var o2 = document.createElement("option");
+      o2.value = p.code;
+      o2.textContent = (p.name || p.code) + " (" + p.code + ")";
+      toSel.appendChild(o2);
+    });
+    if (plans.length > 1) {
+      fromSel.value = plans[0].code;
+      toSel.value = plans[Math.min(1, plans.length - 1)].code;
+    }
   }
 
   function render(data) {
@@ -85,13 +165,48 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
     if (data && data.disclaimer) {
       discEl.textContent = data.disclaimer;
     }
+    var life = (data && data.lifetime) || {};
+    if (!life.enabled) {
+      lifeEl.hidden = false;
+      lifeEl.textContent = life.banner || "Founding Lifetime sắp mở (chưa bán)";
+    } else {
+      lifeEl.hidden = true;
+    }
+    var ff = (data && data.founding_family) || {};
+    if (ff.preorder_enabled) {
+      ffEl.hidden = false;
+      ffEl.textContent = ff.banner || ("Founding Family pre-order đến " + (ff.until || "OS 3.10"));
+    } else {
+      ffEl.hidden = true;
+    }
+    var seat = (data && data.seat_addon) || {};
+    if (seat.amount_monthly != null) {
+      seatEl.hidden = false;
+      seatEl.textContent = "Seat thêm: " + formatVnd(seat.amount_monthly) + "/người/tháng (từ cấu hình)";
+    }
+
     var exps = (data && data.experiments) || [];
     var ab = exps.filter(function (x) { return x.key === "aca_price_ab"; })[0];
     if (ab) {
       expEl.textContent = "Thử nghiệm aca_price_ab: " +
         (ab.active ? "bật" : "tắt") + " · biến thể " + (ab.variant || "A");
     }
+
     var plans = (data && data.plans) || [];
+    cachedPlans = plans;
+    fillPlanSelects(plans);
+
+    var sv = plans.filter(function (p) { return p.code === "ACA_SV"; })[0];
+    if (sv) {
+      var parts = [];
+      (sv.prices || []).forEach(function (pr) {
+        parts.push(intervalLabel(pr.interval) + ": " + formatVnd(pr.amount));
+      });
+      parts.push("Trọn đời: không bán");
+      parts.push("Không bán OS qua đường SV");
+      studentAmounts.textContent = parts.join(" · ");
+    }
+
     while (plansEl.firstChild) plansEl.removeChild(plansEl.firstChild);
     plans.forEach(function (p) {
       var card = document.createElement("article");
@@ -107,11 +222,24 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
         b.textContent = "Dùng thử " + p.trial.days + " ngày";
         name.appendChild(b);
       }
+      if (p.student || p.code === "ACA_SV") {
+        var bsv = document.createElement("span");
+        bsv.className = "badge sv";
+        bsv.textContent = "Sinh viên";
+        name.appendChild(bsv);
+      }
+      if (p.founding_family) {
+        var bff = document.createElement("span");
+        bff.className = "badge ff";
+        bff.textContent = "Founding Family";
+        name.appendChild(bff);
+      }
       card.appendChild(name);
 
       var code = document.createElement("div");
       code.className = "plan-code";
-      code.textContent = p.code || "";
+      var seatTxt = p.seat_limit != null ? " · " + p.seat_limit + " chỗ ngồi" : "";
+      code.textContent = (p.code || "") + seatTxt;
       card.appendChild(code);
 
       var desc = document.createElement("p");
@@ -129,18 +257,36 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       card.appendChild(ul);
 
       (p.prices || []).forEach(function (pr) {
+        var locked = pr.interval === "lifetime" || pr.sellable === false || pr.locked;
         var row = document.createElement("div");
-        row.className = "price-row";
+        row.className = "price-row" + (locked && pr.interval === "lifetime" ? " locked" : "");
         var left = document.createElement("span");
-        left.textContent = intervalLabel(pr.interval);
+        left.textContent = intervalLabel(pr.interval) + (locked && pr.interval === "lifetime" ? " (khoá)" : "");
         var right = document.createElement("span");
         right.className = "amount";
         right.setAttribute("data-price-id", pr.price_id || "");
-        right.textContent = Number(pr.amount) === 0 ? "0 ₫" : formatVnd(pr.amount);
+        if (p.code === "ACA_SV" && pr.interval === "lifetime") {
+          right.textContent = "Không bán";
+        } else {
+          right.textContent = Number(pr.amount) === 0 ? "0 ₫" : formatVnd(pr.amount);
+        }
         row.appendChild(left);
         row.appendChild(right);
         card.appendChild(row);
       });
+
+      if (p.code === "ACA_SV" && !(p.prices || []).some(function (x) { return x.interval === "lifetime"; })) {
+        var rowL = document.createElement("div");
+        rowL.className = "price-row locked";
+        var leftL = document.createElement("span");
+        leftL.textContent = "Trọn đời";
+        var rightL = document.createElement("span");
+        rightL.className = "amount";
+        rightL.textContent = "Không bán";
+        rowL.appendChild(leftL);
+        rowL.appendChild(rightL);
+        card.appendChild(rowL);
+      }
 
       if (p.trial && p.trial.verification === "phone_otp") {
         var trialNote = document.createElement("p");
@@ -169,6 +315,41 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       }).catch(function () {});
     } catch (_e) {}
   }
+
+  document.getElementById("previewBtn").addEventListener("click", function () {
+    previewOut.textContent = "Đang tính…";
+    fetch("/api/core/v1/entitlements/plan-change/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from_plan: fromSel.value,
+        to_plan: toSel.value,
+        interval: document.getElementById("intervalSel").value,
+        days_remaining: Number(document.getElementById("daysRemain").value) || 0,
+        days_in_period: document.getElementById("intervalSel").value === "year" ? 365 : 30
+      })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); })
+      .then(function (res) {
+        var b = res.body || {};
+        if (!res.ok) {
+          previewOut.textContent = (b.message || b.error_code || ("Lỗi " + res.status));
+          return;
+        }
+        var lines = [
+          "Hướng: " + (b.direction || ""),
+          "Hiệu lực: " + (b.effective || ""),
+          "Tín dụng: " + formatVnd(b.credit || 0),
+          "Phí gộp: " + formatVnd(b.charge_gross || 0),
+          "Chênh lệch (prorate): " + formatVnd(b.prorate_due || 0),
+          "Thu tiền thật: không (checkout tắt)"
+        ];
+        previewOut.textContent = lines.join("\n");
+      })
+      .catch(function () {
+        previewOut.textContent = "Không xem trước được. Thử lại sau.";
+      });
+  });
 
   fetch("/api/core/v1/entitlements/pricing")
     .then(function (r) {

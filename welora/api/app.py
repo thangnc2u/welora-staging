@@ -343,6 +343,22 @@ class EntitlementEventBody(BaseModel):
     payload: Optional[dict] = None
 
 
+class EntitlementStudentStartBody(BaseModel):
+    student_id: str = Field(..., min_length=4)
+    verification_method: str = "edu_vn_email_otp"
+    email: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class EntitlementPlanChangePreviewBody(BaseModel):
+    from_plan: str = Field(..., min_length=1)
+    to_plan: str = Field(..., min_length=1)
+    interval: str = "month"
+    days_remaining: int = 15
+    days_in_period: int = 30
+    user_id: Optional[str] = None
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -1018,7 +1034,7 @@ def create_app() -> FastAPI:
 
 
 
-    # --- MVP Pricing & Entitlements (P1–P3 · P8 · P9) ---
+    # --- Pricing & Entitlements (P1–P9 · P4–P7) ---
     @app.get("/api/core/v1/entitlements/pricing", tags=["entitlements"])
     def entitlements_pricing() -> dict:
         return entitlements_svc.get_pricing_public()
@@ -1062,6 +1078,50 @@ def create_app() -> FastAPI:
             phone=body.phone,
             otp_code=body.otp_code,
         ))
+
+    @app.post("/api/core/v1/entitlements/student/start", tags=["entitlements"])
+    def entitlements_student_start(body: EntitlementStudentStartBody) -> dict:
+        """P4 — student verify → 12 months free then ACA_SV; blocks OS sell."""
+        return _respond(*entitlements_svc.start_student_path(
+            user_id=body.user_id,
+            student_id=body.student_id,
+            verification_method=body.verification_method,
+            email=body.email,
+        ))
+
+    @app.get("/api/core/v1/entitlements/seats/quote", tags=["entitlements"])
+    def entitlements_seats_quote(
+        extra_seats: int = Query(1, ge=0, le=50),
+        plan_code: Optional[str] = Query(None),
+    ) -> dict:
+        """P5 — household seat add-on quote from config (no charge)."""
+        return entitlements_svc.quote_seat_addon(
+            extra_seats=extra_seats, plan_code=plan_code,
+        )
+
+    @app.get("/api/core/v1/entitlements/founding-family", tags=["entitlements"])
+    def entitlements_founding_family(
+        plan_code: Optional[str] = Query(None),
+    ) -> dict:
+        """P5 — Founding Family pre-order flag until OS 3.10."""
+        return entitlements_svc.founding_family_status(plan_code)
+
+    @app.post("/api/core/v1/entitlements/plan-change/preview", tags=["entitlements"])
+    def entitlements_plan_change_preview(body: EntitlementPlanChangePreviewBody) -> dict:
+        """P6 — upgrade/downgrade + prorate preview (checkout remains off)."""
+        return _respond(*entitlements_svc.preview_plan_change(
+            from_plan=body.from_plan,
+            to_plan=body.to_plan,
+            interval=body.interval,
+            days_remaining=body.days_remaining,
+            days_in_period=body.days_in_period,
+            user_id=body.user_id,
+        ))
+
+    @app.get("/api/core/v1/entitlements/lifetime", tags=["entitlements"])
+    def entitlements_lifetime() -> dict:
+        """P7 — Founding Lifetime status (flag OFF — not for sale)."""
+        return entitlements_svc.lifetime_purchase_blocked()
 
     @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
     def entitlements_events(body: EntitlementEventBody) -> dict:

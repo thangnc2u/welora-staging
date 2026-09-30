@@ -195,7 +195,39 @@
     "checkout_required_for_charge": true
   },
   "experiments": [
-    {"key": "aca_price_ab", "active": false, "variant": "A"}
+    {
+      "key": "aca_price_ab",
+      "active": false,
+      "variant": "A",
+      "plan": "ACA",
+      "split": {"A": 50, "B": 50},
+      "variant_prices": {"A": {}, "B": {"month": 49000}}
+    }
   ],
+  "checkout_rules": {
+    "min_amount": 2000,
+    "upgrade_credit_round_down": 1000,
+    "coupon_excluded_plans": ["ACA_SV"],
+    "refund": {"window_days": 7, "max_academy_lessons": 3, "max_os_budget_periods": 1},
+    "renewal": {
+      "grace_days": 7,
+      "magic_link_hours": 24,
+      "schedule": {
+        "month": [
+          {"step": "d-3", "offset_days": -3, "channels": ["email", "push"]},
+          {"step": "d0", "offset_days": 0, "channels": ["email", "push"]},
+          {"step": "d+3", "offset_days": 3, "channels": ["email", "push"]},
+          {"step": "d+7", "offset_days": 7, "channels": ["email"], "final": true}
+        ],
+        "year": [
+          {"step": "d-14", "offset_days": -14, "channels": ["email"]},
+          {"step": "d-3", "offset_days": -3, "channels": ["email", "push"]},
+          {"step": "d0", "offset_days": 0, "channels": ["email", "push"]},
+          {"step": "d+3", "offset_days": 3, "channels": ["email", "push"]},
+          {"step": "d+7", "offset_days": 7, "channels": ["email"], "final": true}
+        ]
+      }
+    }
+  },
   "disclaimer": "Welora cung cấp thông tin và công cụ quản lý tài chính cá nhân, không tư vấn đầu tư, không nhận hoa hồng hay liên kết tiếp thị (affiliate) với bất kỳ sản phẩm tài chính nào."
 }

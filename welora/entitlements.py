@@ -240,10 +240,15 @@ def get_me(user_id: Optional[str] = None) -> dict[str, Any]:
 
     # Paid subscription (checkout): past period end + 7-day grace (PAY-04) → FREE
     sub = state.get("subscription") or {}
+    in_grace = False
+    grace_ends_at = None
     if sub.get("current_period_end"):
         end = float(sub.get("current_period_end") or 0)
-        if sub.get("status") == "expired" or now > end + GRACE_DAYS * 86400:
+        grace_ends_at = end + GRACE_DAYS * 86400
+        if sub.get("status") == "expired" or now > grace_ends_at:
             plan_code = DEFAULT_PLAN
+        elif now > end:
+            in_grace = True  # PAY-04: full access + renewal banner
 
     if trial and trial.get("status") == "active":
         ends = float(trial.get("ends_at") or 0)
@@ -293,6 +298,13 @@ def get_me(user_id: Optional[str] = None) -> dict[str, Any]:
         "founding_family": state.get("founding_family"),
         "checkout_enabled": False,
         "lifetime_enabled": False,
+        "in_grace": in_grace,
+        "grace_ends_at": grace_ends_at if in_grace else None,
+        "renewal_banner": (
+            "Gói đã hết hạn — bạn vẫn dùng đầy đủ trong thời gian ân hạn 7 ngày. Gia hạn để không bị hạ về Free."
+            if in_grace
+            else None
+        ),
     }
 
 
@@ -743,6 +755,16 @@ def grant_plan(
         {"user_id": uid, "plan": plan_code, "source": source, "order_code": order_code},
     )
     return subscription
+
+
+def set_subscription_state(user_id: str, plan_code: str, subscription: Optional[dict[str, Any]]) -> None:
+    """Quietly restore a paid plan from DB (no grant event) — refunds / renewal job."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+    with _lock:
+        prev = _user_state.get(uid) or {}
+        _user_state[uid] = {**prev, "plan": plan_code, "subscription": copy.deepcopy(subscription)}
 
 
 def revoke_plan(user_id: str, *, reason: str = "") -> None:

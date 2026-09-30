@@ -349,6 +349,7 @@ class EntitlementEventBody(BaseModel):
 class CheckoutQuoteBody(BaseModel):
     plan_id: str = Field(..., min_length=1)
     billing_cycle: str = "month"
+    coupon_code: Optional[str] = Field(None, max_length=40)
 
 
 class CheckoutOrderBody(BaseModel):
@@ -357,6 +358,7 @@ class CheckoutOrderBody(BaseModel):
     agree_terms: bool = False
     # CK-04: accepted only so we can prove it is IGNORED — server prices only.
     amount: Optional[Any] = None
+    coupon_code: Optional[str] = Field(None, max_length=40)
 
 
 class AdminReasonBody(BaseModel):
@@ -366,6 +368,50 @@ class AdminReasonBody(BaseModel):
 class AdminRefundBody(BaseModel):
     reason: str = ""
     stage: str = "request"
+    override: bool = False
+    bank_ref: Optional[str] = Field(None, max_length=120)
+    amount: Optional[int] = None
+
+
+class UserRefundBody(BaseModel):
+    reason: str = ""
+
+
+class RenewMagicBody(BaseModel):
+    token: str = Field(..., min_length=20, max_length=200)
+
+
+class Admin2FABody(BaseModel):
+    code: str = Field(..., min_length=6, max_length=10)
+
+
+class AdminCouponBody(BaseModel):
+    code: str = Field(..., min_length=3, max_length=32)
+    kind: str
+    value: int
+    plans: list[str] = []
+    cycles: list[str] = []
+    starts_at: Optional[str] = None
+    ends_at: Optional[str] = None
+    max_redemptions: Optional[int] = None
+    per_user_limit: int = 1
+    reason: str = ""
+
+
+class AdminCouponActiveBody(BaseModel):
+    active: bool
+    reason: str = ""
+
+
+class AdminShiftBody(BaseModel):
+    order_code: int
+    days: float
+    reason: str = ""
+
+
+class AdminRenewalRunBody(BaseModel):
+    # non-prod only (WELORA_CHECKOUT_TEST_HOOKS=1): run the job as if N days later
+    now_offset_days: Optional[float] = None
 
 
 class AdminConfirmWebhookBody(BaseModel):
@@ -416,6 +462,30 @@ def _require_admin(authorization: Optional[str]) -> str:
     return uid
 
 
+def _bearer_token(authorization: Optional[str]) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return ""
+    return authorization[7:].strip()
+
+
+def _require_admin_2fa(authorization: Optional[str]) -> str:
+    """Mục 9 — admin role AND a live TOTP session bound to this bearer token."""
+    uid = _require_admin(authorization)
+    from welora import admin_2fa
+
+    if not admin_2fa.is_enrolled(uid):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "ADMIN_2FA_NOT_ENROLLED", "message": "Tài khoản quản trị chưa cấu hình 2FA"},
+        )
+    if not admin_2fa.session_valid(uid, _bearer_token(authorization)):
+        raise HTTPException(
+            status_code=401,
+            detail={"error_code": "ADMIN_2FA_REQUIRED", "message": "Nhập mã 2FA để tiếp tục"},
+        )
+    return uid
+
+
 def _checkout_call(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
@@ -426,12 +496,16 @@ def _checkout_call(fn, *args, **kwargs):
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     # Reconcile job (every 5 min) runs in THIS process — no extra Render service.
+    from welora import renewal as renewal_svc
+
     if checkout_svc.checkout_enabled():
         checkout_svc.start_reconcile_loop()
+        renewal_svc.start_loop()  # mục 7 reminders + grace/downgrade, same process
     try:
         yield
     finally:
         checkout_svc.stop_reconcile_loop()
+        renewal_svc.stop_loop()
 
 
 class EntitlementStudentStartBody(BaseModel):
@@ -636,7 +710,17 @@ def create_app() -> FastAPI:
 
     @app.get("/app/admin/checkout", include_in_schema=False)
     def admin_checkout_ui() -> HTMLResponse:
+        # Static shell only — every data call needs admin role + TOTP session (mục 9).
         return _serve_app_html(static_dir, "admin-checkout.html")
+
+    @app.get("/app/checkout/renew", include_in_schema=False)
+    def checkout_renew_ui() -> HTMLResponse:
+        return _serve_app_html(static_dir, "checkout-renew.html")
+
+    @app.get("/app/my-plan", include_in_schema=False)
+    @app.get("/app/my-plan/", include_in_schema=False)
+    def my_plan_ui() -> HTMLResponse:
+        return _serve_app_html(static_dir, "my-plan.html")
 
     @app.get("/health", tags=["system"])
     def health() -> dict:
@@ -1235,8 +1319,10 @@ def create_app() -> FastAPI:
     @app.post("/api/checkout/v1/quote", tags=["checkout"])
     def checkout_quote(body: CheckoutQuoteBody, authorization: Optional[str] = Header(None)) -> dict:
         _checkout_call(checkout_svc._require_enabled)
-        _require_login(authorization)
-        return _checkout_call(checkout_svc.quote, body.plan_id, body.billing_cycle)
+        uid = _require_login(authorization)
+        return _checkout_call(
+            checkout_svc.quote, body.plan_id, body.billing_cycle, user_id=uid, coupon_code=body.coupon_code,
+        )
 
     @app.post("/api/checkout/v1/orders", tags=["checkout"])
     def checkout_create_order(body: CheckoutOrderBody, authorization: Optional[str] = Header(None)) -> dict:
@@ -1250,6 +1336,7 @@ def create_app() -> FastAPI:
         return _checkout_call(
             checkout_svc.create_order,
             user_id=uid, plan_id=body.plan_id, billing_cycle=body.billing_cycle, client_amount=body.amount,
+            coupon_code=body.coupon_code,
         )
 
     @app.get("/api/checkout/v1/orders/{order_code}", tags=["checkout"])
@@ -1286,47 +1373,150 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=e.status, content=e.body())
         return JSONResponse(status_code=code, content=out)
 
-    # --- Admin CK-10 (role ∈ ADMIN_ROLES; every manual action audit-logged) ---
+    # --- Admin CK-10 (role ∈ ADMIN_ROLES + TOTP 2FA session; every manual action audit-logged) ---
     @app.get("/api/admin/v1/checkout/orders", tags=["admin"])
     def admin_checkout_search(q: str = Query("", max_length=120), authorization: Optional[str] = Header(None)) -> dict:
-        _require_admin(authorization)
+        _require_admin_2fa(authorization)
         return {"orders": _checkout_call(checkout_svc.admin_search, q)}
 
     @app.get("/api/admin/v1/checkout/orders/{order_code}", tags=["admin"])
     def admin_checkout_detail(order_code: int, authorization: Optional[str] = Header(None)) -> dict:
-        _require_admin(authorization)
+        _require_admin_2fa(authorization)
         return _checkout_call(checkout_svc.admin_order_detail, order_code)
 
     @app.post("/api/admin/v1/checkout/orders/{order_code}/grant", tags=["admin"])
     def admin_checkout_grant(order_code: int, body: AdminReasonBody, authorization: Optional[str] = Header(None)) -> dict:
-        admin_uid = _require_admin(authorization)
+        admin_uid = _require_admin_2fa(authorization)
         return _checkout_call(
             checkout_svc.admin_manual_grant, admin_uid=admin_uid, order_code=order_code, reason=body.reason,
         )
 
     @app.post("/api/admin/v1/checkout/orders/{order_code}/refund", tags=["admin"])
     def admin_checkout_refund(order_code: int, body: AdminRefundBody, authorization: Optional[str] = Header(None)) -> dict:
-        admin_uid = _require_admin(authorization)
+        admin_uid = _require_admin_2fa(authorization)
         return _checkout_call(
             checkout_svc.admin_refund, admin_uid=admin_uid, order_code=order_code,
-            reason=body.reason, stage=body.stage,
+            reason=body.reason, stage=body.stage, override=body.override, bank_ref=body.bank_ref, amount=body.amount,
         )
 
     @app.post("/api/admin/v1/checkout/reconcile", tags=["admin"])
     def admin_checkout_reconcile(authorization: Optional[str] = Header(None)) -> dict:
-        _require_admin(authorization)
+        _require_admin_2fa(authorization)
         return checkout_svc.reconcile_once()
 
     @app.post("/api/admin/v1/checkout/confirm-webhook", tags=["admin"])
     def admin_checkout_confirm_webhook(body: AdminConfirmWebhookBody, authorization: Optional[str] = Header(None)) -> dict:
         """Run once per environment/channel: registers webhook URL with payOS."""
-        _require_admin(authorization)
+        _require_admin_2fa(authorization)
         from welora.payments import ProviderError, get_provider
 
         try:
             return get_provider().confirm_webhook(body.webhook_url)
         except (ProviderError, NotImplementedError) as e:
             raise HTTPException(status_code=502, detail={"error_code": "CONFIRM_WEBHOOK_FAILED", "message": str(e)})
+
+    # --- Checkout P1 user API (CK-12 / CK-13 / mục 7 / mục 8) ---
+    @app.get("/api/checkout/v1/prices", tags=["checkout"])
+    def checkout_prices(authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.prices_for_user, uid)
+
+    @app.get("/api/checkout/v1/my-plan", tags=["checkout"])
+    def checkout_my_plan(authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.my_plan, uid)
+
+    @app.get("/api/checkout/v1/orders/{order_code}/refund-eligibility", tags=["checkout"])
+    def checkout_refund_eligibility(order_code: int, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.refund_eligibility_for_user, uid, order_code)
+
+    @app.post("/api/checkout/v1/orders/{order_code}/refund-request", tags=["checkout"])
+    def checkout_refund_request(order_code: int, body: UserRefundBody, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.request_refund_for_user, uid, order_code, body.reason)
+
+    @app.post("/api/checkout/v1/renew/magic", tags=["checkout"])
+    def checkout_renew_magic(body: RenewMagicBody) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        return _checkout_call(checkout_svc.consume_renewal_link, body.token)
+
+    # --- Admin 2FA (mục 9) ---
+    @app.get("/api/admin/v1/2fa/status", tags=["admin"])
+    def admin_2fa_status(authorization: Optional[str] = Header(None)) -> dict:
+        from welora import admin_2fa
+
+        uid = _require_admin(authorization)
+        return {
+            "enrolled": admin_2fa.is_enrolled(uid),
+            "session": admin_2fa.session_valid(uid, _bearer_token(authorization)),
+        }
+
+    @app.post("/api/admin/v1/2fa/verify", tags=["admin"])
+    def admin_2fa_verify(body: Admin2FABody, authorization: Optional[str] = Header(None)) -> dict:
+        from welora import admin_2fa
+
+        uid = _require_admin(authorization)
+        try:
+            return admin_2fa.open_session(uid, _bearer_token(authorization), body.code)
+        except admin_2fa.TwoFactorError as e:
+            raise HTTPException(status_code=e.status, detail=e.body())
+
+    @app.post("/api/admin/v1/2fa/logout", tags=["admin"])
+    def admin_2fa_logout(authorization: Optional[str] = Header(None)) -> dict:
+        from welora import admin_2fa
+
+        _require_admin(authorization)
+        admin_2fa.close_session(_bearer_token(authorization))
+        return {"ok": True}
+
+    # --- Admin P1 (2FA): coupons · A/B stats · renewal job · non-prod test hooks ---
+    @app.get("/api/admin/v1/checkout/coupons", tags=["admin"])
+    def admin_coupons_list(authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin_2fa(authorization)
+        return {"coupons": _checkout_call(checkout_svc.admin_list_coupons)}
+
+    @app.post("/api/admin/v1/checkout/coupons", tags=["admin"])
+    def admin_coupons_create(body: AdminCouponBody, authorization: Optional[str] = Header(None)) -> dict:
+        admin_uid = _require_admin_2fa(authorization)
+        return _checkout_call(checkout_svc.admin_create_coupon, admin_uid=admin_uid, body=body.model_dump())
+
+    @app.post("/api/admin/v1/checkout/coupons/{code}/active", tags=["admin"])
+    def admin_coupons_active(code: str, body: AdminCouponActiveBody, authorization: Optional[str] = Header(None)) -> dict:
+        admin_uid = _require_admin_2fa(authorization)
+        return _checkout_call(
+            checkout_svc.admin_set_coupon_active, admin_uid=admin_uid, code=code, active=body.active, reason=body.reason,
+        )
+
+    @app.get("/api/admin/v1/checkout/experiments/aca_price_ab", tags=["admin"])
+    def admin_experiment_stats(authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin_2fa(authorization)
+        return _checkout_call(checkout_svc.admin_experiment_stats)
+
+    @app.post("/api/admin/v1/checkout/renewal/run", tags=["admin"])
+    def admin_renewal_run(body: Optional[AdminRenewalRunBody] = None, authorization: Optional[str] = Header(None)) -> dict:
+        import time as _time
+
+        from welora import renewal as renewal_svc
+
+        _require_admin_2fa(authorization)
+        now = None
+        if body and body.now_offset_days:
+            _checkout_call(checkout_svc._require_test_hooks)
+            now = _time.time() + float(body.now_offset_days) * 86400
+        return renewal_svc.run_once(now=now)
+
+    @app.post("/api/admin/v1/checkout/test/shift-subscription", tags=["admin"])
+    def admin_test_shift(body: AdminShiftBody, authorization: Optional[str] = Header(None)) -> dict:
+        admin_uid = _require_admin_2fa(authorization)
+        return _checkout_call(
+            checkout_svc.admin_test_shift_subscription, admin_uid=admin_uid, order_code=body.order_code,
+            days=body.days, reason=body.reason,
+        )
 
     @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
     def entitlements_events(body: EntitlementEventBody) -> dict:

@@ -35,7 +35,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 </style>
 </head>
 <body class="welora-shell">
-<p><a href="/pricing">← Bảng giá</a> · <a href="/app">Welora</a></p>
+<p><a href="/pricing">← Bảng giá</a> · <a href="/app/my-plan">Gói của tôi</a> · <a href="/app">Welora</a></p>
 <h1 id="pageTitle">Thanh toán VietQR</h1>
 <div class="banner" id="offBanner" hidden role="status">Sắp mở thanh toán</div>
 <p class="err" id="err" hidden role="alert"></p>
@@ -54,6 +54,9 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 <!-- CK-03 xác nhận đơn -->
 <section id="stepConfirm" hidden>
   <div class="card" id="confirmCard"></div>
+  <!-- CK-11 mã giảm giá (kiểm tra trên server) -->
+  <p class="seg"><input id="coupon" maxlength="32" placeholder="Mã giảm giá (nếu có)" autocomplete="off" style="flex:1;padding:8px;border-radius:10px"/>
+    <button type="button" class="copy" id="applyCoupon">Áp dụng</button></p>
   <label class="terms"><input type="checkbox" id="agree"/>
     Tôi đồng ý Điều khoản sử dụng và Chính sách hoàn tiền: gói tháng/năm hoàn 100% trong 7 ngày đầu nếu chưa học quá 3 bài (Academy) và chưa dùng quá 1 kỳ ngân sách (OS); đặt trước gói gia đình hoàn 100% trước khi gói ra mắt.
   </label>
@@ -96,7 +99,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 (function () {
   var POLL_MS = 3000;
   var $ = function (id) { return document.getElementById(id); };
-  var state = { plans: [], checkoutPlans: [], plan: null, cycle: "month", order: null, poll: null, tick: null };
+  var state = { plans: [], checkoutPlans: [], plan: null, cycle: "month", order: null, poll: null, tick: null, coupon: null, userPrices: null, lastStatus: null };
   var qs = new URLSearchParams(location.search);
 
   function token() { try { return localStorage.getItem("welora_token") || ""; } catch (_e) { return ""; } }
@@ -140,6 +143,9 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       });
   }
   function priceOf(plan, iv) {
+    // CK-12: the server tells us this user's fixed A/B price (if any)
+    var up = state.userPrices && state.userPrices[plan.code];
+    if (up && up[iv] != null) return Number(up[iv]);
     var p = (plan.prices || []).filter(function (x) { return x.interval === iv; })[0];
     return p ? Number(p.amount) : null;
   }
@@ -168,22 +174,34 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   });
 
   // ---- CK-03 ----
-  $("toConfirm").addEventListener("click", function () {
+  function loadQuote(coupon) {
     err("");
-    api("POST", "/api/checkout/v1/quote", { plan_id: state.plan, billing_cycle: state.cycle })
+    return api("POST", "/api/checkout/v1/quote", { plan_id: state.plan, billing_cycle: state.cycle, coupon_code: coupon || null })
       .then(function (q) {
+        state.coupon = q.coupon_code || null;
         var c = $("confirmCard"); clear(c);
         var h = document.createElement("h2"); h.textContent = q.plan_name; c.appendChild(h);
         row(c, "Chu kỳ", q.billing_cycle === "year" ? "Năm" : "Tháng");
         row(c, "Giá gốc", formatVnd(q.list_price));
-        row(c, "Giảm giá", formatVnd(q.discount));
+        row(c, "Giảm giá" + (q.coupon_code ? " (" + q.coupon_code + ")" : ""), formatVnd(q.discount));
+        if (q.upgrade_credit) row(c, "Trừ giá trị còn lại gói " + q.upgrade.from_plan + " (" + q.upgrade.days_left + " ngày)", formatVnd(q.upgrade_credit));
         row(c, "Tổng tiền", formatVnd(q.amount));
         row(c, "Hết hạn dự kiến", new Date(q.expected_period_end).toLocaleDateString("vi-VN"));
+        if (q.is_renewal) row(c, "Gia hạn sớm", "Kỳ mới nối tiếp ngày hết hạn hiện tại");
         if (q.is_preorder) row(c, "Đặt trước", "Founding Family — hoàn 100% nếu trễ ngày cam kết");
-        $("agree").checked = false; $("payBtn").disabled = true;
+        $("coupon").disabled = !!q.upgrade; $("applyCoupon").disabled = !!q.upgrade;
         show("stepConfirm");
-      })
-      .catch(function (e) { err(e.message); });
+        return q;
+      });
+  }
+  $("toConfirm").addEventListener("click", function () {
+    $("coupon").value = ""; state.coupon = null;
+    $("agree").checked = false; $("payBtn").disabled = true;
+    loadQuote(null).catch(function (e) { err(e.message); });
+  });
+  $("applyCoupon").addEventListener("click", function () {
+    var code = $("coupon").value.trim();
+    loadQuote(code).catch(function (e) { err(e.message); state.coupon = null; });
   });
   $("agree").addEventListener("change", function () { $("payBtn").disabled = !$("agree").checked; });
   $("backChoose").addEventListener("click", function () { show("stepChoose"); });
@@ -192,7 +210,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   $("payBtn").addEventListener("click", function () {
     err(""); $("payBtn").disabled = true;
     // No amount is sent — the server prices the order (CK-04).
-    api("POST", "/api/checkout/v1/orders", { plan_id: state.plan, billing_cycle: state.cycle, agree_terms: true })
+    api("POST", "/api/checkout/v1/orders", { plan_id: state.plan, billing_cycle: state.cycle, agree_terms: true, coupon_code: state.coupon })
       .then(function (o) { openOrder(o); })
       .catch(function (e) { err(e.message); $("payBtn").disabled = false; });
   });
@@ -209,7 +227,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   }
 
   function openOrder(o) {
-    state.order = o;
+    state.order = o; state.lastStatus = o.status;
     try { sessionStorage.setItem("welora_checkout_order", String(o.order_code)); } catch (_e) {}
     var f = $("fields"); clear(f);
     if (o.bin) row(f, "Ngân hàng (BIN)", o.bin, o.bin);
@@ -250,13 +268,16 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   }
   function applyStatus(o) {
     var s = o.status;
+    // mục 8: underpaid → QR switches to the remaining amount (24h to top up)
+    if (s === "UNDERPAID" && state.lastStatus !== "UNDERPAID") loadQr(o);
+    state.lastStatus = s;
     $("renewBtn").hidden = !(s === "EXPIRED" || s === "CANCELLED");
     $("cancelBtn").hidden = s !== "PENDING";
     $("remain").hidden = s !== "UNDERPAID";
     if (s === "PAID") {
       clearInterval(state.poll); clearInterval(state.tick);
       try { sessionStorage.removeItem("welora_checkout_order"); } catch (_e) {}
-      $("successText").textContent = "Đơn " + o.order_code + " · " + o.plan_name + " · " + formatVnd(o.amount_paid || o.amount) + ". Biên nhận đã gửi qua email.";
+      $("successText").textContent = "Đơn " + o.order_code + " · " + o.plan_name + " · " + formatVnd(o.amount_paid || o.amount) + ". Biên nhận đã gửi qua email. Xem ở Gói của tôi.";
       show("stepSuccess");
       return;
     }
@@ -269,7 +290,7 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       REFUNDED: "Đã hoàn tiền"
     }[s] || s;
     $("status").textContent = label;
-    if (s === "UNDERPAID") $("remain").textContent = "Còn thiếu: " + formatVnd(o.amount_remaining) + " · nội dung " + o.description;
+    if (s === "UNDERPAID") $("remain").textContent = "Còn thiếu: " + formatVnd(o.amount_remaining) + " · nội dung " + o.description + " · QR mới cho phần còn lại, hạn " + (o.underpaid_deadline ? new Date(o.underpaid_deadline).toLocaleString("vi-VN") : "24 giờ");
     if (s === "EXPIRED" || s === "CANCELLED") { clearInterval(state.poll); }
   }
 
@@ -297,15 +318,17 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 
   Promise.all([
     fetch("/api/checkout/v1/config").then(function (r) { return r.json(); }),
-    fetch("/api/core/v1/entitlements/pricing").then(function (r) { return r.json(); })
+    fetch("/api/core/v1/entitlements/pricing").then(function (r) { return r.json(); }),
+    fetch("/api/checkout/v1/prices", { headers: authHeaders(false) }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
   ]).then(function (res) {
     var cfg = res[0] || {}, pricing = res[1] || {};
+    state.userPrices = (res[2] && res[2].plans) || null;
     if (!cfg.checkout_enabled) { $("offBanner").hidden = false; return; }
     state.checkoutPlans = cfg.plans || [];
     state.plans = (pricing.plans || []).filter(function (p) { return state.checkoutPlans.indexOf(p.code) >= 0; });
     var path = location.pathname.replace(/\/+$/, "");
     var code = qs.get("orderCode") || (function () { try { return sessionStorage.getItem("welora_checkout_order"); } catch (_e) { return null; } })();
-    if ((path === "/app/checkout/return" || path === "/app/checkout/cancel") && code) {
+    if (((path === "/app/checkout/return" || path === "/app/checkout/cancel") && code) || qs.get("orderCode")) {
       // returnUrl only navigates — status always comes from the server (CK-08).
       return resumeOrder(code, path === "/app/checkout/cancel");
     }

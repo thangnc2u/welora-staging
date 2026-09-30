@@ -269,6 +269,10 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
           right.textContent = "Không bán";
         } else {
           right.textContent = Number(pr.amount) === 0 ? "0 ₫" : formatVnd(pr.amount);
+          if (pr.ab_variant) {
+            right.setAttribute("data-ab-variant", pr.ab_variant);
+            right.title = "Giá thử nghiệm (nhóm " + pr.ab_variant + ")";
+          }
         }
         row.appendChild(left);
         row.appendChild(right);
@@ -357,7 +361,14 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       });
   });
 
-  fetch("/api/core/v1/entitlements/pricing")
+  // CK-12: send the session (if any) so the server can apply this user's sticky
+  // A/B price when the experiment is on. Amounts always come from the server.
+  var pricingHeaders = {};
+  try {
+    var tk = localStorage.getItem("welora_token") || "";
+    if (tk) pricingHeaders.Authorization = "Bearer " + tk;
+  } catch (_e) { /* storage blocked → anonymous (control) price */ }
+  fetch("/api/core/v1/entitlements/pricing", { headers: pricingHeaders })
     .then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();

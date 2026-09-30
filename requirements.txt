@@ -14,4 +14,6 @@ typing-extensions==4.12.2
 annotated-types==0.7.0
 # Checkout VietQR QR render (pure-python wheel, SVG only — no Pillow)
 qrcode==8.2
+# PAY-05 Web Push (RFC 8291 ECDH/HKDF/AES-GCM + VAPID ES256) — abi3 manylinux wheels, no Rust build
+cryptography==44.0.0
 # Optional Postgres (P2-E1): pip install -r requirements-postgres.txt

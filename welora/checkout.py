@@ -24,6 +24,7 @@ from __future__ import annotations
 import calendar
 import hashlib
 import json
+import re
 import secrets
 import logging
 import os
@@ -688,7 +689,9 @@ def _grant_for_order(conn: Any, order: dict[str, Any], *, source: str, now: floa
         start = _ts(sub["current_period_end"])  # early renewal: continue from old end
     end = add_period(start, cycle)
     if order.get("upgrade_from_plan"):
-        # CK-14: the old plan ends now; its remaining value was credited on this order
+        # CK-14: the old plan ends now; its remaining value was credited on this order.
+        # Snapshot it first so a refund of this upgrade can restore it (remaining term).
+        _snapshot_previous_plan(conn, order, now=now)
         conn.execute(
             "UPDATE subscriptions SET status='expired', current_period_end=? "
             "WHERE user_id=? AND plan_id=? AND status IN ('active','grace')",
@@ -711,6 +714,71 @@ def _grant_for_order(conn: Any, order: dict[str, Any], *, source: str, now: floa
         uid, plan, period_start=start, period_end=end, source=source,
         order_code=int(order["order_code"]), is_preorder=bool(order.get("is_preorder")),
     )
+
+
+def _snapshot_previous_plan(conn: Any, order: dict[str, Any], *, now: float) -> None:
+    prev = _row(
+        conn.execute(
+            "SELECT * FROM subscriptions WHERE user_id=? AND plan_id=? AND status IN ('active','grace')",
+            (order["user_id"], order["upgrade_from_plan"]),
+        ).fetchone()
+    )
+    if not prev:
+        return
+    end = _ts(prev["current_period_end"])
+    _insert_event(
+        conn, order_id=order["id"], provider="welora", event_type="upgrade.closed_previous",
+        ref=f"upgrade:closed:{order['id']}", amount=0,
+        raw={
+            "subscription_id": prev["id"], "plan_id": prev["plan_id"], "status": prev["status"],
+            "period_start": prev["current_period_start"], "period_end": prev["current_period_end"],
+            "remaining_s": max(0, int(end - now)), "closed_at": _iso(now),
+        },
+        signature_valid=True, now=now,
+    )
+
+
+def _restore_previous_plan(conn: Any, order: dict[str, Any], *, now: float) -> dict[str, Any]:
+    """Refund of a CK-14 upgrade → give back the old plan with the term it had left
+    at the moment of upgrade (now + remaining_s). Only when the upgraded plan's
+    subscription has ended after rollback (never two paid plans at once)."""
+    if not order.get("upgrade_from_plan"):
+        return {}
+    ev = _row(
+        conn.execute(
+            "SELECT * FROM payment_events WHERE order_id=? AND event_type='upgrade.closed_previous'", (order["id"],)
+        ).fetchone()
+    )
+    if not ev:
+        return {"previous_plan_restored": False, "previous_plan_note": "no_snapshot"}
+    snap = json.loads(ev["raw_payload"] or "{}")
+    new_sub = _row(
+        conn.execute(
+            "SELECT * FROM subscriptions WHERE user_id=? AND plan_id=?", (order["user_id"], order["plan_id"])
+        ).fetchone()
+    )
+    if new_sub and new_sub["status"] in ("active", "grace") and _ts(new_sub["current_period_end"]) > now:
+        return {"previous_plan_restored": False, "previous_plan_note": "upgraded_plan_still_active"}
+    remaining = int(snap.get("remaining_s") or 0)
+    if remaining <= 0:
+        return {"previous_plan_restored": False, "previous_plan_note": "no_remaining_term"}
+    new_end = now + remaining
+    cur = conn.execute(
+        "UPDATE subscriptions SET status='active', current_period_end=? WHERE id=? AND user_id=? AND plan_id=?",
+        (_iso(new_end), snap.get("subscription_id"), order["user_id"], order["upgrade_from_plan"]),
+    )
+    conn.commit()
+    if (cur.rowcount or 0) != 1:
+        return {"previous_plan_restored": False, "previous_plan_note": "previous_subscription_missing"}
+    info = {
+        "subscription_id": snap.get("subscription_id"), "plan_id": order["upgrade_from_plan"],
+        "remaining_s": remaining, "restored_until": _iso(new_end),
+    }
+    _insert_event(
+        conn, order_id=order["id"], provider="welora", event_type="upgrade.restored_previous",
+        ref=f"upgrade:restored:{order['id']}", amount=0, raw=info, signature_valid=True, now=now,
+    )
+    return {"previous_plan_restored": True, "previous_plan": info}
 
 
 def _user_email(conn: Any, user_id: str) -> Optional[str]:
@@ -764,6 +832,56 @@ def _int(v: Any) -> int:
         return 0
 
 
+# P1 follow-up · UNDERPAID top-up after the 15-min link expired: a later transfer
+# may arrive without a usable orderCode (e.g. remainder QR / manual transfer with
+# the same content). Match it by transfer description instead.
+_DESC_FULL_RE = re.compile(r"(?<![A-Z0-9])" + DESCRIPTION_PREFIX + r"\s*(\d{6,})(?!\d)", re.IGNORECASE)
+_DESC_SHORT_RE = re.compile(r"(?<![A-Z0-9])" + DESCRIPTION_FALLBACK_PREFIX + r"\s*(\d{7})(?!\d)", re.IGNORECASE)
+TOPUP_STATES = ("PENDING", "UNDERPAID", "EXPIRED")
+REMATCH_WINDOW_S = 7 * 86400
+
+
+def match_order_by_description(conn: Any, description: Any) -> tuple[Optional[dict[str, Any]], str]:
+    """(order, method). method ∈ description_full | description_short | ambiguous | none.
+
+    ``WELORA<orderCode>`` → exact order code. ``WL<last 7 digits>`` → the ONLY
+    open order (PENDING/UNDERPAID/EXPIRED) whose code ends with those digits;
+    several candidates → ``ambiguous`` (left for admin, never guessed).
+    """
+    text = str(description or "")
+    m = _DESC_FULL_RE.search(text)
+    if m:
+        order = _get_order(conn, order_code=int(m.group(1)))
+        if order:
+            return order, "description_full"
+    m = _DESC_SHORT_RE.search(text)
+    if m:
+        marks = ",".join("?" for _ in TOPUP_STATES)
+        rows = [
+            _row(r)
+            for r in conn.execute(
+                f"SELECT * FROM orders WHERE status IN ({marks}) AND (order_code % 10000000) = ?",
+                (*TOPUP_STATES, int(m.group(1))),
+            ).fetchall()
+        ]
+        if len(rows) == 1:
+            return rows[0], "description_short"
+        if len(rows) > 1:
+            return None, "ambiguous"
+    return None, "none"
+
+
+def _record_match(conn: Any, *, order: dict[str, Any], provider: str, ref: str, method: str, description: str, now: float) -> None:
+    """Trace (payment_events, amount 0 — not counted by _sum_paid) of a description match."""
+    _insert_event(
+        conn, order_id=order["id"], provider=provider, event_type="match.description",
+        ref=f"match:{ref}", amount=0,
+        raw={"method": method, "order_code": int(order["order_code"]), "description": str(description or "")[:200], "ref": ref},
+        signature_valid=True, now=now,
+    )
+    log.info("payment matched by %s order=%s ref=%s", method, order["order_code"], ref)
+
+
 def handle_webhook(payload: Any, *, now: Optional[float] = None, provider: Optional[PaymentProvider] = None) -> tuple[int, dict[str, Any]]:
     p = _require_enabled(provider)
     t = _now(now)
@@ -790,6 +908,13 @@ def handle_webhook(payload: Any, *, now: Optional[float] = None, provider: Optio
         ref = str(data.get("reference") or "").strip() or (
             f"{p.name}:{data.get('paymentLinkId')}:{order_code}:{data.get('amount')}:{data.get('transactionDateTime')}"
         )
+        matched_by = "order_code" if order else None
+        if not order and success:
+            # late top-up / transfer without our orderCode → WELORA<code> / WL<7 digits>
+            order, method = match_order_by_description(conn, data.get("description"))
+            matched_by = method if order else None
+            if method == "ambiguous":
+                log.warning("webhook description ambiguous ref=%s → admin", ref)
         # 2. store raw (UNIQUE provider_txn_ref → idempotent)
         inserted = _insert_event(
             conn, order_id=order["id"] if order else None, provider=p.name,
@@ -800,19 +925,29 @@ def handle_webhook(payload: Any, *, now: Optional[float] = None, provider: Optio
             return 200, {"ok": True, "duplicate": True}
         if not order:
             return 200, {"ok": True, "unknown_order": True}
+        if matched_by and matched_by.startswith("description"):
+            _record_match(conn, order=order, provider=p.name, ref=ref, method=matched_by, description=data.get("description"), now=t)
         if not success:
             return 200, {"ok": True, "ignored": "non_success"}
         # 3. idempotent on already-settled orders
         if order["status"] in ("PAID", "REFUND_PENDING", "REFUNDED"):
             if order["status"] == "PAID":
-                log.warning("second payment on PAID order=%s → admin refund", order_code)
-            return 200, {"ok": True, "idempotent": True, "status": order["status"]}
+                log.warning("second payment on PAID order=%s → admin refund", order["order_code"])
+            out: dict[str, Any] = {"ok": True, "idempotent": True, "status": order["status"]}
+            if order["status"] == "REFUND_PENDING":
+                # top-up arrived after the 24h underpaid window → admin decides (refund or manual grant)
+                log.warning("payment on REFUND_PENDING order=%s → needs admin", order["order_code"])
+                out["needs_admin"] = True
+            return 200, out
         if order["status"] == "CANCELLED":
             log.warning("payment on CANCELLED order=%s → needs admin (CK-10)", order_code)
             return 200, {"ok": True, "needs_admin": True, "status": "CANCELLED"}
         # 4. compare amount → PAID / UNDERPAID
         status = _settle(conn, order["id"], source="webhook", now=t)
-        return 200, {"ok": True, "status": status}
+        out = {"ok": True, "status": status}
+        if matched_by and matched_by != "order_code":
+            out["matched_by"] = matched_by
+        return 200, out
     finally:
         conn.close()
 
@@ -822,14 +957,54 @@ def handle_webhook(payload: Any, *, now: Optional[float] = None, provider: Optio
 # ---------------------------------------------------------------------------
 
 
+def _rematch_unassigned(conn: Any, *, now: float, summary: dict[str, Any]) -> None:
+    """Reconcile side of late top-ups: signed payment events stored with no order
+    (unknown orderCode, ambiguous description, or received before this matcher
+    existed) are matched again by orderCode / description and settled."""
+    rows = [
+        _row(r)
+        for r in conn.execute(
+            "SELECT * FROM payment_events WHERE order_id IS NULL AND signature_valid=1 AND event_type=?",
+            ("webhook.payment",),
+        ).fetchall()
+    ]
+    for ev in rows:
+        try:
+            if now - _ts(ev["received_at"]) > REMATCH_WINDOW_S:
+                continue
+            raw = json.loads(ev.get("raw_payload") or "{}")
+        except (ValueError, TypeError):
+            continue
+        data = (raw or {}).get("data") if isinstance((raw or {}).get("data"), dict) else {}
+        order = _get_order(conn, order_code=_int(data.get("orderCode"))) if _int(data.get("orderCode")) else None
+        method = "order_code" if order else "none"
+        if not order:
+            order, method = match_order_by_description(conn, data.get("description"))
+        if not order or order["status"] not in TOPUP_STATES:
+            continue
+        cur = conn.execute("UPDATE payment_events SET order_id=? WHERE id=? AND order_id IS NULL", (order["id"], ev["id"]))
+        conn.commit()
+        if (cur.rowcount or 0) != 1:
+            continue
+        summary["rematched"] += 1
+        _record_match(conn, order=order, provider=ev["provider"], ref=ev["provider_txn_ref"], method=method,
+                      description=data.get("description"), now=now)
+        if _settle(conn, order["id"], source="reconcile", now=now) == "PAID":
+            summary["paid"] += 1
+
+
 def reconcile_once(*, now: Optional[float] = None, provider: Optional[PaymentProvider] = None) -> dict[str, Any]:
     if not checkout_enabled():
         return {"skipped": "checkout_disabled"}
     p = provider or get_provider()
     t = _now(now)
-    summary = {"checked": 0, "paid": 0, "underpaid": 0, "expired": 0, "cancelled": 0, "refund_pending": 0, "errors": 0}
+    summary = {
+        "checked": 0, "paid": 0, "underpaid": 0, "expired": 0, "cancelled": 0, "refund_pending": 0, "errors": 0,
+        "rematched": 0,
+    }
     conn = _conn()
     try:
+        _rematch_unassigned(conn, now=t, summary=summary)
         rows = [
             _row(r)
             for r in conn.execute(
@@ -1313,6 +1488,7 @@ def admin_refund(
             detail.update(amount=amt, bank_ref=(bank_ref or "")[:120])
             if order.get("paid_at"):  # entitlement was granted → take it back
                 detail.update(_rollback_subscription(conn, order, now=t))
+                detail.update(_restore_previous_plan(conn, order, now=t))  # CK-14 upgrade refund
                 _refresh_entitlement(order["user_id"], reason="refund")
             ent.emit_event("refund_completed", {"order_code": int(order["order_code"]), "amount": amt})
         elif stage == "excess":
@@ -1654,6 +1830,34 @@ def admin_set_coupon_active(*, admin_uid: str, code: str, active: bool, reason: 
         _audit(conn, admin_uid=admin_uid, action="coupon_activate" if active else "coupon_deactivate",
                order=None, reason=r, detail={"code": cp.normalize_code(code)})
         return {"ok": True, "code": cp.normalize_code(code), "active": bool(active)}
+    finally:
+        conn.close()
+
+
+def admin_unmatched_payments(limit: int = 100) -> list[dict[str, Any]]:
+    """Signed payments that no order could claim (unknown orderCode, no/ambiguous
+    description). Read-only; admin resolves via manual grant (CK-10) or refund."""
+    conn = _conn()
+    try:
+        out = []
+        for r in conn.execute(
+            "SELECT * FROM payment_events WHERE order_id IS NULL AND signature_valid=1 AND event_type=? "
+            "ORDER BY received_at DESC LIMIT ?",
+            ("webhook.payment", max(1, min(int(limit), 500))),
+        ).fetchall():
+            ev = _row(r)
+            try:
+                data = (json.loads(ev.get("raw_payload") or "{}") or {}).get("data") or {}
+            except (ValueError, TypeError):
+                data = {}
+            _, method = match_order_by_description(conn, data.get("description"))
+            out.append({
+                "reference": ev["provider_txn_ref"], "amount": int(ev["amount"] or 0), "received_at": ev["received_at"],
+                "order_code_in_payload": _int(data.get("orderCode")) or None,
+                "description": str(data.get("description") or "")[:200],
+                "match": method,
+            })
+        return out
     finally:
         conn.close()
 

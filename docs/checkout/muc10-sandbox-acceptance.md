@@ -47,3 +47,39 @@ Reminder schedule check (mục 7): use `POST /api/admin/v1/checkout/renewal/run`
 - Verify on the test channel that a top-up transfer for an UNDERPAID order (same description,
   remainder QR) is matched by payOS to the same `orderCode` after the original 15-min link expiry.
   If payOS does not match it, handle via admin manual grant (CK-10) and report back.
+
+## 3. P1 follow-ups — extra test-channel checks
+
+### Late UNDERPAID top-up (after the 15-min link expired)
+
+Server behaviour (covered by CI with MockPaymentProvider):
+- Webhook with our `orderCode` → accumulates (`_sum_paid`) → PAID + grant when total ≥ amount.
+- Webhook with missing/unknown `orderCode` → matched by transfer content: `WELORA<orderCode>`
+  (exact) or `WL<last 7 digits>` (only if exactly one open order matches; otherwise left for admin).
+  Match traced as `payment_events.match.description`.
+- Reconcile: `GET /v2/payment-requests/{orderCode}` transactions for UNDERPAID orders (any age
+  until REFUND_PENDING at 24 h), plus re-matching of stored signed webhooks with no order.
+- Anything unmatched: `GET /api/admin/v1/checkout/unmatched-payments` (2FA) → manual grant / refund.
+
+NOT verifiable without the payOS test channel — record what you see:
+| # | Question | How |
+|---|---|---|
+| 1 | Does the bank accept a transfer to the link's virtual account after the link expired? | pay 60% → wait 16 min → scan the remainder QR on `/app/checkout` |
+| 2 | If accepted: does payOS send a webhook? With which `orderCode` (same / other / none) and `description`? | check `payment_events.raw_payload` (or `/unmatched-payments`) |
+| 3 | Does `GET /v2/payment-requests/{orderCode}` list the late transaction (`transactions[]`, `amountPaid`)? | admin "reconcile" → order status |
+| 4 | Is `reference` identical in webhook and API (dedupe relies on it)? | compare both rows' `provider_txn_ref` |
+
+### Renewal Web Push
+1. `python -m welora.webpush gen-vapid` locally → set `WELORA_PUSH_PROVIDER=webpush`,
+   `WELORA_VAPID_PUBLIC_KEY`, `WELORA_VAPID_PRIVATE_KEY`, `WELORA_VAPID_SUBJECT=mailto:…` on Render.
+2. `/app/my-plan` → "Bật thông báo nhắc gia hạn" → allow (Chrome/Edge/Firefox; iOS needs the site
+   added to Home Screen, iOS ≥ 16.4).
+3. Admin → "Chạy job nhắc hạn ngay" with a D-3 offset → notification appears; click opens the renewal link.
+
+### Upgrade refund
+Buy ACA → upgrade to OS1 → refund OS1 (request + complete) → `/app/my-plan` shows ACA active with the
+days it had left at upgrade time (counted from the refund); `payment_events.upgrade.restored_previous`.
+
+### A/B price on /pricing
+Only when `experiments[aca_price_ab].active=true` (both config copies): logged-in user in group B sees
+ACA 49.000 ₫/tháng on `/pricing` and is charged the same at checkout; anonymous visitors see the control price.

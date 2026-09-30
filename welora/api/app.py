@@ -414,6 +414,17 @@ class AdminRenewalRunBody(BaseModel):
     now_offset_days: Optional[float] = None
 
 
+class PushSubscriptionBody(BaseModel):
+    """W3C PushSubscription.toJSON() — endpoint + keys{p256dh, auth} (public keys)."""
+
+    endpoint: str = Field(..., min_length=12, max_length=1000)
+    keys: dict[str, str] = Field(default_factory=dict)
+
+
+class PushUnsubscribeBody(BaseModel):
+    endpoint: str = Field(..., min_length=12, max_length=1000)
+
+
 class AdminConfirmWebhookBody(BaseModel):
     webhook_url: str = Field(..., min_length=8)
 
@@ -716,6 +727,16 @@ def create_app() -> FastAPI:
     @app.get("/app/checkout/renew", include_in_schema=False)
     def checkout_renew_ui() -> HTMLResponse:
         return _serve_app_html(static_dir, "checkout-renew.html")
+
+    @app.get("/app/sw.js", include_in_schema=False)
+    def app_service_worker() -> Response:
+        # Served under /app/ so its default scope is /app/ (renewal push → /app/checkout/renew).
+        js = (static_dir / "sw.js").read_text(encoding="utf-8")
+        return Response(
+            content=js,
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/app/"},
+        )
 
     @app.get("/app/my-plan", include_in_schema=False)
     @app.get("/app/my-plan/", include_in_schema=False)
@@ -1224,8 +1245,13 @@ def create_app() -> FastAPI:
 
     # --- Pricing & Entitlements (P1–P9 · P4–P7) ---
     @app.get("/api/core/v1/entitlements/pricing", tags=["entitlements"])
-    def entitlements_pricing() -> dict:
-        return entitlements_svc.get_pricing_public()
+    def entitlements_pricing(authorization: Optional[str] = Header(None)) -> dict:
+        # Optional bearer: A/B price for the viewer's sticky group when the
+        # experiment is on (default OFF → config price, identical payload).
+        from welora import checkout_pricing as _cp
+
+        uid = _bearer_uid(authorization) if _cp.experiment().get("active") else None
+        return _cp.pricing_public_for(uid)
 
     @app.get("/api/core/v1/entitlements/checkout/config", tags=["entitlements"])
     def entitlements_checkout_config() -> dict:
@@ -1422,6 +1448,37 @@ def create_app() -> FastAPI:
         uid = _require_login(authorization)
         return _checkout_call(checkout_svc.prices_for_user, uid)
 
+    # --- PAY-05 renewal push (Web Push / VAPID) — safe no-op until env keys are set ---
+    @app.get("/api/push/v1/vapid-public-key", tags=["push"])
+    def push_vapid_public_key() -> dict:
+        from welora import webpush
+
+        key = webpush.public_key()
+        return {"enabled": bool(key), "public_key": key}
+
+    @app.post("/api/push/v1/subscriptions", tags=["push"])
+    def push_subscribe(
+        body: PushSubscriptionBody,
+        authorization: Optional[str] = Header(None),
+        user_agent: Optional[str] = Header(None),
+    ) -> dict:
+        from welora import webpush
+
+        uid = _require_login(authorization)
+        if not webpush.enabled():
+            raise HTTPException(status_code=503, detail={"error_code": "PUSH_DISABLED", "message": "Thông báo đẩy chưa bật"})
+        try:
+            return webpush.save_subscription(uid, body.model_dump(), user_agent=user_agent or "")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail={"error_code": str(e), "message": "Đăng ký thông báo không hợp lệ"})
+
+    @app.delete("/api/push/v1/subscriptions", tags=["push"])
+    def push_unsubscribe(body: PushUnsubscribeBody, authorization: Optional[str] = Header(None)) -> dict:
+        from welora import webpush
+
+        uid = _require_login(authorization)
+        return {"ok": True, "removed": webpush.delete_subscription(uid, body.endpoint)}
+
     @app.get("/api/checkout/v1/my-plan", tags=["checkout"])
     def checkout_my_plan(authorization: Optional[str] = Header(None)) -> dict:
         _checkout_call(checkout_svc._require_enabled)
@@ -1491,6 +1548,11 @@ def create_app() -> FastAPI:
         return _checkout_call(
             checkout_svc.admin_set_coupon_active, admin_uid=admin_uid, code=code, active=body.active, reason=body.reason,
         )
+
+    @app.get("/api/admin/v1/checkout/unmatched-payments", tags=["admin"])
+    def admin_unmatched_payments(authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin_2fa(authorization)
+        return {"items": _checkout_call(checkout_svc.admin_unmatched_payments)}
 
     @app.get("/api/admin/v1/checkout/experiments/aca_price_ab", tags=["admin"])
     def admin_experiment_stats(authorization: Optional[str] = Header(None)) -> dict:

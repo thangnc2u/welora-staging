@@ -133,8 +133,11 @@ def run_once(*, now: Optional[float] = None) -> dict[str, Any]:
                             mailer.enqueue(email, subject, body)
                             summary["emails"] += 1
                     if "push" in chans:
-                        push.send(uid, subject, body.split("\n", 1)[0], {"type": "renewal", "plan": plan, "step": latest["step"]})
-                        summary["pushes"] += 1
+                        if push.send(
+                            uid, subject, body.split("\n", 1)[0],
+                            {"type": "renewal", "plan": plan, "step": latest["step"], "url": link},
+                        ):
+                            summary["pushes"] += 1
                     ent.emit_event("renewal_reminder", {"plan": plan, "step": latest["step"], "channels": chans})
 
             # --- status: active → grace → expired (downgrade to FREE, data kept)

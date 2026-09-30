@@ -104,6 +104,51 @@ def list_price(plan: str, cycle: str, variant: Optional[str]) -> Optional[int]:
     return base
 
 
+def pricing_public_for(user_id: Optional[str], *, now: Optional[float] = None) -> dict[str, Any]:
+    """/pricing payload with the viewer's A/B price (CK-12 · P1 follow-up).
+
+    Experiment OFF (default) → exactly ``ent.get_pricing_public()`` (config price).
+    Experiment ON + logged-in viewer → sticky variant via ``assign_variant`` (the
+    same row checkout's ``quote`` reads) and the experiment plan's amounts via
+    ``list_price`` — so /pricing shows what checkout will charge that user.
+    Anonymous viewers get the default/control price (never a price they would not
+    be charged after login). Works regardless of WELORA_CHECKOUT_ENABLED.
+    """
+    import copy
+
+    payload = ent.get_pricing_public()
+    exp = experiment()
+    uid = (user_id or "").strip()
+    if not exp.get("active") or not uid:
+        return payload
+    from welora import checkout as co
+
+    conn = co._conn()
+    try:
+        variant = assign_variant(conn, uid, now=now)
+    finally:
+        conn.close()
+    out = copy.deepcopy(payload)
+    plan_code = exp.get("plan") or "ACA"
+    for p in out.get("plans") or []:
+        if p.get("code") != plan_code:
+            continue
+        for pr in p.get("prices") or []:
+            interval = pr.get("interval")
+            if interval == "lifetime":
+                continue  # Lifetime stays OFF / locked — never overridden
+            amt = list_price(plan_code, str(interval), variant)
+            if amt is not None and int(amt) != int(pr.get("amount") or 0):
+                pr["base_amount"] = pr.get("amount")
+                pr["amount"] = int(amt)
+                pr["ab_variant"] = variant
+    for e in out.get("experiments") or []:
+        if e.get("key") == EXPERIMENT_KEY:
+            e["variant"] = variant
+    out["price_variant"] = variant
+    return out
+
+
 def experiment_stats(conn: Any) -> dict[str, Any]:
     exp = experiment()
     plan = exp.get("plan") or "ACA"

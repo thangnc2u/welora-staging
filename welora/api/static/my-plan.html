@@ -33,6 +33,8 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
 <!-- CK-13: gói hiện tại + ngày hết hạn + Gia hạn / Nâng cấp -->
 <section class="card" id="currentCard" hidden></section>
 <section class="card" id="upgradeCard" hidden><h2>Nâng cấp (CK-14)</h2><p class="muted">Trừ phần giá trị còn lại của gói cũ theo ngày, làm tròn xuống 1.000đ.</p><div id="upgrades"></div></section>
+<!-- PAY-05: nhắc gia hạn qua thông báo đẩy (chỉ hiện khi server đã cấu hình VAPID) -->
+<section class="card" id="pushCard" hidden><h2>Nhắc gia hạn</h2><p class="muted">Email luôn được gửi. Bật thêm thông báo trên thiết bị này để nhận nhắc trước khi gói hết hạn.</p><button type="button" class="cta secondary" id="pushBtn">Bật thông báo nhắc gia hạn</button><p class="muted" id="pushMsg" role="status"></p></section>
 <section class="card"><h2>Lịch sử thanh toán</h2><div id="history"><p class="muted">Chưa có thanh toán.</p></div></section>
 
 <section class="disclaimer">
@@ -141,5 +143,6 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   load();
 })();
 </script>
+<script src="/static/push-optin.js"></script>
 </body>
 </html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Gói của tôi</title>
+<script src="/static/auth-gate.js"></script>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:640px;margin-inline:auto}
+h1{font-size:1.35rem;margin:4px 0 8px}
+a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.banner{background:#3A2E12;border:1px solid #E8C86A;border-radius:12px;padding:12px 14px;margin:12px 0;font-weight:700;font-size:14px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:12px 0}
+.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--border-default,#2F3D54);font-size:14px;align-items:center}
+.row:first-child{border-top:0}
+.amount{font-weight:700;color:var(--link,#E8C86A)}
+.cta{display:inline-block;margin:8px 8px 0 0;padding:10px 14px;border-radius:10px;background:var(--link,#E8C86A);color:#121A28;border:0;font-weight:800;font-size:14px;cursor:pointer}
+.cta.secondary{background:var(--bg-subtle,#162033);color:var(--text-primary,#F4F1E8);border:1px solid var(--border-default,#2F3D54)}
+.err{color:#ff6b6b;font-size:13px}
+.disclaimer{font-size:12px;line-height:1.5;color:var(--text-secondary,#A8B0C0);border-left:3px solid var(--border-default,#2F3D54);padding:8px 12px;margin:16px 0}
+</style>
+</head>
+<body class="welora-shell">
+<p><a href="/app">← Welora</a> · <a href="/pricing">Bảng giá</a></p>
+<h1>Gói của tôi</h1>
+<div class="banner" id="offBanner" hidden role="status">Sắp mở thanh toán</div>
+<div class="banner" id="graceBanner" hidden role="status"></div>
+<p class="err" id="err" hidden role="alert"></p>
+
+<!-- CK-13: gói hiện tại + ngày hết hạn + Gia hạn / Nâng cấp -->
+<section class="card" id="currentCard" hidden></section>
+<section class="card" id="upgradeCard" hidden><h2>Nâng cấp (CK-14)</h2><p class="muted">Trừ phần giá trị còn lại của gói cũ theo ngày, làm tròn xuống 1.000đ.</p><div id="upgrades"></div></section>
+<section class="card"><h2>Lịch sử thanh toán</h2><div id="history"><p class="muted">Chưa có thanh toán.</p></div></section>
+
+<section class="disclaimer">
+  Welora cung cấp thông tin và công cụ quản lý tài chính cá nhân, không tư vấn đầu tư,
+  không nhận hoa hồng hay liên kết tiếp thị (affiliate) với bất kỳ sản phẩm tài chính nào.
+</section>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function token() { try { return localStorage.getItem("welora_token") || ""; } catch (_e) { return ""; } }
+  function api(method, url, body) {
+    var h = { Authorization: "Bearer " + token() };
+    if (body) h["Content-Type"] = "application/json";
+    return fetch(url, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { var d = (j && j.detail) || j || {}; var e = new Error(d.message || d.error_code || ("HTTP " + r.status)); e.code = d.error_code; throw e; }
+        return j;
+      });
+    });
+  }
+  function vnd(n) { try { return new Intl.NumberFormat("vi-VN").format(Number(n)) + " ₫"; } catch (_e) { return String(n); } }
+  function date(s) { return s ? new Date(s).toLocaleDateString("vi-VN") : ""; }
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function row(parent, label, value) {
+    var r = document.createElement("div"); r.className = "row";
+    var l = document.createElement("span"); l.textContent = label;
+    var v = document.createElement("span"); v.className = "amount"; v.textContent = value;
+    r.appendChild(l); r.appendChild(v); parent.appendChild(r); return r;
+  }
+  function link(parent, text, href, secondary) {
+    var a = document.createElement("a"); a.className = "cta" + (secondary ? " secondary" : ""); a.textContent = text; a.href = href;
+    parent.appendChild(a); return a;
+  }
+  function err(m) { $("err").hidden = !m; $("err").textContent = m || ""; }
+  var STATUS = { active: "Đang hoạt động", grace: "Ân hạn 7 ngày", expired: "Đã hết hạn" };
+  var ORDER = { PAID: "Đã thanh toán", UNDERPAID: "Thiếu tiền", REFUND_PENDING: "Đang hoàn tiền", REFUNDED: "Đã hoàn tiền" };
+
+  function render(d) {
+    if (d.renewal_banner) { $("graceBanner").textContent = d.renewal_banner; $("graceBanner").hidden = false; }
+    var cur = d.current, c = $("currentCard"); clear(c);
+    var h = document.createElement("h2"); c.appendChild(h);
+    if (cur) {
+      h.textContent = cur.plan_name;
+      row(c, "Trạng thái", STATUS[cur.status] || cur.status);
+      row(c, "Chu kỳ", cur.billing_cycle === "year" ? "Năm" : "Tháng");
+      row(c, "Hết hạn", date(cur.current_period_end));
+      if (cur.status === "grace") row(c, "Hết ân hạn", date(cur.grace_ends_at));
+      var rn = d.actions && d.actions.renew;
+      if (rn) link(c, "Gia hạn", "/app/checkout?plan=" + encodeURIComponent(rn.plan_id) + "&cycle=" + encodeURIComponent(rn.billing_cycle));
+      var sy = d.actions && d.actions.switch_to_year;
+      if (sy) {
+        var p = document.createElement("p"); p.className = "muted";
+        p.textContent = "Gói năm: " + vnd(sy.year) + " so với " + vnd(sy.month_x12) + " cho 12 tháng — tiết kiệm " + vnd(sy.savings) + ".";
+        c.appendChild(p);
+        link(c, "Chuyển sang gói năm", "/app/checkout?plan=" + encodeURIComponent(sy.plan_id) + "&cycle=year", true);
+      }
+    } else {
+      h.textContent = "Welora Free";
+      link(c, "Xem các gói", "/app/checkout");
+    }
+    c.hidden = false;
+    var ups = (d.actions && d.actions.upgrades) || [];
+    var u = $("upgrades"); clear(u);
+    ups.forEach(function (x) {
+      var card = document.createElement("div"); card.className = "card";
+      var t = document.createElement("strong"); t.textContent = x.plan_name; card.appendChild(t);
+      row(card, "Giá gốc", vnd(x.list_price));
+      row(card, "Trừ giá trị gói cũ", vnd(x.upgrade_credit));
+      row(card, "Cần trả", vnd(x.amount));
+      link(card, "Nâng cấp", "/app/checkout?plan=" + encodeURIComponent(x.plan_id) + "&cycle=" + encodeURIComponent(x.billing_cycle));
+      u.appendChild(card);
+    });
+    $("upgradeCard").hidden = ups.length === 0;
+    var hist = $("history"); clear(hist);
+    if (!(d.history || []).length) { var m = document.createElement("p"); m.className = "muted"; m.textContent = "Chưa có thanh toán."; hist.appendChild(m); }
+    (d.history || []).forEach(function (o) {
+      var card = document.createElement("div"); card.className = "card";
+      var t = document.createElement("strong"); t.textContent = "Đơn " + o.order_code + " · " + o.plan_name; card.appendChild(t);
+      row(card, "Ngày", date(o.paid_at || o.created_at));
+      row(card, "Số tiền", vnd(o.amount_paid || o.amount));
+      row(card, "Trạng thái", ORDER[o.status] || o.status);
+      if (o.refund_amount) row(card, "Đã hoàn", vnd(o.refund_amount));
+      // mục 8: nút Yêu cầu hoàn tiền chỉ hiện khi đủ điều kiện (server kiểm tra)
+      if (o.refund && o.refund.eligible) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "cta secondary"; b.textContent = "Yêu cầu hoàn tiền";
+        b.addEventListener("click", function () {
+          var reason = window.prompt("Lý do yêu cầu hoàn tiền (tối thiểu 5 ký tự):") || "";
+          api("POST", "/api/checkout/v1/orders/" + o.order_code + "/refund-request", { reason: reason })
+            .then(load).catch(function (e) { err(e.message); });
+        });
+        card.appendChild(b);
+      } else if (o.refund && o.refund.message && o.status === "PAID") {
+        var n = document.createElement("p"); n.className = "muted"; n.textContent = "Hoàn tiền: " + o.refund.message; card.appendChild(n);
+      }
+      hist.appendChild(card);
+    });
+  }
+  function load() {
+    err("");
+    return api("GET", "/api/checkout/v1/my-plan").then(render).catch(function (e) {
+      if (e.code === "CHECKOUT_DISABLED") { $("offBanner").hidden = false; return; }
+      err(e.message);
+    });
+  }
+  load();
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,12 @@
 - 1 PENDING per user per plan: a new order cancels the old link.
 - Runtime switch: WELORA_CHECKOUT_ENABLED (default off → 403).
 
+P1 (this module + checkout_pricing / renewal / admin_2fa):
+- CK-11 coupons · CK-12 A/B Academy price (fixed group, stored on order)
+- CK-13 "Gói của tôi" · CK-14 upgrade credit (by day, round down 1.000đ)
+- mục 7 renewal magic link · mục 8 refund (PAY-03 eligibility, REFUND_PENDING →
+  REFUNDED, revoke) · UNDERPAID remainder QR · non-prod test hooks (mục 10)
+
 Does not touch Hard Deny R01–R09 / TARGET_MONTHS / Pre-Rule / gate_months.
 Lifetime stays OFF (billing_cycle only month|year).
 """
@@ -16,7 +22,9 @@ Lifetime stays OFF (billing_cycle only month|year).
 from __future__ import annotations
 
 import calendar
+import hashlib
 import json
+import secrets
 import logging
 import os
 import threading
@@ -25,6 +33,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from welora import checkout_pricing as cp
 from welora import entitlements as ent
 from welora import mailer
 from welora.db.connection import get_connection
@@ -107,6 +116,17 @@ def add_period(start_ts: float, cycle: str) -> float:
     dt = datetime.fromtimestamp(start_ts, tz=timezone.utc)
     months = 12 if cycle == "year" else 1
     m = dt.month - 1 + months
+    y = dt.year + m // 12
+    m = m % 12 + 1
+    d = min(dt.day, calendar.monthrange(y, m)[1])
+    return dt.replace(year=y, month=m, day=d).timestamp()
+
+
+def sub_period(end_ts: float, cycle: str) -> float:
+    """end − 1 calendar month / year (inverse of add_period, day clamped)."""
+    dt = datetime.fromtimestamp(end_ts, tz=timezone.utc)
+    months = 12 if cycle == "year" else 1
+    m = dt.month - 1 - months
     y = dt.year + m // 12
     m = m % 12 + 1
     d = min(dt.day, calendar.monthrange(y, m)[1])
@@ -213,33 +233,95 @@ def _is_preorder(plan: str) -> bool:
     return bool(ff.get("preorder_enabled")) and plan in (ff.get("plans") or [])
 
 
-def quote(plan_id: str, billing_cycle: str, *, now: Optional[float] = None) -> dict[str, Any]:
+def quote(
+    plan_id: str,
+    billing_cycle: str,
+    *,
+    now: Optional[float] = None,
+    user_id: Optional[str] = None,
+    coupon_code: Optional[str] = None,
+    conn: Any = None,
+) -> dict[str, Any]:
+    """Server-side price: config (or A/B variant) − coupon − upgrade credit (CK-04/11/12/14)."""
     plan, cycle = _norm_plan_cycle(plan_id, billing_cycle)
-    list_price = ent.price_amount(plan, cycle)
-    if list_price is None or list_price <= 0:
-        raise CheckoutError(400, "PRICE_MISSING", f"Không có giá {plan}/{cycle} trong config")
-    discount = 0  # CK-11 coupons are P1
-    amount = max(0, int(list_price) - discount)
-    monthly = ent.price_amount(plan, "month") or 0
-    yearly = ent.price_amount(plan, "year") or 0
-    info = ent.plan_by_code(plan) or {}
     t = _now(now)
-    preorder = _is_preorder(plan)
-    return {
-        "plan_id": plan,
-        "plan_name": info.get("name") or plan,
-        "billing_cycle": cycle,
-        "list_price": int(list_price),
-        "discount": discount,
-        "amount": amount,
-        "currency": "VND",
-        "members": int(info.get("seat_limit") or 1),
-        "year_savings": max(0, monthly * 12 - yearly) if monthly and yearly else 0,
-        "expected_period_end": _iso(add_period(t, cycle)),
-        "is_preorder": preorder,
-        "founding_family": ent.founding_family_status(plan) if preorder else None,
-        "price_variant": ent.assign_experiment("aca_price_ab").get("variant") if plan == "ACA" else None,
-    }
+    uid = (user_id or "").strip() or None
+    own = conn is None and uid is not None
+    c = _conn() if own else conn
+    try:
+        exp = cp.experiment()
+        variant: Optional[str] = None
+        if plan == (exp.get("plan") or "ACA"):
+            variant = cp.assign_variant(c, uid, now=t) if c is not None else str(exp.get("variant") or "A")
+        list_price = cp.list_price(plan, cycle, variant)
+        if list_price is None or list_price <= 0:
+            raise CheckoutError(400, "PRICE_MISSING", f"Không có giá {plan}/{cycle} trong config")
+        monthly = cp.list_price(plan, "month", variant) or 0
+        yearly = cp.list_price(plan, "year", variant) or 0
+
+        # CK-14: user holds another (lower) plan → upgrade with prorated credit
+        upgrade: Optional[dict[str, Any]] = None
+        renew_from: Optional[float] = None
+        if uid and c is not None:
+            subs = cp.active_subscriptions(c, uid, now=t)
+            for sub in subs:
+                if sub["plan_id"] == plan and _ts(sub["current_period_end"]) > t:
+                    renew_from = _ts(sub["current_period_end"])
+            others = [x for x in subs if x["plan_id"] != plan]
+            if others:
+                top = max(others, key=lambda x: cp.rank(x["plan_id"]))
+                if cp.rank(top["plan_id"]) > cp.rank(plan):
+                    raise CheckoutError(
+                        409, "DOWNGRADE_NOT_SUPPORTED",
+                        "Đang có gói cao hơn — hạ gói áp dụng sau khi hết kỳ hiện tại",
+                        current_plan=top["plan_id"],
+                    )
+                upgrade = cp.upgrade_credit(top, now=t)
+
+        # CK-11 coupon (never stacks with student offer; not combined with upgrade credit)
+        discount = 0
+        code: Optional[str] = None
+        if coupon_code and str(coupon_code).strip():
+            if upgrade:
+                raise CheckoutError(400, "COUPON_NOT_WITH_UPGRADE", "Mã giảm giá không áp dụng khi nâng cấp gói")
+            if c is None:
+                raise CheckoutError(401, "LOGIN_REQUIRED", "Cần đăng nhập để dùng mã giảm giá")
+            code, discount = cp.validate_coupon(
+                c, str(coupon_code), plan=plan, cycle=cycle, user_id=uid, list_amount=int(list_price), now=t,
+                exclude_pending=(uid, plan) if uid else None,
+            )
+        credit = 0
+        if upgrade:
+            step = cp.credit_round_down()
+            cap = max(0, int(list_price) - discount - cp.min_amount())
+            credit = min(int(upgrade["credit"]), (cap // step) * step)
+            upgrade["credit_applied"] = credit
+        amount = max(0, int(list_price) - discount - credit)
+        info = ent.plan_by_code(plan) or {}
+        preorder = _is_preorder(plan)
+        start = renew_from if (renew_from and not upgrade) else t
+        return {
+            "plan_id": plan,
+            "plan_name": info.get("name") or plan,
+            "billing_cycle": cycle,
+            "list_price": int(list_price),
+            "discount": discount,
+            "coupon_code": code,
+            "upgrade": upgrade,
+            "upgrade_credit": credit,
+            "amount": amount,
+            "currency": "VND",
+            "members": int(info.get("seat_limit") or 1),
+            "year_savings": max(0, monthly * 12 - yearly) if monthly and yearly else 0,
+            "expected_period_end": _iso(add_period(start, cycle)),
+            "is_renewal": bool(renew_from and not upgrade),
+            "is_preorder": preorder,
+            "founding_family": ent.founding_family_status(plan) if preorder else None,
+            "price_variant": variant,
+        }
+    finally:
+        if own and c is not None:
+            c.close()
 
 
 def _check_purchase_rules(user_id: str, plan: str) -> None:
@@ -384,6 +466,17 @@ def public_order(order: dict[str, Any], link: Optional[dict[str, Any]] = None, *
         "seconds_left": max(0, int(exp - t)) if order["status"] == "PENDING" else 0,
         "paid_at": order.get("paid_at"),
         "created_at": order["created_at"],
+        "coupon_code": order.get("coupon_code"),
+        "price_variant": order.get("price_variant"),
+        "upgrade_from_plan": order.get("upgrade_from_plan"),
+        "upgrade_credit": int(order.get("upgrade_credit") or 0),
+        "refund_amount": int(order.get("refund_amount") or 0),
+        "refunded_at": order.get("refunded_at"),
+        # mục 8: underpaid → new QR for the remainder, 24h to top up
+        "remainder_qr": order["status"] == "UNDERPAID" and max(0, int(order["amount"]) - paid) > 0,
+        "underpaid_deadline": (
+            _iso(_ts(order["created_at"]) + UNDERPAID_REFUND_AFTER_S) if order["status"] == "UNDERPAID" else None
+        ),
     }
 
 
@@ -393,6 +486,7 @@ def create_order(
     plan_id: str,
     billing_cycle: str,
     client_amount: Any = None,
+    coupon_code: Optional[str] = None,
     now: Optional[float] = None,
     provider: Optional[PaymentProvider] = None,
 ) -> dict[str, Any]:
@@ -400,15 +494,15 @@ def create_order(
     uid = (user_id or "").strip()
     if not uid:
         raise CheckoutError(401, "LOGIN_REQUIRED", "Cần đăng nhập trước khi thanh toán")
-    q = quote(plan_id, billing_cycle, now=now)
-    plan, cycle = q["plan_id"], q["billing_cycle"]
-    _check_purchase_rules(uid, plan)
-    if client_amount is not None:
-        log.info("client amount ignored (server price used) plan=%s cycle=%s", plan, cycle)
-
     t = _now(now)
     conn = _conn()
     try:
+        q = quote(plan_id, billing_cycle, now=t, user_id=uid, coupon_code=coupon_code, conn=conn)
+        plan, cycle = q["plan_id"], q["billing_cycle"]
+        _check_purchase_rules(uid, plan)
+        if client_amount is not None:
+            log.info("client amount ignored (server price used) plan=%s cycle=%s", plan, cycle)
+        upgrade_from = (q.get("upgrade") or {}).get("from_plan")
         order: Optional[dict[str, Any]] = None
         for _attempt in range(4):
             # 1 PENDING per user per plan — cancel old link first
@@ -424,11 +518,13 @@ def create_order(
                 conn.execute(
                     "INSERT INTO orders(id, order_code, user_id, plan_id, billing_cycle, list_price, "
                     "discount, amount, coupon_code, price_variant, provider, status, expires_at, "
-                    "amount_paid, is_preorder, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "amount_paid, is_preorder, created_at, upgrade_from_plan, upgrade_credit) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         oid, code, uid, plan, cycle, q["list_price"], q["discount"], q["amount"],
-                        None, q["price_variant"], p.name, "PENDING",
+                        q["coupon_code"], q["price_variant"], p.name, "PENDING",
                         _iso(t + EXPIRY_MINUTES * 60), 0, 1 if q["is_preorder"] else 0, _iso(t),
+                        upgrade_from, int(q["upgrade_credit"] or 0),
                     ),
                 )
                 conn.commit()
@@ -480,7 +576,10 @@ def create_order(
         order = _get_order(conn, order_id=order["id"])
         ent.emit_event(
             "checkout_started",
-            {"user_id": uid, "plan": plan, "cycle": cycle, "order_code": int(order["order_code"])},
+            {
+                "user_id": uid, "plan": plan, "cycle": cycle, "order_code": int(order["order_code"]),
+                "price_variant": q["price_variant"], "coupon": bool(q["coupon_code"]), "upgrade_from": upgrade_from,
+            },
         )
         return public_order(order, link_raw, now=t)
     finally:
@@ -554,9 +653,14 @@ def _settle(conn: Any, order_id: str, *, source: str, now: float) -> str:
             sub = _grant_for_order(conn, order, source=source, now=now)
             if paid > amount:
                 log.warning("overpaid order=%s paid=%s amount=%s → admin refund", order["order_code"], paid, amount)
+            cp.record_redemption(conn, order, now=now)
+            _snapshot_usage(conn, order, now=now)
             ent.emit_event(
                 "checkout_completed",
-                {"order_code": int(order["order_code"]), "plan": order["plan_id"], "source": source},
+                {
+                    "order_code": int(order["order_code"]), "plan": order["plan_id"], "source": source,
+                    "price_variant": order.get("price_variant"),
+                },
             )
             _queue_receipt(conn, order, sub)
         return "PAID"
@@ -583,6 +687,13 @@ def _grant_for_order(conn: Any, order: dict[str, Any], *, source: str, now: floa
     if sub and sub["status"] in ("active", "grace") and _ts(sub["current_period_end"]) > now:
         start = _ts(sub["current_period_end"])  # early renewal: continue from old end
     end = add_period(start, cycle)
+    if order.get("upgrade_from_plan"):
+        # CK-14: the old plan ends now; its remaining value was credited on this order
+        conn.execute(
+            "UPDATE subscriptions SET status='expired', current_period_end=? "
+            "WHERE user_id=? AND plan_id=? AND status IN ('active','grace')",
+            (_iso(now), uid, order["upgrade_from_plan"]),
+        )
     if sub:
         conn.execute(
             "UPDATE subscriptions SET status='active', current_period_start=?, current_period_end=?, "
@@ -958,33 +1069,275 @@ def admin_manual_grant(*, admin_uid: str, order_code: int, reason: str) -> dict[
         conn.close()
 
 
-def admin_refund(*, admin_uid: str, order_code: int, reason: str, stage: str = "request") -> dict[str, Any]:
-    """Record refund: request → REFUND_PENDING; complete → REFUNDED + revoke."""
+# ---------------------------------------------------------------------------
+# refunds (mục 8 · PAY-03) — REFUND_PENDING → REFUNDED, revoke entitlement
+# ---------------------------------------------------------------------------
+
+ACADEMY_FULL_KEY = "academy.lesson.full"
+
+
+def _refund_rules() -> dict[str, Any]:
+    r = cp.rules().get("refund") or {}
+    return {
+        "window_days": int(r.get("window_days") or 7),
+        "max_academy_lessons": int(r.get("max_academy_lessons") or 3),
+        "max_os_budget_periods": int(r.get("max_os_budget_periods") or 1),
+    }
+
+
+def _usage_academy_lessons(user_id: str) -> int:
+    try:
+        from welora import academy
+
+        prof = academy._PROFILES.get(user_id) or {}
+        done = set(prof.get("read") or [])
+        for nid, st in (prof.get("nodes") or {}).items():
+            if (st or {}).get("mastery_level") not in (None, "not_started"):
+                done.add(nid)
+        return len(done)
+    except Exception:
+        return 0
+
+
+def _usage_budget_periods(conn: Any, user_id: str) -> int:
+    periods: set[str] = set()
+    try:
+        from welora import budget
+
+        cur = budget._BUDGETS.get(user_id) or {}
+        if cur.get("period"):
+            periods.add(str(cur["period"]))
+        for k in list(budget._BUDGET_PERIODS):
+            if k.startswith(f"{user_id}:"):
+                periods.add(k.split(":", 1)[1])
+    except Exception:
+        pass
+    try:
+        for r in conn.execute("SELECT period FROM os_budgets WHERE user_id=?", (user_id,)).fetchall():
+            periods.add(str(r["period"]))
+    except Exception:
+        conn.rollback()
+    return len(periods)
+
+
+def _usage_now(conn: Any, user_id: str) -> dict[str, int]:
+    return {"academy_lessons": _usage_academy_lessons(user_id), "os_budget_periods": _usage_budget_periods(conn, user_id)}
+
+
+def _snapshot_usage(conn: Any, order: dict[str, Any], *, now: float) -> None:
+    """Baseline at PAID so PAY-03 counts only usage after purchase (free samples excluded)."""
+    _insert_event(
+        conn, order_id=order["id"], provider="welora", event_type="usage.baseline",
+        ref=f"usage:{order['id']}", amount=0, raw=_usage_now(conn, order["user_id"]),
+        signature_valid=True, now=now,
+    )
+
+
+def _usage_since_paid(conn: Any, order: dict[str, Any]) -> dict[str, int]:
+    base = {"academy_lessons": 0, "os_budget_periods": 0}
+    r = conn.execute(
+        "SELECT raw_payload FROM payment_events WHERE provider_txn_ref=?", (f"usage:{order['id']}",)
+    ).fetchone()
+    if r:
+        try:
+            base.update({k: int(v) for k, v in (json.loads(r["raw_payload"]) or {}).items()})
+        except (ValueError, TypeError):
+            pass
+    cur = _usage_now(conn, order["user_id"])
+    return {k: max(0, cur[k] - base.get(k, 0)) for k in cur}
+
+
+def _refund_eligibility(conn: Any, order: dict[str, Any], *, now: float) -> dict[str, Any]:
+    rr = _refund_rules()
+    out: dict[str, Any] = {"eligible": False, "order_code": int(order["order_code"]), "rules": rr}
+    if order["status"] != "PAID":
+        out.update(reason_code="NOT_PAID", message="Chỉ đơn đã thanh toán mới yêu cầu hoàn tiền")
+        return out
+    if order.get("is_preorder"):
+        ff = ent.founding_family_status(order["plan_id"])
+        ok = bool(ff.get("preorder_enabled"))
+        out.update(
+            eligible=ok, policy="preorder_100",
+            reason_code="OK" if ok else "PREORDER_LAUNCHED",
+            message="Đặt trước gói gia đình: hoàn 100% trước khi gói ra mắt (PRICING-01)"
+            if ok else "Gói đã ra mắt — áp dụng chính sách hoàn tiền thường",
+        )
+        if ok:
+            return out
+    paid_at = _ts(order.get("paid_at"))
+    window_end = paid_at + rr["window_days"] * 86400
+    usage = _usage_since_paid(conn, order)
+    out.update(policy="pay03_7d", window_ends_at=_iso(window_end), usage=usage)
+    info = ent.plan_by_code(order["plan_id"]) or {}
+    keys = {e.get("key") for e in info.get("entitlements") or [] if isinstance(e, dict)}
+    if now > window_end:
+        out.update(reason_code="WINDOW_PASSED", message=f"Quá {rr['window_days']} ngày kể từ khi thanh toán")
+    elif ACADEMY_FULL_KEY in keys and usage["academy_lessons"] > rr["max_academy_lessons"]:
+        out.update(reason_code="ACADEMY_USED", message=f"Đã học quá {rr['max_academy_lessons']} bài")
+    elif order["plan_id"] in ent.OS_PLANS and usage["os_budget_periods"] > rr["max_os_budget_periods"]:
+        out.update(reason_code="OS_USED", message=f"Đã dùng quá {rr['max_os_budget_periods']} kỳ ngân sách")
+    else:
+        out.update(eligible=True, reason_code="OK", message="Đủ điều kiện hoàn 100%")
+    return out
+
+
+def refund_eligibility_for_user(user_id: str, order_code: int, *, now: Optional[float] = None) -> dict[str, Any]:
+    _require_enabled()
+    conn = _conn()
+    try:
+        order = _get_order(conn, order_code=order_code)
+        if not order or order["user_id"] != user_id:
+            raise CheckoutError(404, "ORDER_NOT_FOUND", "Không tìm thấy đơn")
+        return _refund_eligibility(conn, order, now=_now(now))
+    finally:
+        conn.close()
+
+
+def _mark_refund_pending(conn: Any, order: dict[str, Any], *, by: str, reason: str, now: float) -> None:
+    if not _set_status(conn, order["id"], "REFUND_PENDING", from_states=("PAID", "UNDERPAID")):
+        raise CheckoutError(409, "INVALID_TRANSITION", f"Không chuyển được từ {order['status']}")
+    _insert_event(
+        conn, order_id=order["id"], provider="welora", event_type="refund.requested",
+        ref=f"refund:req:{order['id']}:{uuid.uuid4().hex[:8]}", amount=int(order.get("amount_paid") or 0),
+        raw={"by": by, "reason": reason[:500], "from": order["status"]}, signature_valid=True, now=now,
+    )
+    ent.emit_event("refund_requested", {"order_code": int(order["order_code"]), "by": by})
+
+
+def request_refund_for_user(user_id: str, order_code: int, reason: str, *, now: Optional[float] = None) -> dict[str, Any]:
+    """User taps "Yêu cầu hoàn tiền" — only shown/allowed when PAY-03 eligible."""
+    _require_enabled()
+    t = _now(now)
     r = _require_reason(reason)
+    conn = _conn()
+    try:
+        order = _get_order(conn, order_code=order_code)
+        if not order or order["user_id"] != user_id:
+            raise CheckoutError(404, "ORDER_NOT_FOUND", "Không tìm thấy đơn")
+        el = _refund_eligibility(conn, order, now=t)
+        if not el["eligible"]:
+            raise CheckoutError(409, "REFUND_NOT_ELIGIBLE", el.get("message") or "Không đủ điều kiện", eligibility=el)
+        _mark_refund_pending(conn, order, by="user", reason=r, now=t)
+        order = _get_order(conn, order_id=order["id"])
+        return public_order(order, _link_info(conn, order["id"]), now=t)
+    finally:
+        conn.close()
+
+
+def _refresh_entitlement(user_id: str, *, reason: str) -> None:
+    """Recompute in-memory entitlement from DB subscriptions (after refund / downgrade)."""
+    restored = _resolve_subscription(user_id)
+    if restored:
+        ent.set_subscription_state(user_id, restored["plan"], restored["subscription"])
+    else:
+        ent.revoke_plan(user_id, reason=reason)
+
+
+def _rollback_subscription(conn: Any, order: dict[str, Any], *, now: float) -> dict[str, Any]:
+    """Remove the period this order bought; expire when nothing paid remains."""
+    sub = _row(
+        conn.execute(
+            "SELECT * FROM subscriptions WHERE user_id=? AND plan_id=?", (order["user_id"], order["plan_id"])
+        ).fetchone()
+    )
+    if not sub:
+        return {"subscription": None}
+    end = sub_period(_ts(sub["current_period_end"]), order["billing_cycle"])
+    if end <= now:
+        conn.execute(
+            "UPDATE subscriptions SET status='expired', current_period_end=? WHERE id=?", (_iso(now), sub["id"])
+        )
+    else:
+        start = min(_ts(sub["current_period_start"]), sub_period(end, order["billing_cycle"]))
+        conn.execute(
+            "UPDATE subscriptions SET current_period_start=?, current_period_end=? WHERE id=?",
+            (_iso(start), _iso(end), sub["id"]),
+        )
+    conn.commit()
+    return {"subscription": _row(conn.execute("SELECT * FROM subscriptions WHERE id=?", (sub["id"],)).fetchone())}
+
+
+def admin_refund(
+    *,
+    admin_uid: str,
+    order_code: int,
+    reason: str,
+    stage: str = "request",
+    override: bool = False,
+    bank_ref: Optional[str] = None,
+    amount: Optional[int] = None,
+    now: Optional[float] = None,
+) -> dict[str, Any]:
+    """Record refund (manual bank transfer back to the paying account).
+
+    request  → PAID/UNDERPAID → REFUND_PENDING (PAY-03 checked; override audited)
+    complete → REFUND_PENDING → REFUNDED + payment_events refund.completed +
+               orders.refund_amount/refunded_at + subscription rollback + revoke
+    excess   → overpaid / paid twice: record refund of the extra only (no state change)
+    """
+    r = _require_reason(reason)
+    t = _now(now)
     conn = _conn()
     try:
         order = _get_order(conn, order_code=order_code)
         if not order:
             raise CheckoutError(404, "ORDER_NOT_FOUND", "Không tìm thấy đơn")
+        detail: dict[str, Any] = {"from": order["status"]}
         if stage == "request":
-            ok = _set_status(conn, order["id"], "REFUND_PENDING", from_states=("PAID", "UNDERPAID"))
+            if order["status"] == "PAID":
+                el = _refund_eligibility(conn, order, now=t)
+                detail["eligibility"] = {k: el.get(k) for k in ("eligible", "reason_code", "policy", "usage")}
+                if not el["eligible"] and not override:
+                    raise CheckoutError(
+                        409, "REFUND_NOT_ELIGIBLE", el.get("message") or "Không đủ điều kiện", eligibility=el
+                    )
+                detail["override"] = bool(override and not el["eligible"])
+            _mark_refund_pending(conn, order, by=f"admin:{admin_uid}", reason=r, now=t)
         elif stage == "complete":
-            ok = _set_status(conn, order["id"], "REFUNDED", from_states=("REFUND_PENDING",))
-            if ok:
-                conn.execute(
-                    "UPDATE subscriptions SET status='expired' WHERE user_id=? AND plan_id=?",
-                    (order["user_id"], order["plan_id"]),
-                )
-                conn.commit()
-                ent.revoke_plan(order["user_id"], reason="refund")
+            paid = int(order.get("amount_paid") or 0)
+            amt = int(amount) if amount not in (None, "") else paid
+            if amt <= 0 or amt > max(paid, 0):
+                raise CheckoutError(400, "REFUND_AMOUNT_INVALID", "Số tiền hoàn phải > 0 và không vượt số đã trả")
+            if not _set_status(conn, order["id"], "REFUNDED", from_states=("REFUND_PENDING",)):
+                raise CheckoutError(409, "INVALID_TRANSITION", f"Không chuyển được từ {order['status']}")
+            conn.execute(
+                "UPDATE orders SET refund_amount=?, refunded_at=? WHERE id=?", (amt, _iso(t), order["id"])
+            )
+            conn.commit()
+            _insert_event(
+                conn, order_id=order["id"], provider="welora", event_type="refund.completed",
+                ref=f"refund:done:{order['id']}", amount=amt,
+                raw={"admin": admin_uid, "bank_ref": (bank_ref or "")[:120], "method": "manual_bank_transfer"},
+                signature_valid=True, now=t,
+            )
+            detail.update(amount=amt, bank_ref=(bank_ref or "")[:120])
+            if order.get("paid_at"):  # entitlement was granted → take it back
+                detail.update(_rollback_subscription(conn, order, now=t))
+                _refresh_entitlement(order["user_id"], reason="refund")
+            ent.emit_event("refund_completed", {"order_code": int(order["order_code"]), "amount": amt})
+        elif stage == "excess":
+            paid = int(order.get("amount_paid") or 0)
+            amt = int(amount or 0)
+            if amt <= 0 or amt > paid:
+                raise CheckoutError(400, "REFUND_AMOUNT_INVALID", "Nhập số tiền hoàn phần thừa")
+            _insert_event(
+                conn, order_id=order["id"], provider="welora", event_type="refund.excess",
+                ref=f"refund:excess:{order['id']}:{uuid.uuid4().hex[:8]}", amount=amt,
+                raw={"admin": admin_uid, "bank_ref": (bank_ref or "")[:120]}, signature_valid=True, now=t,
+            )
+            conn.execute(
+                "UPDATE orders SET refund_amount=refund_amount+? WHERE id=?", (amt, order["id"])
+            )
+            conn.commit()
+            detail.update(amount=amt, bank_ref=(bank_ref or "")[:120])
         else:
-            raise CheckoutError(400, "INVALID_STAGE", "stage phải là request hoặc complete")
-        if not ok:
-            raise CheckoutError(409, "INVALID_TRANSITION", f"Không chuyển được từ {order['status']}")
-        _audit(conn, admin_uid=admin_uid, action=f"refund_{stage}", order=order, reason=r,
-               detail={"from": order["status"]})
+            raise CheckoutError(400, "INVALID_STAGE", "stage phải là request, complete hoặc excess")
+        _audit(conn, admin_uid=admin_uid, action=f"refund_{stage}", order=order, reason=r, detail=detail)
         order = _get_order(conn, order_id=order["id"])
-        return {"ok": True, "order_code": int(order["order_code"]), "status": order["status"]}
+        return {
+            "ok": True, "order_code": int(order["order_code"]), "status": order["status"],
+            "refund_amount": int(order.get("refund_amount") or 0),
+        }
     finally:
         conn.close()
 
@@ -992,6 +1345,7 @@ def admin_refund(*, admin_uid: str, order_code: int, reason: str, stage: str = "
 def checkout_config() -> dict[str, Any]:
     from welora.payments.provider import provider_name_from_env
 
+    rr = _refund_rules()
     return {
         "checkout_enabled": checkout_enabled(),
         "plans": list(CHECKOUT_PLANS),
@@ -1000,6 +1354,10 @@ def checkout_config() -> dict[str, Any]:
         "poll_interval_s": 3,
         "provider": provider_name_from_env(),
         "lifetime_enabled": False,
+        "coupons_enabled": True,
+        "price_experiment_active": bool(cp.experiment().get("active")),
+        "refund_policy": rr,
+        "grace_days": ent.GRACE_DAYS,
     }
 
 
@@ -1012,6 +1370,16 @@ def qr_svg(user_id: str, order_code: int) -> str:
         if not order or order["user_id"] != user_id:
             raise CheckoutError(404, "ORDER_NOT_FOUND", "Không tìm thấy đơn")
         payload = order.get("qr_code") or ""
+        remaining = max(0, int(order["amount"]) - int(order.get("amount_paid") or 0))
+        if order["status"] == "UNDERPAID" and remaining > 0:
+            link = _link_info(conn, order["id"])
+            if link.get("bin") and link.get("accountNumber"):
+                from welora import vietqr
+
+                payload = vietqr.build_payload(
+                    bin_code=str(link["bin"]), account_number=str(link["accountNumber"]), amount=remaining,
+                    description=link.get("description") or build_description(int(order["order_code"])),
+                )
     finally:
         conn.close()
     if not payload:
@@ -1027,3 +1395,272 @@ def qr_svg(user_id: str, order_code: int) -> str:
     buf = io.BytesIO()
     img.save(buf)
     return buf.getvalue().decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# CK-12 prices for the logged-in user (A/B variant applied)
+# ---------------------------------------------------------------------------
+
+
+def prices_for_user(user_id: Optional[str]) -> dict[str, Any]:
+    _require_enabled()
+    conn = _conn() if user_id else None
+    try:
+        exp = cp.experiment()
+        variant = cp.assign_variant(conn, user_id) if conn is not None else str(exp.get("variant") or "A")
+        out: dict[str, Any] = {}
+        for plan in CHECKOUT_PLANS:
+            v = variant if plan == (exp.get("plan") or "ACA") else None
+            out[plan] = {c: cp.list_price(plan, c, v) for c in BILLING_CYCLES}
+        return {"plans": out, "price_variant": variant, "experiment_active": bool(exp.get("active"))}
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+# ---------------------------------------------------------------------------
+# CK-13 "Gói của tôi"
+# ---------------------------------------------------------------------------
+
+
+def my_plan(user_id: str, *, now: Optional[float] = None) -> dict[str, Any]:
+    _require_enabled()
+    t = _now(now)
+    conn = _conn()
+    try:
+        me = ent.get_me(user_id)
+        subs = []
+        for r in conn.execute(
+            "SELECT s.*, o.billing_cycle AS last_cycle FROM subscriptions s LEFT JOIN orders o ON o.id=s.last_order_id "
+            "WHERE s.user_id=? ORDER BY s.current_period_end DESC",
+            (user_id,),
+        ).fetchall():
+            row = _row(r)
+            end = _ts(row["current_period_end"])
+            grace_end = end + ent.GRACE_DAYS * 86400
+            state = row["status"]
+            if state != "expired":
+                state = "active" if t <= end else ("grace" if t <= grace_end else "expired")
+            subs.append({
+                "plan_id": row["plan_id"],
+                "plan_name": (ent.plan_by_code(row["plan_id"]) or {}).get("name") or row["plan_id"],
+                "status": state,
+                "billing_cycle": row.get("last_cycle") or "month",
+                "current_period_start": row["current_period_start"],
+                "current_period_end": row["current_period_end"],
+                "grace_ends_at": _iso(grace_end),
+                "days_left": max(0, int((end - t) // 86400)),
+            })
+        current = next((x for x in subs if x["status"] in ("active", "grace")), None)
+        history = []
+        for r in conn.execute(
+            "SELECT * FROM orders WHERE user_id=? AND status IN ('PAID','UNDERPAID','REFUND_PENDING','REFUNDED') "
+            "ORDER BY created_at DESC LIMIT 50",
+            (user_id,),
+        ).fetchall():
+            o = _row(r)
+            item = public_order(o, now=t)
+            for k in ("checkout_url", "qr_code", "account_number", "account_name", "bin"):
+                item.pop(k, None)
+            item["refund"] = _refund_eligibility(conn, o, now=t) if o["status"] == "PAID" else None
+            history.append(item)
+        actions: dict[str, Any] = {"renew": None, "upgrades": [], "switch_to_year": None}
+        if current:
+            actions["renew"] = {"plan_id": current["plan_id"], "billing_cycle": current["billing_cycle"]}
+            if current["billing_cycle"] == "month":
+                m = ent.price_amount(current["plan_id"], "month") or 0
+                y = ent.price_amount(current["plan_id"], "year") or 0
+                if m and y and m * 12 > y:
+                    actions["switch_to_year"] = {
+                        "plan_id": current["plan_id"], "month_x12": m * 12, "year": y, "savings": m * 12 - y,
+                    }
+            for plan in CHECKOUT_PLANS:
+                if cp.rank(plan) <= cp.rank(current["plan_id"]):
+                    continue
+                try:
+                    q = quote(plan, current["billing_cycle"], now=t, user_id=user_id, conn=conn)
+                    _check_purchase_rules(user_id, plan)
+                except CheckoutError:
+                    continue
+                actions["upgrades"].append({
+                    "plan_id": plan, "plan_name": q["plan_name"], "billing_cycle": q["billing_cycle"],
+                    "list_price": q["list_price"], "upgrade_credit": q["upgrade_credit"], "amount": q["amount"],
+                })
+        return {
+            "plan": me.get("plan"),
+            "in_grace": bool(me.get("in_grace")),
+            "renewal_banner": me.get("renewal_banner"),
+            "current": current,
+            "subscriptions": subs,
+            "history": history,
+            "actions": actions,
+            "grace_days": ent.GRACE_DAYS,
+        }
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# mục 7 — one-tap renewal link (magic link, 24h, single use)
+# ---------------------------------------------------------------------------
+
+
+def _magic_hash(token: str) -> str:
+    return hashlib.sha256(("welora-renew:" + token).encode("utf-8")).hexdigest()
+
+
+def create_renewal_link(conn: Any, *, user_id: str, plan_id: str, billing_cycle: str, now: Optional[float] = None) -> str:
+    t = _now(now)
+    hours = int((cp.rules().get("renewal") or {}).get("magic_link_hours") or 24)
+    token = secrets.token_urlsafe(32)
+    conn.execute(
+        "INSERT INTO renewal_links(token_hash, user_id, plan_id, billing_cycle, expires_at, used_at, created_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (_magic_hash(token), user_id, plan_id, billing_cycle, _iso(t + hours * 3600), None, _iso(t)),
+    )
+    conn.commit()
+    # token in the URL fragment: never sent to servers / access logs
+    return f"{_public_base_url()}/app/checkout/renew#t={token}"
+
+
+def consume_renewal_link(token: str, *, now: Optional[float] = None) -> dict[str, Any]:
+    """Exchange magic link → session token + renewal order (opens QR directly)."""
+    _require_enabled()
+    t = _now(now)
+    tok = (token or "").strip()
+    if len(tok) < 20:
+        raise CheckoutError(400, "RENEW_LINK_INVALID", "Link gia hạn không hợp lệ")
+    conn = _conn()
+    try:
+        row = _row(conn.execute("SELECT * FROM renewal_links WHERE token_hash=?", (_magic_hash(tok),)).fetchone())
+        if not row:
+            raise CheckoutError(400, "RENEW_LINK_INVALID", "Link gia hạn không hợp lệ")
+        if row.get("used_at"):
+            raise CheckoutError(410, "RENEW_LINK_USED", "Link đã được dùng — đăng nhập để gia hạn")
+        if t > _ts(row["expires_at"]):
+            raise CheckoutError(410, "RENEW_LINK_EXPIRED", "Link đã hết hạn (24 giờ) — đăng nhập để gia hạn")
+        cur = conn.execute(
+            "UPDATE renewal_links SET used_at=? WHERE token_hash=? AND used_at IS NULL", (_iso(t), row["token_hash"])
+        )
+        conn.commit()
+        if (cur.rowcount or 0) != 1:
+            raise CheckoutError(410, "RENEW_LINK_USED", "Link đã được dùng — đăng nhập để gia hạn")
+        from welora import auth as auth_svc
+
+        u = conn.execute("SELECT role FROM users WHERE user_id=?", (row["user_id"],)).fetchone()
+        if not u or ((u["role"] or "").strip().lower() in auth_svc.ADMIN_ROLES):
+            raise CheckoutError(403, "RENEW_LINK_FORBIDDEN", "Không dùng link gia hạn cho tài khoản này")
+        session = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO auth_tokens(token, user_id, device_id, kind, expires_at) VALUES (?,?,?,?,?)",
+            (session, row["user_id"], None, "magic_renew", _iso(t + 24 * 3600)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    order = None
+    error = None
+    try:
+        order = create_order(user_id=row["user_id"], plan_id=row["plan_id"], billing_cycle=row["billing_cycle"])
+    except CheckoutError as e:
+        error = e.body()
+    return {"token": session, "order": order, "error": error, "plan_id": row["plan_id"], "billing_cycle": row["billing_cycle"]}
+
+
+# ---------------------------------------------------------------------------
+# mục 10 sandbox acceptance — NON-PROD test hooks (refused in production)
+# ---------------------------------------------------------------------------
+
+
+def test_hooks_allowed() -> bool:
+    env = (os.environ.get("WELORA_ENV") or "").strip().lower()
+    if env in ("production", "prod"):
+        return False
+    return (os.environ.get("WELORA_CHECKOUT_TEST_HOOKS") or "").strip() == "1"
+
+
+def _require_test_hooks() -> None:
+    if not test_hooks_allowed():
+        raise CheckoutError(
+            403, "TEST_HOOKS_DISABLED",
+            "Test hooks chỉ bật ở non-prod với WELORA_CHECKOUT_TEST_HOOKS=1 (luôn tắt ở production)",
+        )
+
+
+def admin_test_shift_subscription(*, admin_uid: str, order_code: int, days: float, reason: str) -> dict[str, Any]:
+    """Time-travel: move the order's subscription period back by `days` (e.g. 8 → grace over)."""
+    _require_test_hooks()
+    r = _require_reason(reason)
+    d = float(days)
+    if not (0 < d <= 400):
+        raise CheckoutError(400, "INVALID_DAYS", "days phải trong (0, 400]")
+    conn = _conn()
+    try:
+        order = _get_order(conn, order_code=order_code)
+        if not order:
+            raise CheckoutError(404, "ORDER_NOT_FOUND", "Không tìm thấy đơn")
+        sub = _row(
+            conn.execute(
+                "SELECT * FROM subscriptions WHERE user_id=? AND plan_id=?", (order["user_id"], order["plan_id"])
+            ).fetchone()
+        )
+        if not sub:
+            raise CheckoutError(404, "SUBSCRIPTION_NOT_FOUND", "Đơn chưa có gói")
+        sh = d * 86400
+        conn.execute(
+            "UPDATE subscriptions SET current_period_start=?, current_period_end=? WHERE id=?",
+            (_iso(_ts(sub["current_period_start"]) - sh), _iso(_ts(sub["current_period_end"]) - sh), sub["id"]),
+        )
+        conn.commit()
+        _audit(conn, admin_uid=admin_uid, action="test_shift_subscription", order=order, reason=r, detail={"days": d})
+        _refresh_entitlement(order["user_id"], reason="test_shift")
+        sub = _row(conn.execute("SELECT * FROM subscriptions WHERE id=?", (sub["id"],)).fetchone())
+        return {"ok": True, "subscription": sub, "non_prod_only": True}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# admin CK-11 / CK-12 wrappers
+# ---------------------------------------------------------------------------
+
+
+def admin_create_coupon(*, admin_uid: str, body: dict[str, Any]) -> dict[str, Any]:
+    r = _require_reason(body.get("reason"))
+    conn = _conn()
+    try:
+        row = cp.create_coupon(conn, admin_uid=admin_uid, body=body)
+        _audit(conn, admin_uid=admin_uid, action="coupon_create", order=None, reason=r,
+               detail={k: row.get(k) for k in ("code", "kind", "value", "max_redemptions", "plans", "cycles")})
+        return {"ok": True, "coupon": row}
+    finally:
+        conn.close()
+
+
+def admin_list_coupons() -> list[dict[str, Any]]:
+    conn = _conn()
+    try:
+        return cp.list_coupons(conn)
+    finally:
+        conn.close()
+
+
+def admin_set_coupon_active(*, admin_uid: str, code: str, active: bool, reason: str) -> dict[str, Any]:
+    r = _require_reason(reason)
+    conn = _conn()
+    try:
+        if not cp.set_coupon_active(conn, code, active):
+            raise CheckoutError(404, "COUPON_NOT_FOUND", "Không tìm thấy mã")
+        _audit(conn, admin_uid=admin_uid, action="coupon_activate" if active else "coupon_deactivate",
+               order=None, reason=r, detail={"code": cp.normalize_code(code)})
+        return {"ok": True, "code": cp.normalize_code(code), "active": bool(active)}
+    finally:
+        conn.close()
+
+
+def admin_experiment_stats() -> dict[str, Any]:
+    conn = _conn()
+    try:
+        return cp.experiment_stats(conn)
+    finally:
+        conn.close()

@@ -16,11 +16,18 @@ td,th{border-bottom:1px solid var(--border-default,#2F3D54);padding:6px;text-ali
 tr.clickable{cursor:pointer}
 pre{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;background:#0e1520;padding:6px;border-radius:6px}
 .err{color:#ff6b6b}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:12px}
 .card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:12px;margin:12px 0}
 </style>
 </head>
 <body class="welora-shell">
 <h1>Quản trị đơn hàng (CK-10)</h1>
+<!-- mục 9: 2FA (TOTP) bắt buộc trước mọi thao tác quản trị -->
+<div class="card" id="tfa">
+  <strong>Xác thực 2 lớp</strong> <span id="tfaState"></span>
+  <p><input id="tfaCode" inputmode="numeric" maxlength="8" placeholder="Mã 6 số từ app xác thực" autocomplete="one-time-code"/>
+    <button type="button" id="tfaBtn">Xác nhận</button> <button type="button" id="tfaOut">Khoá phiên</button></p>
+</div>
 <p><input id="q" placeholder="Mã đơn / email / số điện thoại / user_id" size="40"/> <button id="searchBtn" type="button">Tìm</button></p>
 <p class="err" id="err" hidden></p>
 <table id="results"><thead><tr><th>Mã đơn</th><th>Gói</th><th>Số tiền</th><th>Trạng thái</th><th>Tạo lúc</th></tr></thead><tbody></tbody></table>
@@ -37,8 +44,34 @@ pre{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;backgroun
   <p>
     <button type="button" id="grantBtn">Mở gói thủ công</button>
     <button type="button" id="refundReqBtn">Ghi nhận yêu cầu hoàn tiền</button>
-    <button type="button" id="refundDoneBtn">Đã chuyển trả (REFUNDED)</button>
+    <label><input type="checkbox" id="override"/> Ngoài điều kiện PAY-03 (ghi log)</label>
   </p>
+  <p>
+    <input id="bankRef" placeholder="Mã giao dịch chuyển trả (sao kê)" size="28"/>
+    <input id="refundAmt" inputmode="numeric" placeholder="Số tiền (mặc định = đã trả)" size="22"/>
+    <button type="button" id="refundDoneBtn">Đã chuyển trả (REFUNDED)</button>
+    <button type="button" id="refundExcessBtn">Hoàn phần thừa / trả 2 lần</button>
+  </p>
+  <p class="muted" id="testHooks">Non-prod (WELORA_CHECKOUT_TEST_HOOKS=1): <input id="shiftDays" inputmode="decimal" size="4" value="8"/> ngày
+    <button type="button" id="shiftBtn">Lùi kỳ gói (thử ân hạn)</button></p>
+</div>
+
+<div class="card">
+  <h2>Mã giảm giá (CK-11)</h2>
+  <p><input id="cCode" placeholder="MÃ" size="12"/>
+    <select id="cKind"><option value="percent">%</option><option value="fixed">VND</option></select>
+    <input id="cValue" inputmode="numeric" placeholder="Giá trị" size="8"/>
+    <input id="cPlans" placeholder="Gói (ACA,OS1…) trống = tất cả" size="22"/>
+    <input id="cMax" inputmode="numeric" placeholder="Số lượt" size="6"/>
+    <input id="cEnds" placeholder="Hết hạn ISO (tuỳ chọn)" size="20"/>
+    <button type="button" id="cCreate">Tạo mã</button> <button type="button" id="cList">Tải danh sách</button></p>
+  <table id="coupons"><thead><tr><th>Mã</th><th>Loại</th><th>Giá trị</th><th>Gói</th><th>Đã dùng / tối đa</th><th>Bật</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="card">
+  <h2>A/B giá Academy (CK-12) · Gia hạn (mục 7)</h2>
+  <p><button type="button" id="abBtn">Xem chuyển đổi A/B</button> <button type="button" id="renewRun">Chạy job nhắc hạn ngay</button></p>
+  <pre id="abOut"></pre>
 </div>
 
 <script>
@@ -95,6 +128,18 @@ pre{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;backgroun
       (d.audit || []).forEach(function (a) { tr(ta, [a.created_at, a.admin_user_id, a.action, a.reason]); });
     }).catch(function (e) { err(e.message); });
   }
+  function tfaStatus() {
+    api("GET", "/api/admin/v1/2fa/status").then(function (s) {
+      $("tfaState").textContent = !s.enrolled ? "· chưa cấu hình (WELORA_ADMIN_TOTP_SECRETS)" : (s.session ? "· đã xác thực" : "· cần nhập mã");
+    }).catch(function (e) { $("tfaState").textContent = "· " + e.message; });
+  }
+  $("tfaBtn").addEventListener("click", function () {
+    err("");
+    api("POST", "/api/admin/v1/2fa/verify", { code: $("tfaCode").value.trim() })
+      .then(function () { $("tfaCode").value = ""; tfaStatus(); })
+      .catch(function (e) { err(e.message); });
+  });
+  $("tfaOut").addEventListener("click", function () { api("POST", "/api/admin/v1/2fa/logout").then(tfaStatus).catch(function (e) { err(e.message); }); });
   function act(path, body) {
     if (!current) return;
     err("");
@@ -105,8 +150,51 @@ pre{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;backgroun
   $("searchBtn").addEventListener("click", search);
   $("q").addEventListener("keydown", function (e) { if (e.key === "Enter") search(); });
   $("grantBtn").addEventListener("click", function () { act("/grant", { reason: $("reason").value }); });
-  $("refundReqBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "request" }); });
-  $("refundDoneBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "complete" }); });
+  function amt() { var v = $("refundAmt").value.trim(); return v ? parseInt(v, 10) : null; }
+  $("refundReqBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "request", override: $("override").checked }); });
+  $("refundDoneBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "complete", bank_ref: $("bankRef").value.trim(), amount: amt() }); });
+  $("refundExcessBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "excess", bank_ref: $("bankRef").value.trim(), amount: amt() }); });
+  $("shiftBtn").addEventListener("click", function () {
+    if (!current) return;
+    api("POST", "/api/admin/v1/checkout/test/shift-subscription", { order_code: current.order_code, days: parseFloat($("shiftDays").value), reason: $("reason").value })
+      .then(function () { load(current.order_code); }).catch(function (e) { err(e.message); });
+  });
+  function listCoupons() {
+    api("GET", "/api/admin/v1/checkout/coupons").then(function (res) {
+      var tb = $("coupons").querySelector("tbody"); clear(tb);
+      (res.coupons || []).forEach(function (c) {
+        var r = document.createElement("tr");
+        [c.code, c.kind, c.value, (c.plans || []).join(",") || "tất cả", c.redeemed + " / " + (c.max_redemptions == null ? "∞" : c.max_redemptions), c.active ? "có" : "không"].forEach(function (x) {
+          var td = document.createElement("td"); td.textContent = String(x); r.appendChild(td);
+        });
+        var td = document.createElement("td"); var b = document.createElement("button"); b.type = "button";
+        b.textContent = c.active ? "Tắt" : "Bật";
+        b.addEventListener("click", function () {
+          api("POST", "/api/admin/v1/checkout/coupons/" + encodeURIComponent(c.code) + "/active", { active: !c.active, reason: $("reason").value || "Cập nhật trạng thái mã" })
+            .then(listCoupons).catch(function (e) { err(e.message); });
+        });
+        td.appendChild(b); r.appendChild(td); tb.appendChild(r);
+      });
+    }).catch(function (e) { err(e.message); });
+  }
+  $("cList").addEventListener("click", listCoupons);
+  $("cCreate").addEventListener("click", function () {
+    err("");
+    var plans = $("cPlans").value.split(",").map(function (x) { return x.trim().toUpperCase(); }).filter(Boolean);
+    var mx = $("cMax").value.trim();
+    api("POST", "/api/admin/v1/checkout/coupons", {
+      code: $("cCode").value.trim(), kind: $("cKind").value, value: parseInt($("cValue").value, 10) || 0,
+      plans: plans, max_redemptions: mx ? parseInt(mx, 10) : null, ends_at: $("cEnds").value.trim() || null,
+      reason: $("reason").value || "Tạo mã giảm giá"
+    }).then(listCoupons).catch(function (e) { err(e.message); });
+  });
+  $("abBtn").addEventListener("click", function () {
+    api("GET", "/api/admin/v1/checkout/experiments/aca_price_ab").then(function (r) { $("abOut").textContent = JSON.stringify(r, null, 2); }).catch(function (e) { err(e.message); });
+  });
+  $("renewRun").addEventListener("click", function () {
+    api("POST", "/api/admin/v1/checkout/renewal/run", {}).then(function (r) { $("abOut").textContent = JSON.stringify(r, null, 2); }).catch(function (e) { err(e.message); });
+  });
+  tfaStatus();
 })();
 </script>
 </body>

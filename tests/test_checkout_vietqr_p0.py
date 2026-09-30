@@ -34,7 +34,10 @@ ENV_KEYS = (
     "WELORA_ENV", "WELORA_STORE", "WELORA_DB_URL", "WELORA_CHECKOUT_ENABLED", "PAYMENT_PROVIDER",
     "MOCK_PAYMENT_CHECKSUM_KEY", "WELORA_MAIL_SYNC", "PAYOS_CLIENT_ID", "PAYOS_API_KEY",
     "PAYOS_CHECKSUM_KEY", "PAYOS_DESCRIPTION_MAX_LEN", "WELORA_PUBLIC_BASE_URL", "WELORA_GUEST_DEMO",
+    "WELORA_ADMIN_TOTP_SECRETS",
 )
+# P1 (mục 9): admin APIs need a TOTP session — obviously fake test secret.
+FAKE_TOTP_SECRET = "JBSWY3DPEHPK3PXPFAKEFAKEFAKEFAKE"
 
 
 class _Base(unittest.TestCase):
@@ -346,7 +349,13 @@ class TestCheckoutVietQR(_Base):
             conn.commit()
         finally:
             conn.close()
-        return a["user_id"], {"Authorization": f"Bearer {a['token']}"}
+        from welora import admin_2fa
+
+        os.environ["WELORA_ADMIN_TOTP_SECRETS"] = f"{a['user_id']}:{FAKE_TOTP_SECRET}"
+        ah = {"Authorization": f"Bearer {a['token']}"}
+        r = self.client.post("/api/admin/v1/2fa/verify", json={"code": admin_2fa.totp(FAKE_TOTP_SECRET)}, headers=ah)
+        assert r.status_code == 200, r.text
+        return a["user_id"], ah
 
     def test_admin_guard(self):
         self.assertEqual(self.client.get("/api/admin/v1/checkout/orders?q=1").status_code, 401)

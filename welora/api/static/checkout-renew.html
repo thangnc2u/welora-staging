@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="referrer" content="no-referrer"/>
+<title>Welora · Gia hạn</title>
+<!-- No auth-gate here: the one-tap renewal magic link (mục 7) logs the user in.
+     The token is in the URL fragment (#t=…), never sent to the server in the URL. -->
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px;max-width:560px;margin-inline:auto}
+a{color:var(--link,#E8C86A);font-weight:600}
+.err{color:#ff6b6b}
+</style>
+</head>
+<body class="welora-shell">
+<h1>Gia hạn gói</h1>
+<p id="msg" aria-live="polite">Đang mở mã thanh toán…</p>
+<p class="err" id="err" hidden role="alert"></p>
+<p><a href="/app/login">Đăng nhập</a> · <a href="/app/my-plan">Gói của tôi</a></p>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var m = /(?:^|[#&])t=([^&]+)/.exec(location.hash || "");
+  var tok = m ? decodeURIComponent(m[1]) : "";
+  try { history.replaceState(null, "", location.pathname); } catch (_e) {}
+  function fail(t) { $("msg").hidden = true; $("err").hidden = false; $("err").textContent = t; }
+  if (!tok) { fail("Link gia hạn không hợp lệ."); return; }
+  fetch("/api/checkout/v1/renew/magic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: tok }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) { var d = res.j.detail || res.j || {}; fail(d.message || "Link gia hạn không dùng được."); return; }
+      try { localStorage.setItem("welora_token", res.j.token); } catch (_e) {}
+      if (res.j.order && res.j.order.order_code) {
+        location.replace("/app/checkout?orderCode=" + encodeURIComponent(res.j.order.order_code));
+      } else {
+        location.replace("/app/checkout?plan=" + encodeURIComponent(res.j.plan_id) + "&cycle=" + encodeURIComponent(res.j.billing_cycle));
+      }
+    })
+    .catch(function () { fail("Không kết nối được. Thử lại sau."); });
+})();
+</script>
+</body>
+</html>

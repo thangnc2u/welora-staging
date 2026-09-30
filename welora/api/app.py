@@ -6,9 +6,11 @@ from pathlib import Path
 import re
 from typing import Any, Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -27,6 +29,7 @@ from welora import os_categories as categories_svc
 from welora import content_map as content_svc
 from welora import academy as academy_svc
 from welora import entitlements as entitlements_svc
+from welora import checkout as checkout_svc
 from welora import core_constitution as core_const_svc
 from welora.api.security_headers import SecurityHeadersMiddleware
 
@@ -343,6 +346,94 @@ class EntitlementEventBody(BaseModel):
     payload: Optional[dict] = None
 
 
+class CheckoutQuoteBody(BaseModel):
+    plan_id: str = Field(..., min_length=1)
+    billing_cycle: str = "month"
+
+
+class CheckoutOrderBody(BaseModel):
+    plan_id: str = Field(..., min_length=1)
+    billing_cycle: str = "month"
+    agree_terms: bool = False
+    # CK-04: accepted only so we can prove it is IGNORED — server prices only.
+    amount: Optional[Any] = None
+
+
+class AdminReasonBody(BaseModel):
+    reason: str = ""
+
+
+class AdminRefundBody(BaseModel):
+    reason: str = ""
+    stage: str = "request"
+
+
+class AdminConfirmWebhookBody(BaseModel):
+    webhook_url: str = Field(..., min_length=8)
+
+
+def _bearer_uid(authorization: Optional[str]) -> Optional[str]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization[7:].strip()
+    if not token:
+        return None
+    try:
+        return auth_svc.resolve_token(token)
+    except Exception:
+        return None
+
+
+def _require_login(authorization: Optional[str]) -> str:
+    uid = _bearer_uid(authorization)
+    if not uid:
+        raise HTTPException(
+            status_code=401,
+            detail={"error_code": "LOGIN_REQUIRED", "message": "Cần đăng nhập trước khi thanh toán"},
+        )
+    return uid
+
+
+def _require_admin(authorization: Optional[str]) -> str:
+    """CK-10 guard — bearer token whose users.role ∈ auth.ADMIN_ROLES (fail-closed)."""
+    uid = _bearer_uid(authorization)
+    if not uid:
+        raise HTTPException(status_code=401, detail={"error_code": "ADMIN_LOGIN_REQUIRED"})
+    role = ""
+    try:
+        from welora.db.connection import get_connection
+
+        conn = get_connection(None)
+        try:
+            row = conn.execute("SELECT role FROM users WHERE user_id=?", (uid,)).fetchone()
+            role = ((row["role"] if row else "") or "").strip().lower()
+        finally:
+            conn.close()
+    except Exception:
+        role = ""
+    if role not in auth_svc.ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail={"error_code": "ADMIN_ONLY"})
+    return uid
+
+
+def _checkout_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except checkout_svc.CheckoutError as e:
+        raise HTTPException(status_code=e.status, detail=e.body())
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Reconcile job (every 5 min) runs in THIS process — no extra Render service.
+    if checkout_svc.checkout_enabled():
+        checkout_svc.start_reconcile_loop()
+    try:
+        yield
+    finally:
+        checkout_svc.stop_reconcile_loop()
+
+
 class EntitlementStudentStartBody(BaseModel):
     student_id: str = Field(..., min_length=4)
     verification_method: str = "edu_vn_email_otp"
@@ -360,7 +451,7 @@ class EntitlementPlanChangePreviewBody(BaseModel):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Welora API", version="0.2.0")
+    app = FastAPI(title="Welora API", version="0.2.0", lifespan=_lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(SecurityHeadersMiddleware)
     static_dir = Path(__file__).resolve().parent / "static"
@@ -533,6 +624,19 @@ def create_app() -> FastAPI:
     @app.get("/app/pricing/", include_in_schema=False)
     def app_pricing_ui() -> FileResponse:
         return _serve_app_html(static_dir, "pricing.html")
+
+    # --- Checkout VietQR P0 pages (CK-01/03/05/06) · returnUrl only redirects ---
+    @app.get("/app/checkout", include_in_schema=False)
+    @app.get("/app/checkout/", include_in_schema=False)
+    @app.get("/app/checkout/return", include_in_schema=False)
+    @app.get("/app/checkout/cancel", include_in_schema=False)
+    def checkout_ui() -> HTMLResponse:
+        """Static page only — never grants (CK-08). Status comes from server polling."""
+        return _serve_app_html(static_dir, "checkout.html")
+
+    @app.get("/app/admin/checkout", include_in_schema=False)
+    def admin_checkout_ui() -> HTMLResponse:
+        return _serve_app_html(static_dir, "admin-checkout.html")
 
     @app.get("/health", tags=["system"])
     def health() -> dict:
@@ -1122,6 +1226,107 @@ def create_app() -> FastAPI:
     def entitlements_lifetime() -> dict:
         """P7 — Founding Lifetime status (flag OFF — not for sale)."""
         return entitlements_svc.lifetime_purchase_blocked()
+
+    # --- Checkout VietQR P0 API (CK-01…CK-10) ---
+    @app.get("/api/checkout/v1/config", tags=["checkout"])
+    def checkout_config() -> dict:
+        return checkout_svc.checkout_config()
+
+    @app.post("/api/checkout/v1/quote", tags=["checkout"])
+    def checkout_quote(body: CheckoutQuoteBody, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        _require_login(authorization)
+        return _checkout_call(checkout_svc.quote, body.plan_id, body.billing_cycle)
+
+    @app.post("/api/checkout/v1/orders", tags=["checkout"])
+    def checkout_create_order(body: CheckoutOrderBody, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        if not body.agree_terms:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "TERMS_REQUIRED", "message": "Cần đồng ý Điều khoản và Chính sách hoàn tiền"},
+            )
+        return _checkout_call(
+            checkout_svc.create_order,
+            user_id=uid, plan_id=body.plan_id, billing_cycle=body.billing_cycle, client_amount=body.amount,
+        )
+
+    @app.get("/api/checkout/v1/orders/{order_code}", tags=["checkout"])
+    def checkout_get_order(order_code: int, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.get_order_for_user, uid, order_code)
+
+    @app.get("/api/checkout/v1/orders/{order_code}/qr.svg", tags=["checkout"])
+    def checkout_order_qr(order_code: int, authorization: Optional[str] = Header(None)) -> Response:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        svg = _checkout_call(checkout_svc.qr_svg, uid, order_code)
+        return Response(content=svg, media_type="image/svg+xml")
+
+    @app.post("/api/checkout/v1/orders/{order_code}/cancel", tags=["checkout"])
+    def checkout_cancel_order(order_code: int, authorization: Optional[str] = Header(None)) -> dict:
+        _checkout_call(checkout_svc._require_enabled)
+        uid = _require_login(authorization)
+        return _checkout_call(checkout_svc.cancel_order_for_user, uid, order_code)
+
+    @app.post("/api/checkout/v1/webhook/payos", tags=["checkout"])
+    async def checkout_webhook(request: Request) -> JSONResponse:
+        """payOS webhook — verify signature → payment_events → idempotent → PAID/UNDERPAID."""
+        if not checkout_svc.checkout_enabled():
+            return JSONResponse(status_code=403, content={"error_code": "CHECKOUT_DISABLED"})
+        try:
+            payload = await request.json()
+        except Exception:
+            return JSONResponse(status_code=400, content={"ok": False, "error_code": "INVALID_JSON"})
+        try:
+            code, out = checkout_svc.handle_webhook(payload)
+        except checkout_svc.CheckoutError as e:
+            return JSONResponse(status_code=e.status, content=e.body())
+        return JSONResponse(status_code=code, content=out)
+
+    # --- Admin CK-10 (role ∈ ADMIN_ROLES; every manual action audit-logged) ---
+    @app.get("/api/admin/v1/checkout/orders", tags=["admin"])
+    def admin_checkout_search(q: str = Query("", max_length=120), authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin(authorization)
+        return {"orders": _checkout_call(checkout_svc.admin_search, q)}
+
+    @app.get("/api/admin/v1/checkout/orders/{order_code}", tags=["admin"])
+    def admin_checkout_detail(order_code: int, authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin(authorization)
+        return _checkout_call(checkout_svc.admin_order_detail, order_code)
+
+    @app.post("/api/admin/v1/checkout/orders/{order_code}/grant", tags=["admin"])
+    def admin_checkout_grant(order_code: int, body: AdminReasonBody, authorization: Optional[str] = Header(None)) -> dict:
+        admin_uid = _require_admin(authorization)
+        return _checkout_call(
+            checkout_svc.admin_manual_grant, admin_uid=admin_uid, order_code=order_code, reason=body.reason,
+        )
+
+    @app.post("/api/admin/v1/checkout/orders/{order_code}/refund", tags=["admin"])
+    def admin_checkout_refund(order_code: int, body: AdminRefundBody, authorization: Optional[str] = Header(None)) -> dict:
+        admin_uid = _require_admin(authorization)
+        return _checkout_call(
+            checkout_svc.admin_refund, admin_uid=admin_uid, order_code=order_code,
+            reason=body.reason, stage=body.stage,
+        )
+
+    @app.post("/api/admin/v1/checkout/reconcile", tags=["admin"])
+    def admin_checkout_reconcile(authorization: Optional[str] = Header(None)) -> dict:
+        _require_admin(authorization)
+        return checkout_svc.reconcile_once()
+
+    @app.post("/api/admin/v1/checkout/confirm-webhook", tags=["admin"])
+    def admin_checkout_confirm_webhook(body: AdminConfirmWebhookBody, authorization: Optional[str] = Header(None)) -> dict:
+        """Run once per environment/channel: registers webhook URL with payOS."""
+        _require_admin(authorization)
+        from welora.payments import ProviderError, get_provider
+
+        try:
+            return get_provider().confirm_webhook(body.webhook_url)
+        except (ProviderError, NotImplementedError) as e:
+            raise HTTPException(status_code=502, detail={"error_code": "CONFIRM_WEBHOOK_FAILED", "message": str(e)})
 
     @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
     def entitlements_events(body: EntitlementEventBody) -> dict:

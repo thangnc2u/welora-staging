@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Quản trị đơn hàng</title>
+<script src="/static/auth-gate.js"></script>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px;max-width:900px;margin-inline:auto}
+input,select,textarea{padding:8px;border-radius:8px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-surface,#1A2536);color:inherit;font-size:13px}
+button{padding:8px 12px;border-radius:8px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-subtle,#162033);color:inherit;font-weight:700;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+td,th{border-bottom:1px solid var(--border-default,#2F3D54);padding:6px;text-align:left;vertical-align:top}
+tr.clickable{cursor:pointer}
+pre{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;background:#0e1520;padding:6px;border-radius:6px}
+.err{color:#ff6b6b}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:12px;margin:12px 0}
+</style>
+</head>
+<body class="welora-shell">
+<h1>Quản trị đơn hàng (CK-10)</h1>
+<p><input id="q" placeholder="Mã đơn / email / số điện thoại / user_id" size="40"/> <button id="searchBtn" type="button">Tìm</button></p>
+<p class="err" id="err" hidden></p>
+<table id="results"><thead><tr><th>Mã đơn</th><th>Gói</th><th>Số tiền</th><th>Trạng thái</th><th>Tạo lúc</th></tr></thead><tbody></tbody></table>
+
+<div class="card" id="detail" hidden>
+  <h2 id="dTitle"></h2>
+  <div id="dOrder"></div>
+  <h3>Lịch sử sự kiện</h3>
+  <table id="dEvents"><thead><tr><th>Lúc</th><th>Loại</th><th>Ref</th><th>Số tiền</th><th>Chữ ký</th><th>Payload</th></tr></thead><tbody></tbody></table>
+  <h3>Nhật ký thao tác</h3>
+  <table id="dAudit"><thead><tr><th>Lúc</th><th>Admin</th><th>Hành động</th><th>Lý do</th></tr></thead><tbody></tbody></table>
+  <h3>Thao tác thủ công (bắt buộc lý do)</h3>
+  <p><textarea id="reason" rows="2" cols="60" placeholder="Lý do (bắt buộc, tối thiểu 5 ký tự)"></textarea></p>
+  <p>
+    <button type="button" id="grantBtn">Mở gói thủ công</button>
+    <button type="button" id="refundReqBtn">Ghi nhận yêu cầu hoàn tiền</button>
+    <button type="button" id="refundDoneBtn">Đã chuyển trả (REFUNDED)</button>
+  </p>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var current = null;
+  function token() { try { return localStorage.getItem("welora_token") || ""; } catch (_e) { return ""; } }
+  function api(method, url, body) {
+    var h = { Authorization: "Bearer " + token() };
+    if (body) h["Content-Type"] = "application/json";
+    return fetch(url, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { var d = j.detail || j; throw new Error((d && (d.message || d.error_code)) || ("HTTP " + r.status)); }
+        return j;
+      });
+    });
+  }
+  function err(m) { $("err").hidden = !m; $("err").textContent = m || ""; }
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function tr(tbody, cells, onClick) {
+    var r = document.createElement("tr");
+    cells.forEach(function (c) {
+      var td = document.createElement("td");
+      if (c && c.pre) { var p = document.createElement("pre"); p.textContent = c.pre; td.appendChild(p); }
+      else td.textContent = c == null ? "" : String(c);
+      r.appendChild(td);
+    });
+    if (onClick) { r.className = "clickable"; r.addEventListener("click", onClick); }
+    tbody.appendChild(r);
+  }
+  function search() {
+    err("");
+    api("GET", "/api/admin/v1/checkout/orders?q=" + encodeURIComponent($("q").value.trim()))
+      .then(function (res) {
+        var tb = $("results").querySelector("tbody"); clear(tb);
+        (res.orders || []).forEach(function (o) {
+          tr(tb, [o.order_code, o.plan_id + " · " + o.billing_cycle, o.amount, o.status, o.created_at], function () { load(o.order_code); });
+        });
+      })
+      .catch(function (e) { err(e.message); });
+  }
+  function load(code) {
+    api("GET", "/api/admin/v1/checkout/orders/" + code).then(function (d) {
+      current = d.order;
+      $("detail").hidden = false;
+      $("dTitle").textContent = "Đơn " + d.order.order_code + " · " + d.order.status;
+      var o = $("dOrder"); clear(o);
+      var pre = document.createElement("pre"); pre.textContent = JSON.stringify({ order: d.order, subscription: d.subscription }, null, 2); o.appendChild(pre);
+      var te = $("dEvents").querySelector("tbody"); clear(te);
+      (d.events || []).forEach(function (e) {
+        tr(te, [e.received_at, e.event_type, e.provider_txn_ref, e.amount, e.signature_valid ? "hợp lệ" : "SAI", { pre: JSON.stringify(e.raw_payload, null, 1) }]);
+      });
+      var ta = $("dAudit").querySelector("tbody"); clear(ta);
+      (d.audit || []).forEach(function (a) { tr(ta, [a.created_at, a.admin_user_id, a.action, a.reason]); });
+    }).catch(function (e) { err(e.message); });
+  }
+  function act(path, body) {
+    if (!current) return;
+    err("");
+    api("POST", "/api/admin/v1/checkout/orders/" + current.order_code + path, body)
+      .then(function () { load(current.order_code); })
+      .catch(function (e) { err(e.message); });
+  }
+  $("searchBtn").addEventListener("click", search);
+  $("q").addEventListener("keydown", function (e) { if (e.key === "Enter") search(); });
+  $("grantBtn").addEventListener("click", function () { act("/grant", { reason: $("reason").value }); });
+  $("refundReqBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "request" }); });
+  $("refundDoneBtn").addEventListener("click", function () { act("/refund", { reason: $("reason").value, stage: "complete" }); });
+})();
+</script>
+</body>
+</html>

@@ -24,6 +24,7 @@ LISTED_PLANS = frozenset({"FREE", "ACA", "ACA_SV", "OS1", "OS2", "OS2G", "OS3G"}
 OS_PLANS = frozenset({"OS1", "OS2", "OS2G", "OS3G"})
 ACADEMY_PLANS = frozenset({"ACA", "ACA_SV"})
 DEFAULT_PLAN = "FREE"
+GRACE_DAYS = 7  # PAY-04
 OS_ENTITLEMENT_PREFIXES = ("os.",)
 
 _lock = threading.RLock()
@@ -96,6 +97,17 @@ def _lifetime_enabled() -> bool:
     return bool((mod.get("lifetime") or {}).get("enabled"))
 
 
+def checkout_runtime_enabled() -> bool:
+    """Checkout VietQR runtime switch.
+
+    Config ``checkout_enabled`` is always forced False (default / production).
+    Only the env ``WELORA_CHECKOUT_ENABLED=1`` opens checkout for a non-prod
+    test channel; unset → checkout + webhook endpoints answer 403.
+    """
+    raw = (os.environ.get("WELORA_CHECKOUT_ENABLED") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def get_pricing_public() -> dict[str, Any]:
     """Public pricing payload (UI must fetch this — no hard-coded amounts)."""
     mod = load_pricing_module()
@@ -114,7 +126,7 @@ def get_pricing_public() -> dict[str, Any]:
     return {
         "currency": mod.get("currency") or "VND",
         "plans": plans_out,
-        "checkout_enabled": False,
+        "checkout_enabled": checkout_runtime_enabled(),
         "seat_addon": copy.deepcopy(mod.get("seat_addon") or {}),
         "lifetime": {
             "enabled": False,
@@ -137,7 +149,7 @@ def get_checkout_config() -> dict[str, Any]:
     mod = load_pricing_module()
     providers = list(mod.get("checkout_providers") or ["momo", "zalopay", "vnpay", "vietqr"])
     return {
-        "checkout_enabled": False,
+        "checkout_enabled": checkout_runtime_enabled(),
         "providers": providers,
         "banner": mod.get("checkout_banner") or "Sắp mở thanh toán",
     }
@@ -159,6 +171,15 @@ def _price_amount(plan_code: str, interval: str) -> Optional[int]:
         if pr.get("interval") == interval:
             return int(pr.get("amount") or 0)
     return None
+
+
+def price_amount(plan_code: str, interval: str) -> Optional[int]:
+    """Server-side price (VND int) from pricing_module.json — never from client."""
+    return _price_amount(plan_code, interval)
+
+
+def plan_by_code(code: str) -> Optional[dict[str, Any]]:
+    return _plan_by_code(code)
 
 
 def _entitlement_keys(plan: dict[str, Any]) -> list[str]:
@@ -204,11 +225,25 @@ def get_me(user_id: Optional[str] = None) -> dict[str, Any]:
     uid = (user_id or "").strip() or "anonymous"
     with _lock:
         state = copy.deepcopy(_user_state.get(uid) or {})
+    if not state and uid != "anonymous" and _subscription_resolver is not None:
+        try:
+            restored = _subscription_resolver(uid)
+        except Exception:
+            restored = None
+        if restored:
+            state = copy.deepcopy(restored)
 
     plan_code = state.get("plan") or DEFAULT_PLAN
     trial = state.get("trial")
     student = state.get("student")
     now = time.time()
+
+    # Paid subscription (checkout): past period end + 7-day grace (PAY-04) → FREE
+    sub = state.get("subscription") or {}
+    if sub.get("current_period_end"):
+        end = float(sub.get("current_period_end") or 0)
+        if sub.get("status") == "expired" or now > end + GRACE_DAYS * 86400:
+            plan_code = DEFAULT_PLAN
 
     if trial and trial.get("status") == "active":
         ends = float(trial.get("ends_at") or 0)
@@ -593,7 +628,7 @@ def lifetime_purchase_blocked() -> dict[str, Any]:
         "early_bird_discount_pct": lt.get("early_bird_discount_pct") or 30,
         "banner": lt.get("banner") or "Founding Lifetime sắp mở (chưa bán)",
         "checkout_enabled": False,
-        "message": "Lifetimeetime flag OFF — wire model/config only, không bán thật",
+        "message": "Lifetime flag OFF — wire model/config only, không bán thật",
     }
 
 
@@ -657,6 +692,70 @@ def list_events(limit: int = 50) -> list[dict[str, Any]]:
         return copy.deepcopy(_events[-limit:])
 
 
+# --- Checkout grant hooks (CK-07) -------------------------------------------
+_subscription_resolver: Optional[Any] = None
+
+
+def register_subscription_resolver(fn: Optional[Any]) -> None:
+    """Checkout registers a DB lookup so paid plans survive process restarts."""
+    global _subscription_resolver
+    _subscription_resolver = fn
+
+
+def grant_plan(
+    user_id: str,
+    plan_code: str,
+    *,
+    period_start: float,
+    period_end: float,
+    source: str,
+    order_code: Optional[int] = None,
+    is_preorder: bool = False,
+) -> dict[str, Any]:
+    """Grant a paid plan. Founding Family pre-order activates OS1 for owner."""
+    uid = (user_id or "").strip()
+    if not uid:
+        raise ValueError("user_id required")
+    active_plan = plan_code
+    if is_preorder:
+        ff = founding_family_status(plan_code)
+        active_plan = ff.get("activates_as") or "OS1"
+    subscription = {
+        "plan_id": plan_code,
+        "active_plan": active_plan,
+        "status": "active",
+        "current_period_start": period_start,
+        "current_period_end": period_end,
+        "source": source,
+        "order_code": order_code,
+        "is_preorder": bool(is_preorder),
+    }
+    with _lock:
+        prev = _user_state.get(uid) or {}
+        _user_state[uid] = {
+            **prev,
+            "plan": active_plan,
+            "subscription": subscription,
+            "trial": None,
+        }
+    emit_event(
+        "subscription_granted",
+        {"user_id": uid, "plan": plan_code, "source": source, "order_code": order_code},
+    )
+    return subscription
+
+
+def revoke_plan(user_id: str, *, reason: str = "") -> None:
+    uid = (user_id or "").strip()
+    with _lock:
+        prev = _user_state.get(uid) or {}
+        sub = dict(prev.get("subscription") or {})
+        if sub:
+            sub["status"] = "expired"
+        _user_state[uid] = {**prev, "plan": DEFAULT_PLAN, "subscription": sub or None}
+    emit_event("subscription_revoked", {"user_id": uid, "reason": reason})
+
+
 def reset_state_for_tests() -> None:
     global _module_cache
     with _lock:
@@ -668,7 +767,7 @@ def reset_state_for_tests() -> None:
 def health_fields() -> dict[str, Any]:
     """Optional health extension — does not alter gate_months / hard_deny."""
     return {
-        "checkout_enabled": False,
+        "checkout_enabled": checkout_runtime_enabled(),
         "sellable_plans": sorted(LISTED_PLANS),
         "pricing_module": True,
         "lifetime_enabled": False,

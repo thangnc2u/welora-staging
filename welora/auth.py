@@ -64,6 +64,7 @@ def login_or_register_device(
         ).fetchone()
         created = False
         if row:
+            _admin_login_gate(conn, row["user_id"], via="device_login")
             user_id = row["user_id"]
             name = row["display_name"]
         else:
@@ -175,6 +176,7 @@ def verify_otp(
                 "SELECT user_id FROM users WHERE device_id=?", (device_key,)
             ).fetchone()
             if existing:
+                _admin_login_gate(conn, existing["user_id"], via="phone_otp")
                 user_id = existing["user_id"]
             else:
                 conn.execute(
@@ -195,6 +197,27 @@ def verify_otp(
         return {"user_id": user_id, "token": token, "kind": "otp", "created": False}
     finally:
         conn.close()
+
+
+def _admin_login_gate(conn, user_id: str, *, via: str) -> str:
+    """Admin accounts sign in by email OTP only (WELORA_ADMIN_EMAILS) — never device / phone OTP / password.
+
+    An admin-role user whose email is no longer listed is demoted here (audited)
+    and continues as a normal user; a still-listed admin is refused on this path.
+    """
+    row = conn.execute(
+        "SELECT user_id, email, role, email_verified_at FROM users WHERE user_id=?", (user_id,)
+    ).fetchone()
+    role = ((row["role"] if row else None) or "guest").strip().lower()
+    if role not in ADMIN_ROLES:
+        return role
+    from welora import admin_bootstrap
+
+    role = admin_bootstrap.sync_role(conn, row, via=via)
+    conn.commit()
+    if role in ADMIN_ROLES:
+        raise PermissionError("tài khoản quản trị chỉ đăng nhập bằng mã OTP email")
+    return role
 
 
 def resolve_token(token: str, *, url: str | None = None) -> Optional[str]:
@@ -244,6 +267,8 @@ def service_device_login(body: dict) -> tuple[int, dict]:
             display_name=body.get("display_name"),
         )
         return 200 if not out["created"] else 201, out
+    except PermissionError as e:
+        return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except ValueError as e:
         return 400, {"error": str(e)}
 
@@ -260,6 +285,8 @@ def service_otp_verify(body: dict) -> tuple[int, dict]:
     try:
         out = verify_otp(body.get("challenge_id") or "", body.get("code") or "")
         return 200, out
+    except PermissionError as e:
+        return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except KeyError:
         return 404, {"error": "challenge not found"}
     except ValueError as e:
@@ -480,6 +507,9 @@ def login_guest(
         if not row or not row["password_hash"]:
             raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
         role = (row["role"] or "guest").strip().lower()
+        if role in ADMIN_ROLES:
+            # de-listed admin → demoted (audited) and continues as guest; listed admin → refused
+            role = _admin_login_gate(conn, row["user_id"], via="password_login")
         if role in ADMIN_ROLES or role not in GUEST_ROLES:
             # Fail-closed: never allow password path into elevated roles
             raise PermissionError("đăng nhập bị từ chối (role)")
@@ -487,7 +517,7 @@ def login_guest(
             raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
         token = _issue_token(conn, row["user_id"], "password")
         conn.commit()
-        pub = _user_row_public(row)
+        pub = {**_user_row_public(row), "role": role}  # role after a possible de-list demotion
         return {
             **pub,
             "token": token,
@@ -781,3 +811,26 @@ def service_me(token: str) -> tuple[int, dict]:  # type: ignore[no-redef]
     if not user:
         return 401, {"error": "invalid or expired token"}
     return 200, user
+
+
+# ---------------------------------------------------------------------------
+# Admin bootstrap — email OTP (WELORA_ADMIN_EMAILS); see welora/admin_bootstrap.py
+# ---------------------------------------------------------------------------
+
+
+def service_email_otp_request(body: dict) -> tuple[int, dict]:
+    from welora import admin_bootstrap
+
+    try:
+        return 200, admin_bootstrap.request_email_otp(body.get("email") or "")
+    except ValueError as e:
+        return 400, {"error": str(e)}
+
+
+def service_email_otp_verify(body: dict) -> tuple[int, dict]:
+    from welora import admin_bootstrap
+
+    try:
+        return 200, admin_bootstrap.verify_email_otp(body.get("challenge_id") or "", body.get("code") or "")
+    except ValueError as e:
+        return 400, {"error": str(e)}

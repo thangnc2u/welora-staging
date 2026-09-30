@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Welora · Đăng nhập quản trị</title>
+<script src="/static/auth-gate.js"></script>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px;max-width:480px;margin-inline:auto}
+input{padding:10px;border-radius:8px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-surface,#1A2536);color:inherit;font-size:14px;width:100%;box-sizing:border-box;margin:6px 0}
+button{padding:10px 14px;border-radius:10px;border:0;background:var(--link,#E8C86A);color:#121A28;font-weight:800;cursor:pointer}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:16px;margin:12px 0}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.err{color:#ff6b6b;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Đăng nhập quản trị</h1>
+<p class="muted">Chỉ email trong danh sách quản trị (WELORA_ADMIN_EMAILS) nhận được mã. Không dùng mật khẩu.
+  Sau khi đăng nhập, trang quản trị còn yêu cầu mã 2FA từ app xác thực.</p>
+<section class="card" id="stepEmail">
+  <label for="email">Email quản trị</label>
+  <input id="email" type="email" autocomplete="email" placeholder="ban@vi-du.vn"/>
+  <button type="button" id="sendBtn">Gửi mã</button>
+</section>
+<section class="card" id="stepCode" hidden>
+  <p class="muted" id="sentMsg" role="status"></p>
+  <label for="code">Mã 6 số trong email</label>
+  <input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/>
+  <button type="button" id="verifyBtn">Đăng nhập</button>
+</section>
+<p class="err" id="err" role="alert" hidden></p>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var challenge = "";
+  function err(m) { $("err").hidden = !m; $("err").textContent = m || ""; }
+  function post(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) { var d = j.detail || j; throw new Error((typeof d === "string" ? d : (d && (d.error || d.message))) || ("HTTP " + r.status)); }
+          return j;
+        });
+      });
+  }
+  $("sendBtn").addEventListener("click", function () {
+    err("");
+    post("/auth/email-otp/request", { email: $("email").value.trim() }).then(function (j) {
+      challenge = j.challenge_id || "";
+      $("sentMsg").textContent = j.message || "";
+      $("stepCode").hidden = false;
+      $("code").focus();
+    }).catch(function (e) { err(e.message); });
+  });
+  $("verifyBtn").addEventListener("click", function () {
+    err("");
+    post("/auth/email-otp/verify", { challenge_id: challenge, code: $("code").value.trim() }).then(function (j) {
+      try { localStorage.setItem("welora_token", j.token); } catch (_e) { /* storage blocked */ }
+      if (!j.admin) { err("Email này không có quyền quản trị."); return; }
+      location.replace("/app/admin/checkout");
+    }).catch(function (e) { err(e.message); });
+  });
+})();
+</script>
+</body>
+</html>

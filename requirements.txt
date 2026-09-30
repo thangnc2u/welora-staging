@@ -16,4 +16,5 @@ annotated-types==0.7.0
 qrcode==8.2
 # PAY-05 Web Push (RFC 8291 ECDH/HKDF/AES-GCM + VAPID ES256) — abi3 manylinux wheels, no Rust build
 cryptography==44.0.0
-# Optional Postgres (P2-E1): pip install -r requirements-postgres.txt
+# Durable staging DB: WELORA_DB_URL=postgresql://… (Neon / Render Postgres) — binary wheels (cp311 manylinux), no build
+psycopg[binary]==3.2.4

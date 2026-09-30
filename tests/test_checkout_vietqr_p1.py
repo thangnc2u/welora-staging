@@ -16,6 +16,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._db_target import db_env
+
 from welora import academy, admin_2fa
 from welora import auth as auth_svc
 from welora import budget
@@ -50,7 +52,7 @@ class _Base(unittest.TestCase):
             os.environ.pop(k, None)
         self.tmp = tempfile.mkdtemp(prefix="welora-ck1-")
         os.environ.update({
-            "WELORA_ENV": "staging", "WELORA_STORE": "sqlite", "WELORA_DB_URL": f"sqlite:///{self.tmp}/ck.db",
+            "WELORA_ENV": "staging", **db_env(self.tmp),  # sqlite (default) or WELORA_TEST_POSTGRES_URL
             "WELORA_GUEST_DEMO": "0", "PAYMENT_PROVIDER": "mock", "MOCK_PAYMENT_CHECKSUM_KEY": FAKE_CHECKSUM,
             "WELORA_MAIL_SYNC": "1", "WELORA_PUBLIC_BASE_URL": "https://welora-test.invalid",
             "WELORA_CHECKOUT_ENABLED": "1",
@@ -674,7 +676,14 @@ class TestAdmin2FA(_Base):
         self.admin()
         conn = get_connection(None)
         try:
-            dump = "\n".join(conn.iterdump())
+            if hasattr(conn, "iterdump"):  # sqlite
+                dump = "\n".join(conn.iterdump())
+            else:  # postgres (WELORA_TEST_POSTGRES_URL): every row of every table as text
+                tables = [r["table_name"] for r in conn.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema='public'").fetchall()]
+                dump = "\n".join(
+                    str(dict(r)) for t in tables for r in conn.execute(f'SELECT * FROM "{t}"').fetchall()
+                )
         finally:
             conn.close()
         self.assertNotIn(FAKE_TOTP, dump)

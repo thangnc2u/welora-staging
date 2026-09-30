@@ -27,8 +27,11 @@ services:
         value: "1"
       - key: WELORA_STORE
         value: sqlite
+      # Durable data: set in the Render Dashboard to a Postgres URL (Neon / Render Postgres),
+      # e.g. postgresql://…?sslmode=require. sync:false → Blueprint syncs never overwrite it.
+      # Unset/sqlite path = ephemeral (reset on every deploy/restart/spin-down on Free).
       - key: WELORA_DB_URL
-        value: /tmp/welora_staging.db
+        sync: false
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

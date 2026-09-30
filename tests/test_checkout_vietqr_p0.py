@@ -18,6 +18,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._db_target import db_env
+
 from welora import auth as auth_svc
 from welora import checkout as co
 from welora import entitlements as ent
@@ -49,8 +51,7 @@ class _Base(unittest.TestCase):
             os.environ.pop(k, None)
         self.tmp = tempfile.mkdtemp(prefix="welora-ck-")
         os.environ["WELORA_ENV"] = "staging"
-        os.environ["WELORA_STORE"] = "sqlite"
-        os.environ["WELORA_DB_URL"] = f"sqlite:///{self.tmp}/ck.db"
+        os.environ.update(db_env(self.tmp))  # sqlite (default) or WELORA_TEST_POSTGRES_URL
         os.environ["WELORA_GUEST_DEMO"] = "0"
         os.environ["PAYMENT_PROVIDER"] = "mock"
         os.environ["MOCK_PAYMENT_CHECKSUM_KEY"] = FAKE_CHECKSUM

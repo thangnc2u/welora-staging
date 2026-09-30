@@ -7,7 +7,8 @@
     "/app/register": 1,
     "/app/forgot-password": 1,
     "/app/reset-password": 1,
-    "/app/otp": 1
+    "/app/otp": 1,
+    "/app/admin/login": 1
   };
   if (allow[path]) {
     /* Hotfix #4 belt: wipe stray token on /app/login entry (keep device_id). */

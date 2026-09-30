@@ -45,6 +45,13 @@ class OtpVerifyBody(BaseModel):
     challenge_id: str
     code: str
 
+class EmailOtpRequestBody(BaseModel):
+    email: str = Field(..., min_length=5, max_length=254)
+
+class EmailOtpVerifyBody(BaseModel):
+    challenge_id: str = Field(..., min_length=8, max_length=64)
+    code: str = Field(..., min_length=4, max_length=12)
+
 class GuestRegisterBody(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -507,8 +514,11 @@ def _checkout_call(fn, *args, **kwargs):
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     # Reconcile job (every 5 min) runs in THIS process — no extra Render service.
+    from welora import admin_bootstrap
     from welora import renewal as renewal_svc
 
+    # WELORA_ADMIN_EMAILS: promote verified listed users / demote unlisted admins (audited, never raises)
+    admin_bootstrap.startup_sync()
     if checkout_svc.checkout_enabled():
         checkout_svc.start_reconcile_loop()
         renewal_svc.start_loop()  # mục 7 reminders + grace/downgrade, same process
@@ -719,6 +729,11 @@ def create_app() -> FastAPI:
         """Static page only — never grants (CK-08). Status comes from server polling."""
         return _serve_app_html(static_dir, "checkout.html")
 
+    @app.get("/app/admin/login", include_in_schema=False)
+    def admin_login_ui() -> HTMLResponse:
+        # Email OTP sign-in for WELORA_ADMIN_EMAILS (no password path into admin).
+        return _serve_app_html(static_dir, "admin-login.html")
+
     @app.get("/app/admin/checkout", include_in_schema=False)
     def admin_checkout_ui() -> HTMLResponse:
         # Static shell only — every data call needs admin role + TOTP session (mục 9).
@@ -790,6 +805,15 @@ def create_app() -> FastAPI:
     @app.post("/auth/otp/verify", tags=["auth"])
     def auth_otp_verify(body: OtpVerifyBody) -> dict:
         return _respond(*auth_svc.service_otp_verify(body.model_dump()))
+
+    # Admin bootstrap (WELORA_ADMIN_EMAILS) — code emailed to listed addresses only, never echoed
+    @app.post("/auth/email-otp/request", tags=["auth"])
+    def auth_email_otp_request(body: EmailOtpRequestBody) -> dict:
+        return _respond(*auth_svc.service_email_otp_request(body.model_dump()))
+
+    @app.post("/auth/email-otp/verify", tags=["auth"])
+    def auth_email_otp_verify(body: EmailOtpVerifyBody) -> dict:
+        return _respond(*auth_svc.service_email_otp_verify(body.model_dump()))
 
     @app.get("/auth/me", tags=["auth"])
     def auth_me(authorization: Optional[str] = Header(None)) -> dict:

@@ -2,10 +2,10 @@
 -- gate_months / Hard Deny / Pre-Rule / TARGET_MONTHS untouched. No secrets stored.
 
 -- CK-14 upgrade credit + mục 8 refund bookkeeping on orders
-ALTER TABLE orders ADD COLUMN upgrade_from_plan TEXT;
-ALTER TABLE orders ADD COLUMN upgrade_credit BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE orders ADD COLUMN refund_amount BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE orders ADD COLUMN refunded_at TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS upgrade_from_plan TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS upgrade_credit BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_amount BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_at TEXT;
 
 -- CK-11 coupons (validity, redemption count, applicable plans — server only)
 CREATE TABLE IF NOT EXISTS coupons (

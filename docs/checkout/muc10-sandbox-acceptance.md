@@ -10,17 +10,54 @@ service against the same base URL `https://api-merchant.payos.vn`. CI never call
 | Env | Value |
 |---|---|
 | `WELORA_ENV` | `staging` (never `production` for this run) |
+| `WELORA_DB_URL` | **Postgres URL** (Neon / Render Postgres, see 0.1) — durable users, orders, 2FA state. Without it the Free service uses SQLite in `/tmp` and loses everything on each deploy/restart/spin-down |
+| `WELORA_ADMIN_EMAILS` | comma-separated admin emails, e.g. `founder@example.com` (case-insensitive). Empty/unset = **nobody is admin** |
+| `WELORA_ADMIN_TOTP_SECRETS` | `<admin_email>:<BASE32>` from `python -m welora.admin_2fa gen <admin_email>` (the older `<user_id>:<BASE32>` form still works) |
+| `WELORA_SMTP_HOST` / `WELORA_SMTP_PORT` / `WELORA_SMTP_USER` / `WELORA_SMTP_PASSWORD` / `WELORA_MAIL_FROM` | real SMTP — **required** for the admin login code (and receipts/reminders) |
 | `WELORA_CHECKOUT_ENABLED` | `1` (non-prod only; production stays unset) |
 | `PAYMENT_PROVIDER` | `payos` |
 | `PAYOS_CLIENT_ID` / `PAYOS_API_KEY` / `PAYOS_CHECKSUM_KEY` | test-channel keys (Render secret) |
 | `WELORA_PUBLIC_BASE_URL` | the non-prod HTTPS URL |
-| `WELORA_ADMIN_TOTP_SECRETS` | `<admin_user_id>:<BASE32>` from `python -m welora.admin_2fa gen <admin_user_id>` |
 | `WELORA_CHECKOUT_TEST_HOOKS` | `1` (enables grace time-travel; refused when `WELORA_ENV=production`) |
-| `WELORA_SMTP_*` / `WELORA_MAIL_FROM` | real SMTP so receipts/reminders arrive |
 
-1. Admin logs in (OTP/device flow, role in `ADMIN_ROLES`) → `/app/admin/checkout` → enter the TOTP code.
-2. Register the webhook once for this channel: `POST /api/admin/v1/checkout/confirm-webhook`
+### 0.1 Durable database (Founder, one-time)
+
+Render Free web services have no persistent disk, so use an external Postgres:
+
+- **Neon Free (recommended for staging)**: no expiry; 0.5 GB storage/project, 100 CU-hours/month,
+  compute scales to zero after 5 min idle (first query wakes it in < 1 s). neon.com → Sign up →
+  *New project* (region **AWS Asia Pacific (Singapore)**, Postgres 17) → *Connect* → copy the
+  connection string `postgresql://…@…neon.tech/neondb?sslmode=require…`.
+- **Render Postgres Free**: 1 GB, but **expires 30 days after creation** (14-day grace to upgrade,
+  then deleted, no backups). Only if you accept re-creating it monthly; same region as the web
+  service (Singapore); use the *Internal Database URL*.
+
+Then on Render → `welora-staging` → *Environment*: set `WELORA_DB_URL` to that URL (keep
+`WELORA_STORE=sqlite`: it only means "DB-backed store"; the URL decides the dialect) → *Save* (Render
+redeploys). On start the app runs migrations 001–011 automatically (idempotent). Check
+`GET /health` → `"dialect": "postgres"`. `render.yaml` declares `WELORA_DB_URL` with `sync: false`, so
+a Blueprint sync never overwrites the Dashboard value. `psycopg[binary]` ships in `requirements.txt`.
+
+Local check (optional): `WELORA_DB_URL=<url> PYTHONPATH=. python -m welora.db.migrate` twice →
+second run prints `OK up-to-date`.
+
+### 0.2 First admin (no Render Shell needed)
+
+1. Set `WELORA_ADMIN_EMAILS=<your email>` and SMTP env (above).
+2. Locally: `PYTHONPATH=. python -m welora.admin_2fa gen <your email>` → put the printed
+   `email:BASE32` line into `WELORA_ADMIN_TOTP_SECRETS`; scan the printed `otpauth://` URI in an
+   authenticator app. Never commit or paste the secret anywhere else.
+3. Open `/app/admin/login` → enter the email → a 6-digit code arrives by email (10 min, 5 tries,
+   max 5 codes / 15 min) → you are signed in with role `admin` (audited in `auth_audit`).
+4. `/app/admin/checkout` → enter the TOTP code → admin tools unlocked (12 h session).
+5. Register the webhook once for this channel: `POST /api/admin/v1/checkout/confirm-webhook`
    `{"webhook_url": "<base>/api/checkout/v1/webhook/payos"}`.
+
+Rules: admin is granted **only** after the email-OTP proves the mailbox (a password sign-up with the
+same address is never promoted and its sessions are revoked on promotion). Password, device and
+phone-OTP logins into an admin account are refused. Removing an email from `WELORA_ADMIN_EMAILS`
+demotes that user at the next restart (env change → redeploy) or next login, audited
+(`admin_role_revoked`). With Postgres, the admin keeps the same `user_id` across deploys.
 
 ## 1. Checklist → how to run
 

@@ -105,6 +105,8 @@ def adapt_sql_for_postgres(sql: str) -> str:
     out = out.replace("INSERT OR IGNORE INTO", "INSERT INTO")
     out = out.replace("excluded.", "EXCLUDED.")
     out = re.sub(r"ON CONFLICT\(([^)]+)\)", r"ON CONFLICT (\1)", out)
+    # literal % (modulo, LIKE 'x%') must be doubled for psycopg; keep explicit %s placeholders
+    out = re.sub(r"%(?!s)", "%%", out)
     out = out.replace("?", "%s")
     if (
         "INSERT INTO users(user_id) VALUES" in out

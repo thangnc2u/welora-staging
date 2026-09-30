@@ -1,8 +1,11 @@
 """Admin 2FA (Phụ lục Checkout mục 9 — "Trang quản trị có 2FA, phân quyền").
 
 Method: TOTP (RFC 6238, SHA-1, 6 digits, 30 s) — works with any authenticator app.
-- Secrets live ONLY in env ``WELORA_ADMIN_TOTP_SECRETS`` (``user_id:BASE32,…``),
-  set on Render; never committed, never logged, never stored in the DB.
+- Secrets live ONLY in env ``WELORA_ADMIN_TOTP_SECRETS`` — comma-separated
+  ``email:BASE32`` (preferred: survives a DB reset / new user_id) or
+  ``user_id:BASE32`` — set on Render; never committed, never logged, never stored
+  in the DB. An ``email:`` entry matches only the user's email VERIFIED by the
+  email-OTP admin login (``users.email_verified_at``); ``user_id`` wins if both exist.
 - ``POST /api/admin/v1/2fa/verify`` with a valid code opens a 2FA session bound
   to the caller's bearer token (sha256 only stored), TTL ``WELORA_ADMIN_2FA_TTL_S``
   (default 12 h). Every admin checkout API requires admin role + live session.
@@ -11,6 +14,7 @@ Method: TOTP (RFC 6238, SHA-1, 6 digits, 30 s) — works with any authenticator 
 - Fail closed: an admin with no configured secret cannot pass 2FA.
 
 Generate a secret locally (prints to your terminal only):
+    PYTHONPATH=. python -m welora.admin_2fa gen <admin_email>     # preferred
     PYTHONPATH=. python -m welora.admin_2fa gen <admin_user_id>
 """
 
@@ -89,18 +93,39 @@ def provisioning_uri(secret: str, account: str, issuer: str = "Welora Admin") ->
     )
 
 
+def _norm_key(key: str) -> str:
+    k = (key or "").strip()
+    return k.lower() if "@" in k else k
+
+
 def _secrets_from_env() -> dict[str, str]:
     raw = (os.environ.get("WELORA_ADMIN_TOTP_SECRETS") or "").strip()
     out: dict[str, str] = {}
     for part in raw.split(","):
-        uid, sep, sec = part.strip().partition(":")
-        if sep and uid.strip() and sec.strip():
-            out[uid.strip()] = sec.strip()
+        key, sep, sec = part.strip().partition(":")
+        if sep and key.strip() and sec.strip():
+            out[_norm_key(key)] = sec.strip()
     return out
 
 
+def _secret_for(user_id: str) -> Optional[str]:
+    """TOTP secret by user_id, else by the user's verified email (email:BASE32)."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return None
+    table = _secrets_from_env()
+    if uid in table:
+        return table[uid]
+    if not any("@" in k for k in table):
+        return None
+    from welora import admin_bootstrap
+
+    email = admin_bootstrap.verified_email_of(uid)
+    return table.get(email) if email else None
+
+
 def is_enrolled(user_id: str) -> bool:
-    return bool(_secrets_from_env().get((user_id or "").strip()))
+    return bool(_secret_for(user_id))
 
 
 def _ttl() -> int:
@@ -124,7 +149,7 @@ def verify_code(user_id: str, code: str, *, now: Optional[float] = None) -> None
     """Raise TwoFactorError unless code is a fresh valid TOTP for user_id."""
     uid = (user_id or "").strip()
     t = time.time() if now is None else float(now)
-    secret = _secrets_from_env().get(uid)
+    secret = _secret_for(uid)
     if not secret:
         raise TwoFactorError(403, "ADMIN_2FA_NOT_ENROLLED", "Tài khoản quản trị chưa cấu hình 2FA")
     c = "".join(ch for ch in str(code or "") if ch.isdigit())
@@ -216,13 +241,18 @@ def close_session(token: str) -> None:
 
 def _main(argv: list[str]) -> int:
     if len(argv) >= 2 and argv[0] == "gen":
+        who = _norm_key(argv[1])
+        if not who or ":" in who or "," in who:
+            print("usage: python -m welora.admin_2fa gen <admin_email|admin_user_id>")
+            return 2
         sec = generate_secret()
-        print("# Add to Render env WELORA_ADMIN_TOTP_SECRETS (comma-separated user_id:secret):")
-        print(f"{argv[1]}:{sec}")
+        kind = "email" if "@" in who else "user_id"
+        print(f"# Add to Render env WELORA_ADMIN_TOTP_SECRETS (comma-separated {kind}:secret):")
+        print(f"{who}:{sec}")
         print("# Scan in an authenticator app:")
-        print(provisioning_uri(sec, argv[1]))
+        print(provisioning_uri(sec, who))
         return 0
-    print("usage: python -m welora.admin_2fa gen <admin_user_id>")
+    print("usage: python -m welora.admin_2fa gen <admin_email|admin_user_id>")
     return 2
 
 

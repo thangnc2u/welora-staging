@@ -298,8 +298,14 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "cta";
-      btn.textContent = checkoutOn ? "Chọn gói" : "Sắp mở thanh toán";
-      btn.disabled = !checkoutOn;
+      var purchasable = checkoutOn && p.code !== "FREE";
+      btn.textContent = purchasable ? "Chọn gói" : "Sắp mở thanh toán";
+      btn.disabled = !purchasable;
+      if (purchasable) {
+        btn.addEventListener("click", function () {
+          location.href = "/app/checkout?plan=" + encodeURIComponent(p.code);
+        });
+      }
       card.appendChild(btn);
 
       plansEl.appendChild(card);

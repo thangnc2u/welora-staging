@@ -12,4 +12,6 @@ h11==0.14.0
 click==8.1.8
 typing-extensions==4.12.2
 annotated-types==0.7.0
+# Checkout VietQR QR render (pure-python wheel, SVG only — no Pillow)
+qrcode==8.2
 # Optional Postgres (P2-E1): pip install -r requirements-postgres.txt

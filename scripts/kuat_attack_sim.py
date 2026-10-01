@@ -461,7 +461,7 @@ def age_rate_events(env: dict, seconds: float) -> None:
 
 def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip: str = "203.0.113.70") -> dict:
     models = {n: Posterior(seed=i + 1) for i, n in enumerate(NODES)}
-    clock = 0.0
+    waited = 0.0
     fails = {n: 0 for n in NODES}
     passes = {n: 0 for n in NODES}
     first_day_fails = 0
@@ -470,21 +470,24 @@ def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip
     learned_at: dict = {}
     started = time.time()
 
+    def now_sim():  # simulated time = waited-out seconds + real seconds the run itself took (round 4)
+        return waited + (time.time() - started)
+
     def wait(r):
-        nonlocal clock
+        nonlocal waited
         d = r.get("detail") or {}
         sec = float(d.get("retry_after") or 60) + 1
         waits[d.get("reason") or "?"] = waits.get(d.get("reason") or "?", 0) + 1
         age_rate_events(env, sec)
-        clock += sec
+        waited += sec
 
-    while clock < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
+    while now_sim() < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
         st, j = srv.call("POST", "/auth/register", {"email": f"t-{uuid.uuid4().hex[:12]}@example.test",
                                                     "password": "Mat-khau-that-dai-1"}, ip=ip)  # register only — no OTP
         if st == 429:  # register limit (20 / IP / 15 min): pace account creation
             waits["register"] = waits.get("register", 0) + 1
             age_rate_events(env, 901)
-            clock += 901
+            waited += 901
             continue
         assert st in (200, 201), (st, j)
         uid, tok = j["user_id"], j["token"]
@@ -507,19 +510,19 @@ def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip
             ok = bool((r.get("kuat_result") or {}).get("passed"))
             m.observe(picks, ok)
             if node not in learned_at and (fails[node] + passes[node]) % 5 == 0 and m.confidence() >= 0.99:
-                learned_at[node] = {"sim_hours": round(clock / 3600, 2), "fails_total": sum(fails.values())}
+                learned_at[node] = {"sim_hours": round(now_sim() / 3600, 2), "fails_total": sum(fails.values())}
             if ok:
                 passes[node] += 1
                 continue  # same account goes on to N02-02
             fails[node] += 1
-            if clock < 86400:
+            if now_sim() < 86400:
                 first_day_fails += 1
             break
     out = {"ip": ip, "accounts_registered": accounts, "graded_fails": fails, "graded_passes": passes,
            "graded_fails_first_24h_one_ip": first_day_fails, "lock_reasons": waits,
-           "simulated_days": round(clock / 86400, 2), "key_learned_at": learned_at,
+           "simulated_days": round(now_sim() / 86400, 2), "key_learned_at": learned_at,
            "stopped_by": ("key_learned" if len(learned_at) == len(NODES) else
-                          "max_days" if clock >= max_days * 86400 else "max_fails"),
+                          "max_days" if now_sim() >= max_days * 86400 else "max_fails"),
            "confidence": {n: round(models[n].confidence(), 3) for n in NODES}, "wall_s": round(time.time() - started)}
     uid, tok = verified_account(srv, ip="198.51.100.78")
     first = {}

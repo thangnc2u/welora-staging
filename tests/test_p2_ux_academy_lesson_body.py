@@ -84,11 +84,10 @@ class TestP2UxAcademyLessonBody(unittest.TestCase):
             "/academy/kuat",
             json={"user_id": self.uid, "node_id": "N02-01", "answers": answers},
         )
-        # GP P0b: this fixed device answers "0" everywhere; repeated runs on the shared default DB
-        # can legitimately reach the KUAT cooldown (429) — still a valid, intact KUAT endpoint.
-        self.assertIn(kr.status_code, (200, 403, 429))
-        if kr.status_code == 200:
-            self.assertIn("kuat_result", kr.json())
+        # GP P0b: a fresh guest device per run (setUp) → no cooldown carried over; the answers go to
+        # the server-held attempt issued with the lesson (k1…kN slots) and are graded normally.
+        self.assertEqual(kr.status_code, 200, kr.text)
+        self.assertIn("kuat_result", kr.json())
 
     def test_health_gate(self):
         self.assertEqual(TARGET_MONTHS, 3)

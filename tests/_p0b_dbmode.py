@@ -96,8 +96,9 @@ def scenario_persist_read() -> dict:
             "PRAGMA table_info(academy_kuat_attempts)").fetchall()] if os.environ["WELORA_STORE"] == "sqlite" else \
             [r["column_name"] for r in conn.execute(
                 "SELECT column_name FROM information_schema.columns WHERE table_name='academy_kuat_attempts'").fetchall()]
-        outcomes = sorted(r["outcome"] or "open" for r in conn.execute(
-            "SELECT outcome FROM academy_kuat_attempts WHERE user_id=?", (uid,)).fetchall())
+        rows = conn.execute("SELECT outcome, score FROM academy_kuat_attempts WHERE user_id=?", (uid,)).fetchall()
+        outcomes = sorted(r["outcome"] or "open" for r in rows)
+        scores = [r["score"] for r in rows]
     finally:
         conn.close()
     return {"before": before, "read_kept": "N02-01" in json.loads(prof["profile_json"])["read"],
@@ -106,7 +107,7 @@ def scenario_persist_read() -> dict:
             "again": [again.status_code, (again.json().get("detail") or {}).get("error_code")],
             "after": _tree_summary(c, uid, tok), "mastery": gate.get("state"),
             "profile_forbidden": sorted(_keys(json.loads(prof["profile_json"])) & FORBIDDEN_KEYS),
-            "attempt_columns": sorted(cols), "outcomes": outcomes}
+            "attempt_columns": sorted(cols), "outcomes": outcomes, "attempt_scores": scores}
 
 
 # --------------------------------------------------------------------------- health score
@@ -188,6 +189,84 @@ def scenario_bruteforce() -> dict:
             "forbidden_keys": sorted(seen_keys & FORBIDDEN_KEYS), "canonical_ids": sorted(set(canon)),
             "mastery": c.get(f"/users/{uid}/mastery", headers=h).json().get("state"),
             "other_user_same_ip": [st2[0], st2[1]]}
+
+
+# --------------------------------------------------------------------------- round 2: guest limits / stale tab
+def _fail_once(c, uid, tok, node, ip=None):
+    from tests._kuat import solve
+
+    h = _h(tok, ip)
+    c.post(f"/academy/nodes/{node}/read", json={"user_id": uid, "node_id": node}, headers=h)
+    st = c.post("/academy/kuat/start", json={"user_id": uid, "node_id": node}, headers=h)
+    if st.status_code != 200:
+        return [st.status_code, (st.json().get("detail") or {}).get("reason")]
+    a = st.json()
+    r = c.post("/academy/kuat", json={"user_id": uid, "node_id": node, "attempt_id": a["attempt_id"],
+                                      "answers": solve(node, a["questions"], correct=False)}, headers=h)
+    if r.status_code != 200:
+        return [r.status_code, (r.json().get("detail") or {}).get("reason")]
+    return [200, r.json()["kuat_result"]["passed"]]
+
+
+def scenario_guest_limits() -> dict:
+    """Fails of ALL guests on one IP are aggregated (6 / 24 h); a guest device is capped at 6 / 24 h
+    across nodes; real accounts on the same IP keep the (shared-NAT) IP limit."""
+    from tests._followup2_dbmode import _register
+
+    c = _client()
+    ip = "198.51.100.%d" % (uuid.uuid4().int % 200 + 1)
+    guests = [_guest(c) for _ in range(7)]
+    per_guest = [_fail_once(c, u, t, "N02-01", ip) for u, t in guests]
+    msg = c.post("/academy/kuat/start", json={"user_id": guests[6][0], "node_id": "N02-01"},
+                 headers=_h(guests[6][1], ip)).json().get("detail") or {}
+    acc = _register(c, f"p0b-r2-{uuid.uuid4().hex[:6]}@example.test", "192.0.2.211")
+    real_same_ip = _fail_once(c, acc["user_id"], acc["token"], "N02-01", ip)
+    other_ip_guest = _fail_once(c, *_guest(c), "N02-01", "198.51.100.250" if not ip.endswith(".250") else "198.51.100.251")
+    # one guest, no IP header: 3 fails on N02-01 (its per-node cooldown) + 3 on N01-01 → device cap
+    du, dt = _guest(c)
+    dev = [_fail_once(c, du, dt, "N02-01") for _ in range(3)] + [_fail_once(c, du, dt, "N01-01") for _ in range(3)]
+    dev_next = _fail_once(c, du, dt, "N03-01")
+    dev_msg = (c.post("/academy/kuat/start", json={"user_id": du, "node_id": "N03-01"}, headers=_h(dt)).json()
+               .get("detail") or {}).get("message")
+    return {"per_guest": per_guest, "guest_ip_msg": msg.get("message"), "guest_ip_reason": msg.get("reason"),
+            "real_same_ip": real_same_ip, "other_ip_guest": other_ip_guest, "device": dev, "device_next": dev_next,
+            "device_msg": dev_msg}
+
+
+def scenario_stale_tab() -> dict:
+    """GET node / start return the SAME open attempt; a tab from before the attempt format
+    (canonical question ids) or with unknown slots gets 409 KUAT_RELOAD and nothing is counted."""
+    from tests._kuat import solve
+    from welora import academy, academy_store
+    from welora.db.connection import get_connection
+
+    c = _client()
+    uid, tok = _guest(c)
+    h = _h(tok, "198.51.100.%d" % (uuid.uuid4().int % 200 + 1))
+    n1 = c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=h).json()
+    n2 = c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=h).json()
+    st = c.post("/academy/kuat/start", json={"user_id": uid, "node_id": "N02-01"}, headers=h).json()
+    same = (n1["kuat"]["attempt_id"] == n2["kuat"]["attempt_id"] == st["attempt_id"]
+            and n1["questions"] == n2["questions"] == st["questions"])
+    old = [{"question_id": q["id"], "choice": q["answer"]} for q in academy.QUESTIONS["N02-01"][:5]]
+    stale = []
+    for _ in range(5):
+        r = c.post("/academy/kuat", json={"user_id": uid, "node_id": "N02-01", "answers": old}, headers=h)
+        stale.append([r.status_code, (r.json().get("detail") or {}).get("error_code")])
+    r = c.post("/academy/kuat", json={"user_id": uid, "node_id": "N02-01", "attempt_id": st["attempt_id"],
+                                      "answers": [{"question_id": "k9", "choice": 0}]}, headers=h)
+    slot = [r.status_code, (r.json().get("detail") or {}).get("error_code"), (r.json().get("detail") or {}).get("message")]
+    kh = academy_store._key_hash("kuat_user_node", f"user:{uid}|node:N02-01")
+    conn = get_connection(None)
+    try:
+        fails = conn.execute("SELECT COUNT(*) AS n FROM auth_rate_events WHERE action='kuat_fail' AND key_hash=?",
+                             (kh,)).fetchone()["n"]
+    finally:
+        conn.close()
+    ok = c.post("/academy/kuat", json={"user_id": uid, "node_id": "N02-01", "attempt_id": st["attempt_id"],
+                                       "answers": solve("N02-01", st["questions"])}, headers=h)
+    return {"same_attempt": same, "stale": stale, "slot": slot, "fails_recorded": int(fails),
+            "then_pass": [ok.status_code, (ok.json().get("kuat_result") or {}).get("passed")]}
 
 
 # --------------------------------------------------------------------------- guest claim

@@ -6,6 +6,10 @@
 2. Academy progress persisted (SQLite + PG17) — survives a fresh process.
 3. Health Score reads the same flags as /safety-gate (cold process after restart).
 4. Guest claim onto an account with an untrusted flags row carries the guest's real mastery.
+Round 2 (CoS review of 7f02a10): pass / fail ONLY (no score oracle), guest limits aggregated per IP
+and per device, one open attempt per user + node, fail slot reserved before grading (real uvicorn
+concurrency tests), length-balanced content + Monte Carlo guessing test, no "hard" marker, GET node
+reuses the open attempt, stale tab → 409 KUAT_RELOAD (not counted).
 DB scenarios run in subprocesses (tests/_p0b_dbmode.py) on SQLite, or PG via WELORA_TEST_POSTGRES_URL.
 """
 
@@ -33,7 +37,8 @@ from welora.safety_gate import TARGET_MONTHS
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "welora" / "api" / "static"
-FORBIDDEN = {"correct", "is_correct", "answer", "answers", "perm", "served", "served_json"}
+FORBIDDEN = {"correct", "is_correct", "answer", "answers", "perm", "served", "served_json",
+             "score", "hard", "correct_count", "percent"}
 VI = re.compile(r"[ạảãáàâầấậẩẫăằắặẳẵđêềếệểễôồốộổỗơờớợởỡưừứựửữìíịỉĩòóọỏõùúụủũỳýỵỷỹ]", re.I)
 
 
@@ -116,8 +121,8 @@ class TestAcademyPersistsAcrossProcessesDb(unittest.TestCase):
 
     def test_nothing_per_question_stored(self):
         self.assertEqual(self.r["profile_forbidden"], [])
-        self.assertEqual(self.r["last_kuat_keys"], ["node_id", "passed", "principle_keys", "question_count",
-                                                    "score", "ts"])
+        self.assertEqual(self.r["last_kuat_keys"], ["node_id", "passed", "principle_keys", "ts"])
+        self.assertEqual(self.r["attempt_scores"], [None] * len(self.r["attempt_scores"]))  # no score stored
         self.assertFalse({"correct", "answers", "detail"} & set(self.r["attempt_columns"]))
         self.assertIn("failed", self.r["outcomes"])
 
@@ -156,6 +161,213 @@ class TestGuestClaimUntrustedAccountDb(unittest.TestCase):
     def test_academy_progress_merged(self):
         self.assertEqual(self.out["d_claim"], [200, 1])
         self.assertEqual(self.out["d_tree"], {"xp": 40, "N01-01": "mastered", "N02-01": "mastered"})
+
+
+class TestGuestLimitsAggregatedDb(unittest.TestCase):
+    """Round 2 blocking 1: single-use guests no longer reset the budget."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("guest_limits", db_env(tempfile.mkdtemp()))
+
+    def test_all_guests_on_one_ip_share_six_fails(self):
+        self.assertEqual(self.out["per_guest"], [[200, False]] * 6 + [[429, "guest_ip"]])
+        self.assertEqual(self.out["guest_ip_reason"], "guest_ip")
+        self.assertRegex(self.out["guest_ip_msg"], VI)
+        self.assertIn("giờ", self.out["guest_ip_msg"])  # retry time ~24 h
+
+    def test_real_account_and_other_ip_unaffected(self):
+        self.assertEqual(self.out["real_same_ip"], [200, False])
+        self.assertEqual(self.out["other_ip_guest"], [200, False])
+
+    def test_guest_device_capped_across_nodes(self):
+        self.assertEqual(self.out["device"], [[200, False]] * 6)
+        self.assertEqual(self.out["device_next"], [429, "device"])
+        self.assertRegex(self.out["device_msg"], VI)
+
+
+class TestStaleTabAndOpenAttemptDb(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("stale_tab", db_env(tempfile.mkdtemp()))
+
+    def test_get_node_and_start_return_the_same_open_attempt(self):
+        self.assertTrue(self.out["same_attempt"])
+
+    def test_old_style_ids_409_reload_not_counted(self):
+        self.assertEqual(self.out["stale"], [[409, "KUAT_RELOAD"]] * 5)
+        self.assertEqual(self.out["slot"][:2], [409, "KUAT_RELOAD"])
+        self.assertIn("Vui lòng tải lại trang", self.out["slot"][2])
+        self.assertEqual(self.out["fails_recorded"], 0)
+        self.assertEqual(self.out["then_pass"], [200, True])  # the open attempt was not burnt
+
+
+# --------------------------------------------------------------------------- real uvicorn concurrency
+def _free_port() -> int:
+    import socket
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+class _Uvicorn:
+    """The app under a REAL uvicorn (start.sh: 1 worker, threadpool → truly parallel requests)."""
+
+    def __init__(self, env: dict) -> None:
+        import urllib.request
+
+        self.env = env
+        self.port = _free_port()
+        full = {k: v for k, v in os.environ.items() if not k.startswith("WELORA_")}
+        full.update(env)
+        full.update({"PORT": str(self.port), "PYTHONPATH": str(ROOT), "WELORA_ENV": "staging",
+                     "WELORA_DEMO_AUTOSEED": "0", "WELORA_RL_DEVICE_NEW_IP_MAX": "1000",
+                     "PATH": os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")})
+        self.proc = subprocess.Popen(["bash", str(ROOT / "start.sh")], cwd=str(ROOT), env=full,
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                raise AssertionError("server exited: " + self.proc.stdout.read().decode("utf-8", "replace")[-3000:])
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{self.port}/health", timeout=1)
+                return
+            except Exception:
+                time.sleep(0.1)
+        self.stop()
+        raise AssertionError("server did not start")
+
+    def call(self, path, body, token=None, ip="203.0.113.9"):
+        import urllib.error
+        import urllib.request
+
+        h = {"Content-Type": "application/json", "X-Forwarded-For": ip}
+        if token:
+            h["Authorization"] = "Bearer " + token
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=json.dumps(body).encode(), headers=h)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, json.loads(r.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b"{}")
+
+    def guest(self, ip):
+        st, j = self.call("/auth/device", {"device_id": "web-" + uuid.uuid4().hex[:14]}, ip=ip)
+        assert st == 200, (st, j)
+        return j["user_id"], j["token"]
+
+    def start(self, uid, tok, node, ip):
+        self.call(f"/academy/nodes/{node}/read", {"user_id": uid, "node_id": node}, tok, ip)
+        return self.call("/academy/kuat/start", {"user_id": uid, "node_id": node}, tok, ip)
+
+    def wrong(self, uid, tok, node, att, ip):
+        return self.call("/academy/kuat", {"user_id": uid, "node_id": node, "attempt_id": att["attempt_id"],
+                                           "answers": solve(node, att["questions"], correct=False)}, tok, ip)
+
+    def q(self, sql, params=()):
+        url = self.env["WELORA_DB_URL"]
+        if url.startswith("sqlite"):
+            import sqlite3
+
+            c = sqlite3.connect(url.split("sqlite:///", 1)[1])
+            try:
+                return c.execute(sql, params).fetchall()
+            finally:
+                c.close()
+        import psycopg
+
+        with psycopg.connect(url) as c:
+            return c.execute(sql.replace("?", "%s"), params).fetchall()
+
+    def fails(self, scope, key):
+        from welora.auth_ratelimit import _key_hash
+
+        return self.q("SELECT COUNT(*) FROM auth_rate_events WHERE action='kuat_fail' AND scope=? AND key_hash=?",
+                      (scope, _key_hash(scope, key)))[0][0]
+
+    def stop(self):
+        if self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+
+
+class TestRealConcurrencyDb(unittest.TestCase):
+    """Round 2 blocking 2 (PG17 when WELORA_TEST_POSTGRES_URL is set, else SQLite): parallel starts
+    and submits through a real uvicorn never open a 2nd attempt nor exceed a fail cap."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = _Uvicorn({**db_env(tempfile.mkdtemp()), "WELORA_KUAT_GUEST_DEVICE_MAX_FAILS": "3"})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def test_parallel_starts_one_open_attempt_and_parallel_submits_one_graded(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        ip = "203.0.113.21"
+        uid, tok = self.srv.guest(ip)
+        self.srv.call("/academy/nodes/N02-01/read", {"user_id": uid, "node_id": "N02-01"}, tok, ip)
+        with ThreadPoolExecutor(25) as ex:
+            starts = list(ex.map(lambda _i: self.srv.call("/academy/kuat/start", {"user_id": uid, "node_id": "N02-01"},
+                                                          tok, ip), range(25)))
+        self.assertEqual({s for s, _ in starts}, {200})
+        self.assertEqual(len({a["attempt_id"] for _, a in starts}), 1)
+        self.assertEqual(self.srv.q("SELECT COUNT(*) FROM academy_kuat_attempts WHERE user_id=? AND used_at IS NULL",
+                                    (uid,))[0][0], 1)
+        att = starts[0][1]
+        with ThreadPoolExecutor(25) as ex:
+            subs = list(ex.map(lambda _i: self.srv.wrong(uid, tok, "N02-01", att, ip), range(25)))
+        self.assertEqual(sorted(s for s, _ in subs), [200] + [409] * 24)
+        self.assertEqual(self.srv.fails("kuat_user_node", f"user:{uid}|node:N02-01"), 1)
+        self.assertEqual(self.srv.q("SELECT COUNT(*) FROM academy_kuat_attempts WHERE user_id=? AND outcome='failed'",
+                                    (uid,))[0][0], 1)
+
+    def test_parallel_submits_of_many_guests_on_one_ip_capped(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        from welora.auth_ratelimit import ip_bucket
+
+        ip = "203.0.113.22"
+        atts = []
+        for _ in range(14):
+            uid, tok = self.srv.guest(ip)
+            st, a = self.srv.start(uid, tok, "N02-01", ip)
+            self.assertEqual(st, 200)
+            atts.append((uid, tok, a))
+        with ThreadPoolExecutor(14) as ex:
+            subs = list(ex.map(lambda t: self.srv.wrong(t[0], t[1], "N02-01", t[2], ip), atts))
+        graded = sum(1 for s, _ in subs if s == 200)
+        self.assertLessEqual(graded, 6)
+        self.assertGreaterEqual(graded, 1)
+        self.assertEqual(graded + sum(1 for s, _ in subs if s == 429), 14)
+        self.assertLessEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), 6)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), graded)
+
+    def test_parallel_submits_of_one_guest_across_nodes_capped_by_device(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        ip = "203.0.113.23"
+        uid, tok = self.srv.guest(ip)
+        atts = []
+        for node in ("N01-01", "N02-01", "N03-01", "N04-01", "N05-01"):
+            st, a = self.srv.start(uid, tok, node, ip)
+            self.assertEqual(st, 200)
+            atts.append((node, a))
+        with ThreadPoolExecutor(5) as ex:
+            subs = list(ex.map(lambda t: self.srv.wrong(uid, tok, t[0], t[1], ip), atts))
+        graded = sum(1 for s, _ in subs if s == 200)
+        self.assertLessEqual(graded, 3)  # WELORA_KUAT_GUEST_DEVICE_MAX_FAILS=3 for this server
+        self.assertEqual(graded + sum(1 for s, _ in subs if s == 429), 5)
+        dev = self.srv.q("SELECT device_id FROM users WHERE user_id=?", (uid,))[0][0]
+        self.assertEqual(self.srv.fails("kuat_guest_device", dev), graded)
 
 
 # =========================================================================== in-process
@@ -232,10 +444,78 @@ class TestQuestionBank(unittest.TestCase):
         self.assertEqual(len(academy._draw("N02-03")), 3)  # small banks: all questions, shuffled
 
 
+class TestGuessingStrategiesMonteCarlo(unittest.TestCase):
+    """Round 2 blocking 3: over the real draw / shuffle / grader, length heuristics and random
+    guessing pass ≤ 2 % on the gate KUATs (before: N02-02 'longest' passed 100 %)."""
+
+    TRIALS = 4000
+
+    def _rate(self, node, strategy, rng):
+        by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
+        passed = 0
+        for _ in range(self.TRIALS):
+            served = academy._draw(node)
+            answers = []
+            for i, slot in enumerate(served):
+                shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
+                order = sorted(range(len(shown)), key=lambda k: (len(shown[k]), rng.random()))
+                pick = {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2],
+                        "random": rng.randrange(len(shown))}[strategy]
+                answers.append({"question_id": f"k{i + 1}", "choice": pick})
+            passed += academy._grade_served(node, served, answers)[1]
+        return passed / self.TRIALS
+
+    def test_strategies_pass_at_most_two_percent(self):
+        import random
+
+        rng = random.Random(241)
+        for node in ("N02-01", "N02-02"):
+            for strategy in ("longest", "shortest", "middle", "random"):
+                rate = self._rate(node, strategy, rng)
+                self.assertLessEqual(rate, 0.02, (node, strategy, rate))
+
+    def test_answer_length_rank_balanced(self):
+        """Deterministic guarantee: the right option is the longest / 2nd / 3rd / shortest in at most 3
+        of the 12 questions each → any fixed length-rank strategy gets ≤ 3 of 5 right → never passes."""
+        for node in ("N02-01", "N02-02"):
+            ranks = []
+            for q in academy.QUESTIONS[node]:
+                lens = [len(c) for c in q["choices"]]
+                self.assertEqual(len(lens), 4, q["id"])
+                self.assertEqual(len(set(lens)), 4, q["id"])  # no ties
+                ranks.append(sorted(lens, reverse=True).index(lens[q["answer"]]))
+            for r in range(4):
+                self.assertLessEqual(ranks.count(r), 3, (node, r, ranks))
+
+
+class TestContentRound2(unittest.TestCase):
+    def _lesson(self, name):
+        return (ROOT / "content" / name).read_text(encoding="utf-8")
+
+    def test_q01h_inclusive_and_q01i_consistent_with_six_month_personas(self):
+        q = {x["id"]: x for x in academy.QUESTIONS["N02-01"]}
+        self.assertNotIn("gia đình", q["q01h"]["choices"][q["q01h"]["answer"]])
+        self.assertIn("nếu có", q["q01h"]["choices"][q["q01h"]["answer"]])
+        self.assertIn("6 tháng", q["q01i"]["choices"][q["q01i"]["answer"]])
+        self.assertNotIn("2 rồi 3", json.dumps(q["q01i"], ensure_ascii=False))
+        wa = self._lesson("WA-02-01-xay-dung-quy-khan-cap.md")
+        self.assertIn("thường khoảng 6 tháng", wa)
+        self.assertIn("tối thiểu **3 tháng**", wa)  # gate floor unchanged
+
+    def test_n02_02_questions_grounded_in_lesson(self):
+        wa = self._lesson("WA-02-02-nguyen-tac-su-dung-quy-khan-cap.md")
+        q = {x["id"]: x for x in academy.QUESTIONS["N02-02"]}
+        self.assertNotIn("khẩn cấp ở điểm nào", q["q02k"]["prompt"])  # 'gấp' vs 'khẩn cấp' removed
+        for phrase in ("Hai câu hỏi trước khi rút", "bất ngờ", "cần thiết", "xe hỏng nặng", "quỹ mục tiêu riêng",
+                       "học phí năm sau", "bắt đáy", "nằm yên", "xây lại đủ 3 tháng", "Điểm sức khỏe tài chính cao"):
+            self.assertIn(phrase, wa, phrase)
+
+
 class TestServerHeldAttempt(_Env):
     def test_grading_uses_served_permutation_and_ignores_client_picks(self):
-        served = [{"q": "q02a", "perm": [1, 0]}, {"q": "q02b", "perm": [2, 0, 1]}, {"q": "q02c", "perm": [1, 0]},
-                  {"q": "q02d", "perm": [0, 2, 1]}, {"q": "q02e", "perm": [1, 2, 0]}]
+        served = [{"q": "q02a", "perm": [1, 0, 3, 2]}, {"q": "q02b", "perm": [2, 0, 1, 3]},
+                  {"q": "q02c", "perm": [3, 1, 0, 2]}, {"q": "q02d", "perm": [0, 2, 1, 3]},
+                  {"q": "q02e", "perm": [1, 2, 3, 0]}]
         right = [{"question_id": f"k{i + 1}", "choice": s["perm"].index(
             next(q for q in academy.QUESTIONS["N02-02"] if q["id"] == s["q"])["answer"])} for i, s in enumerate(served)]
         self.assertEqual(academy._grade_served("N02-02", served, right), (1.0, True))
@@ -247,22 +527,23 @@ class TestServerHeldAttempt(_Env):
                      for i, s in enumerate(served)]
         self.assertFalse(academy._grade_served("N02-02", served, raw_index)[1])  # unshuffled index → wrong
 
-    def test_attempt_single_use_owner_node_and_superseded(self):
+    def test_attempt_single_use_owner_node_and_reused_while_open(self):
         uid, other = _uid(), _uid()
         a = self.start(uid).json()
         self.assertEqual([q["id"] for q in a["questions"]], [f"k{i}" for i in range(1, 6)])
         self.assertFalse(keys(a) & FORBIDDEN)
         ans = solve("N02-01", a["questions"])
         self.assertEqual(self.submit(other, "N02-01", a["attempt_id"], ans).status_code, 409)  # not theirs
-        b = self.start(uid).json()  # supersedes a
+        b = self.start(uid).json()  # round 2: the SAME open attempt (another tab / reload)
+        self.assertEqual((b["attempt_id"], b["questions"]), (a["attempt_id"], a["questions"]))
         r = self.submit(uid, "N02-01", a["attempt_id"], ans)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["kuat_result"]["passed"])
+        r = self.submit(uid, "N02-01", a["attempt_id"], ans)  # single use
         self.assertEqual(r.status_code, 409)
         self.assertEqual(r.json()["detail"]["error_code"], "KUAT_ATTEMPT_INVALID")
         self.assertRegex(r.json()["detail"]["message"], VI)
-        r = self.submit(uid, "N02-01", b["attempt_id"], solve("N02-01", b["questions"]))
-        self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.json()["kuat_result"]["passed"])
-        self.assertEqual(self.submit(uid, "N02-01", b["attempt_id"], solve("N02-01", b["questions"])).status_code, 409)
+        self.assertNotEqual(self.start(uid).json()["attempt_id"], a["attempt_id"])  # used → a new one
 
     def test_attempt_expires(self):
         uid = _uid()
@@ -282,8 +563,10 @@ class TestServerHeldAttempt(_Env):
                                                "answers": solve("N02-01", n["questions"])}, headers=self.h(uid))
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["kuat_result"]["passed"])
-        r = self.c.post("/academy/kuat", json={"user_id": uid, "node_id": "N02-01", "answers": []}, headers=self.h(uid))
+        r = self.c.post("/academy/kuat", json={"user_id": uid, "node_id": "N02-01",
+                                               "answers": [{"question_id": "k1", "choice": 0}]}, headers=self.h(uid))
         self.assertEqual(r.status_code, 409)  # nothing open any more
+        self.assertEqual(r.json()["detail"]["error_code"], "KUAT_ATTEMPT_INVALID")
 
     def test_locked_node_issues_no_attempt(self):
         uid = _uid()
@@ -302,12 +585,28 @@ class TestNoPerQuestionCorrectness(_Env):
         seen |= keys(a)
         r = self.submit(uid, "N02-01", a["attempt_id"], solve("N02-01", a["questions"], correct=False)).json()
         seen |= keys(r)
-        self.assertEqual(sorted(r["kuat_result"]), ["node_id", "passed", "principle_keys", "question_count",
-                                                     "score", "ts"])
+        self.assertEqual(sorted(r["kuat_result"]), ["node_id", "passed", "principle_keys", "ts"])
         seen |= keys(self.c.get("/academy/tree", params={"user_id": uid}, headers=self.h(uid)).json())
         seen |= keys(self.c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=self.h(uid)).json())
         self.assertFalse(seen & FORBIDDEN, seen & FORBIDDEN)
         self.assertFalse(keys(academy._PROFILES[uid]) & FORBIDDEN)
+
+    def test_pass_also_pass_fail_only(self):
+        uid = _uid()
+        a = self.start(uid).json()
+        r = self.submit(uid, "N02-01", a["attempt_id"], solve("N02-01", a["questions"])).json()
+        self.assertEqual(r["kuat_result"]["passed"], True)
+        self.assertEqual(sorted(r["kuat_result"]), ["node_id", "passed", "principle_keys", "ts"])
+        self.assertFalse(keys(r) & FORBIDDEN)
+
+    def test_served_questions_carry_no_hard_marker(self):
+        uid = _uid()
+        a = self.start(uid).json()
+        for q in a["questions"]:
+            self.assertEqual(sorted(q), ["choices", "id", "prompt"])
+        n = self.c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=self.h(uid)).json()
+        for q in n["questions"]:
+            self.assertEqual(sorted(q), ["choices", "id", "prompt"])
 
     def test_in_process_outputs_and_legacy_profiles_sanitised(self):
         uid = _uid()
@@ -315,8 +614,8 @@ class TestNoPerQuestionCorrectness(_Env):
         self.assertFalse(keys(out) & FORBIDDEN)
         p = academy._profile(uid)  # an old in-memory profile still carrying per-question details
         p["nodes"]["N02-01"]["last_kuat"] = {"node_id": "N02-01", "score": 0.3, "passed": False, "ts": "x",
-                                             "answers": [{"id": "q01a", "correct": True}]}
-        p["attempts"].append({"node_id": "N02-01", "answers": [{"id": "q01a", "correct": False}]})
+                                             "question_count": 5, "answers": [{"id": "q01a", "correct": True}]}
+        p["attempts"].append({"node_id": "N02-01", "score": 0.6, "answers": [{"id": "q01a", "correct": False}]})
         self.assertFalse(keys(academy.get_tree(uid)) & FORBIDDEN)
         self.assertFalse(keys(academy._profile(uid)) & FORBIDDEN)
 
@@ -382,12 +681,21 @@ class TestIpCap(_Env):
 
 
 class TestStartLimit(_Env):
-    ENV = {"WELORA_KUAT_MAX_STARTS": "3"}
+    ENV = {"WELORA_KUAT_MAX_STARTS": "3", "WELORA_KUAT_MAX_FAILS": "100", "WELORA_KUAT_DAILY_MAX_FAILS": "100"}
+
+    def test_reopening_the_open_attempt_costs_nothing(self):
+        uid = _uid()
+        ids = {self.start(uid).json()["attempt_id"] for _ in range(10)}
+        ids |= {self.c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=self.h(uid)).json()
+                ["kuat"]["attempt_id"] for _ in range(5)}
+        self.assertEqual(len(ids), 1)
 
     def test_start_limit_and_node_get_still_serves_lesson(self):
         uid = _uid()
-        for _ in range(3):
-            self.assertEqual(self.start(uid).status_code, 200)
+        for _ in range(3):  # three NEW attempts (each used up by a failed submit)
+            a = self.start(uid)
+            self.assertEqual(a.status_code, 200)
+            self.submit(uid, "N02-01", a.json()["attempt_id"], solve("N02-01", a.json()["questions"], correct=False))
         self.assertEqual(self.start(uid).status_code, 429)
         n = self.c.get("/academy/nodes/N02-01", params={"user_id": uid}, headers=self.h(uid))
         self.assertEqual(n.status_code, 200)
@@ -430,6 +738,11 @@ class TestFrontendAcademy(unittest.TestCase):
         self.assertIn("retry_at", s)
         self.assertIn("r.status===409", s)
         self.assertNotRegex(s, r"\.correct\b|\.answers\b|last_kuat\.answers")
+        # round 2: pass / fail only — no score / percent on the page, stale tab handled
+        self.assertNotRegex(s, r"\.score\b|\*100\)?\s*\+\s*'%'")
+        self.assertIn("'CHƯA ĐẠT — ôn lại bài", s)
+        self.assertIn("KUAT_RELOAD", s)
+        self.assertIn("Hãy chọn đáp án cho mọi câu trước khi nộp.", s)
 
     @unittest.skipUnless(__import__("shutil").which("node"), "node not installed")
     def test_academy_script_parses(self):

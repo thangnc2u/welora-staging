@@ -10,6 +10,9 @@ Round 2 (CoS review of 7f02a10): pass / fail ONLY (no score oracle), guest limit
 and per device, one open attempt per user + node, fail slot reserved before grading (real uvicorn
 concurrency tests), length-balanced content + Monte Carlo guessing test, no "hard" marker, GET node
 reuses the open attempt, stale tab → 409 KUAT_RELOAD (not counted).
+Round 3 (Founder 01/10 21:19): accounts without a verified contact (register only, no OTP) count as
+guests; 60 failed KUATs / client IP / 24 h for ALL accounts (reserved before grading, attempt
+re-opened on 429); q01d giveaway removed; option openings diversified + Monte Carlo opening-pattern test.
 DB scenarios run in subprocesses (tests/_p0b_dbmode.py) on SQLite, or PG via WELORA_TEST_POSTGRES_URL.
 """
 
@@ -164,7 +167,8 @@ class TestGuestClaimUntrustedAccountDb(unittest.TestCase):
 
 
 class TestGuestLimitsAggregatedDb(unittest.TestCase):
-    """Round 2 blocking 1: single-use guests no longer reset the budget."""
+    """Round 2 blocking 1: single-use guests no longer reset the budget (round 3: the "real account"
+    on the same IP is an OTP-verified one)."""
 
     @classmethod
     def setUpClass(cls):
@@ -200,6 +204,63 @@ class TestStaleTabAndOpenAttemptDb(unittest.TestCase):
         self.assertIn("Vui lòng tải lại trang", self.out["slot"][2])
         self.assertEqual(self.out["fails_recorded"], 0)
         self.assertEqual(self.out["then_pass"], [200, True])  # the open attempt was not burnt
+
+
+class TestThrowawayAccountsDb(unittest.TestCase):
+    """Round 3 blocking: register-only accounts no longer get account budgets."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("throwaway_accounts", db_env(tempfile.mkdtemp()))
+
+    def test_register_only_accounts_share_the_guest_ip_bucket(self):
+        o = self.out
+        self.assertEqual(o["kind_registered"], "unverified")
+        self.assertEqual(o["per_account"], [[200, False]] * 6 + [[429, "unverified_ip"]] * 2)
+        self.assertEqual(o["reason"], "unverified_ip")
+        self.assertRegex(o["message"], VI)
+        self.assertIn("OTP", o["message"])
+        self.assertIn("24 giờ", o["message"])
+        self.assertGreater(o["retry_after"], 23 * 3600)
+        self.assertEqual(o["guest_after"], [429, "guest_ip"])  # device guests and throwaways share it
+        self.assertEqual(o["blocked_before_otp"], [429, "unverified_ip"])
+
+    def test_verified_accounts_and_demo_personas_unaffected(self):
+        o = self.out
+        self.assertEqual(o["email_verified"], ["verified", 200, False])
+        self.assertEqual(o["phone_verified"], ["verified", 200, False])
+        self.assertEqual(o["demo_kinds"], {f"P{i}": "verified" for i in range(1, 7)})
+        self.assertEqual(o["demo_fail"], [200, False])
+
+    def test_guest_kinds(self):
+        self.assertEqual((self.out["kind_device_guest"], self.out["kind_unknown"]), ("guest", "guest"))
+
+
+class TestIpDayCapDb(unittest.TestCase):
+    """Round 3 blocking: 60 failed KUATs / client IP (IPv6 /64) / 24 h for every account."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("ip_day_cap", db_env(tempfile.mkdtemp()))
+
+    def test_cap_reserved_before_grading_and_attempt_reopened(self):
+        o = self.out
+        self.assertEqual(o["max"], 60)
+        self.assertEqual(o["last_ok"], [200, False])  # the 60th fail of the /64 is graded
+        c = o["capped"]
+        self.assertEqual((c["status"], c["reason"]), (429, "ip_day"))  # another interface id, same /64
+        self.assertRegex(c["message"], VI)
+        self.assertIn("giờ", c["message"])
+        self.assertTrue(3 * 3600 < c["retry_after"] <= 5 * 3600)  # oldest seeded fail was 20 h ago
+        self.assertEqual(c["retry_header"], str(c["retry_after"]))
+        self.assertTrue(c["retry_at"])
+        self.assertEqual(o["attempt_after_429"], [None, None])  # not consumed, not graded
+        self.assertEqual(o["events_after_429"], 60)  # reservation removed
+        self.assertEqual(o["start_detail"], "ip_day")
+
+    def test_other_network_unaffected_and_same_attempt_graded_later(self):
+        self.assertEqual(self.out["other_net"], [200, False])
+        self.assertEqual(self.out["later"], [200, False])
 
 
 # --------------------------------------------------------------------------- real uvicorn concurrency
@@ -370,6 +431,78 @@ class TestRealConcurrencyDb(unittest.TestCase):
         self.assertEqual(self.srv.fails("kuat_guest_device", dev), graded)
 
 
+class TestRealConcurrencyRound3Db(unittest.TestCase):
+    """Round 3: parallel submits of many VERIFIED accounts on one IP never exceed the 24 h IP cap,
+    and parallel throwaway (register-only) accounts never exceed the guest IP cap; refused attempts
+    stay open (not consumed)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = _Uvicorn({**db_env(tempfile.mkdtemp()), "WELORA_KUAT_IP_DAY_MAX_FAILS": "5",
+                            "WELORA_KUAT_GUEST_IP_MAX_FAILS": "3", "WELORA_OTP_ECHO": "1"})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _phone_account(self, n):
+        phone = "09" + "%08d" % (uuid.uuid4().int % 10 ** 8)
+        ip = "192.0.2.%d" % (n % 250 + 1)
+        st, req = self.srv.call("/auth/otp/request", {"phone": phone}, ip=ip)
+        self.assertEqual(st, 200, req)
+        st, ver = self.srv.call("/auth/otp/verify", {"challenge_id": req["challenge_id"], "code": req["pilot_code"]}, ip=ip)
+        self.assertEqual(st, 200, ver)
+        return ver["user_id"], ver["token"]
+
+    def _register(self, n):
+        st, j = self.srv.call("/auth/register", {"email": f"r3-{uuid.uuid4().hex[:10]}@example.test",
+                                                 "password": "Mat-khau-that-dai-1"}, ip="192.0.2.%d" % (n % 250 + 1))
+        self.assertIn(st, (200, 201), j)
+        return j["user_id"], j["token"]
+
+    def _burst(self, accounts, ip):
+        from concurrent.futures import ThreadPoolExecutor
+
+        atts = []
+        for uid, tok in accounts:
+            st, a = self.srv.start(uid, tok, "N02-01", ip)
+            self.assertEqual(st, 200, a)
+            atts.append((uid, tok, a))
+        with ThreadPoolExecutor(len(atts)) as ex:
+            subs = list(ex.map(lambda t: self.srv.wrong(t[0], t[1], "N02-01", t[2], ip), atts))
+        return atts, subs
+
+    def test_verified_accounts_burst_capped_by_ip_day(self):
+        from welora.auth_ratelimit import ip_bucket
+
+        ip = "203.0.113.31"
+        atts, subs = self._burst([self._phone_account(i) for i in range(12)], ip)
+        graded = sum(1 for s, _ in subs if s == 200)
+        self.assertGreaterEqual(graded, 1)
+        self.assertLessEqual(graded, 5)
+        refused = [r for s, r in subs if s == 429]
+        self.assertEqual(graded + len(refused), 12)
+        self.assertEqual({(r.get("detail") or {}).get("reason") for r in refused}, {"ip_day"})
+        self.assertEqual(self.srv.fails("kuat_ip_day", ip_bucket(ip)), graded)
+        open_left = sum(self.srv.q("SELECT COUNT(*) FROM academy_kuat_attempts WHERE attempt_id=? AND used_at IS NULL",
+                                   (a["attempt_id"],))[0][0] for _u, _t, a in atts)
+        self.assertEqual(open_left, 12 - graded)  # refused attempts were re-opened, not consumed
+
+    def test_throwaway_accounts_burst_capped_by_guest_ip(self):
+        from welora.auth_ratelimit import ip_bucket
+
+        ip = "203.0.113.32"
+        _atts, subs = self._burst([self._register(100 + i) for i in range(12)], ip)
+        graded = sum(1 for s, _ in subs if s == 200)
+        self.assertGreaterEqual(graded, 1)
+        self.assertLessEqual(graded, 3)  # WELORA_KUAT_GUEST_IP_MAX_FAILS=3 for this server
+        refused = [r for s, r in subs if s == 429]
+        self.assertEqual(graded + len(refused), 12)
+        # at the boundary a parallel burst may also see the (higher) 24 h IP bucket over its cap
+        self.assertLessEqual({(r.get("detail") or {}).get("reason") for r in refused}, {"unverified_ip", "ip_day"})
+        self.assertEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), graded)
+
+
 # =========================================================================== in-process
 def _uid() -> str:
     return "u-p0b-" + uuid.uuid4().hex[:10]
@@ -509,6 +642,130 @@ class TestContentRound2(unittest.TestCase):
         for phrase in ("Hai câu hỏi trước khi rút", "bất ngờ", "cần thiết", "xe hỏng nặng", "quỹ mục tiêu riêng",
                        "học phí năm sau", "bắt đáy", "nằm yên", "xây lại đủ 3 tháng", "Điểm sức khỏe tài chính cao"):
             self.assertIn(phrase, wa, phrase)
+
+
+def _openings(text: str) -> set[str]:
+    words = [w for w in (re.sub(r"[^\w]", "", x.lower()) for x in text.split()) if w]
+    return {words[0], " ".join(words[:2])} if words else set()
+
+
+class TestOpeningPatternsMonteCarlo(unittest.TestCase):
+    """Round 3 should-fix: no opening phrase predicts correctness. For every opening (first word and
+    first two words) used by ≥ 2 options of a gate bank: 'pick an option with it' and 'avoid options
+    with it' — plus 'avoid every opening that is never right' — pass ≤ 2 % over the real draw /
+    shuffle / grader (before: the 'Không, trừ khi…' distractors were always wrong)."""
+
+    TRIALS = 3000
+
+    def _rate(self, node, choose, rng):
+        by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
+        passed = 0
+        for _ in range(self.TRIALS):
+            served = academy._draw(node)
+            answers = []
+            for i, slot in enumerate(served):
+                shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
+                answers.append({"question_id": f"k{i + 1}", "choice": choose(shown, rng)})
+            passed += academy._grade_served(node, served, answers)[1]
+        return passed / self.TRIALS
+
+    @staticmethod
+    def _pick(p):
+        def f(shown, rng):
+            c = [i for i, x in enumerate(shown) if p in _openings(x)]
+            return rng.choice(c) if c else rng.randrange(len(shown))
+        return f
+
+    @staticmethod
+    def _avoid(ps):
+        def f(shown, rng):
+            c = [i for i, x in enumerate(shown) if not (_openings(x) & ps)]
+            return rng.choice(c) if c else rng.randrange(len(shown))
+        return f
+
+    def test_opening_strategies_pass_at_most_two_percent(self):
+        import random
+        from collections import Counter
+
+        rng = random.Random(2413)
+        for node in ("N02-01", "N02-02"):
+            total, wrong = Counter(), Counter()
+            for q in academy.QUESTIONS[node]:
+                for i, c in enumerate(q["choices"]):
+                    for p in _openings(c):
+                        total[p] += 1
+                        wrong[p] += i != q["answer"]
+            repeated = [p for p, n in total.items() if n >= 2]
+            self.assertIn("không", repeated, node)  # the CoS example is part of the sweep
+            never_right = {p for p in repeated if wrong[p] == total[p]}
+            strategies = [(f"pick {p}", self._pick(p)) for p in repeated] + \
+                         [(f"avoid {p}", self._avoid({p})) for p in repeated] + \
+                         [("avoid never-right " + ",".join(sorted(never_right)), self._avoid(never_right))]
+            for name, fn in strategies:
+                rate = self._rate(node, fn, rng)
+                self.assertLessEqual(rate, 0.02, (node, name, rate))
+
+    def test_no_opening_marks_the_answer(self):
+        """Deterministic: the opening word of a correct option is the correct opening of at most ONE
+        question per bank, and no option uses the old 'Không, trừ khi…' form."""
+        from collections import Counter
+
+        for node in ("N02-01", "N02-02"):
+            right = Counter()
+            for q in academy.QUESTIONS[node]:
+                right[sorted(_openings(q["choices"][q["answer"]]), key=len)[0]] += 1
+                for c in q["choices"]:
+                    self.assertNotRegex(c, r"(?i)^không,\s*trừ khi", (node, q["id"]))
+            self.assertLessEqual(max(right.values()), 1, (node, right.most_common(3)))
+
+
+class TestContentRound3(unittest.TestCase):
+    def test_q01d_has_no_giveaway(self):
+        q = {x["id"]: x for x in academy.QUESTIONS["N02-01"]}["q01d"]
+        for c in q["choices"]:
+            self.assertNotRegex(c, r"[×x(]|tháng", c)  # no '(15 × 3)' / '(đúng 1 tháng chi)' hints
+        self.assertEqual(q["choices"][q["answer"]], "45 triệu ₫")
+        lens = [len(c) for c in q["choices"]]
+        self.assertNotEqual(max(lens), lens[q["answer"]])
+        self.assertNotEqual(min(lens), lens[q["answer"]])
+
+    def test_correct_answers_still_grounded_in_lessons(self):
+        wa1 = (ROOT / "content" / "WA-02-01-xay-dung-quy-khan-cap.md").read_text(encoding="utf-8")
+        wa2 = (ROOT / "content" / "WA-02-02-nguyen-tac-su-dung-quy-khan-cap.md").read_text(encoding="utf-8")
+        for phrase in ("15 × 3 = 45 triệu ₫", "không để mua sắm, kể cả khi đang giảm giá", "tách khỏi tài khoản tiêu",
+                       "lỡ tay tiêu mất", "chưa ĐẠT", "dày hơn, thường khoảng 6 tháng", "giữ nguyên quỹ"):
+            self.assertIn(phrase, wa1, phrase)
+        for phrase in ("cơ hội đầu tư", "phá lớp An Toàn", "xe hỏng nặng không đi làm được", "quỹ mục tiêu riêng",
+                       "bắt đáy", "Điểm sức khỏe tài chính cao cũng không thay được"):
+            self.assertIn(phrase, wa2, phrase)
+
+
+class TestRound3Limits(unittest.TestCase):
+    def test_ip_day_env_default_and_disable(self):
+        prev = os.environ.pop("WELORA_KUAT_IP_DAY_MAX_FAILS", None)
+        try:
+            self.assertEqual(academy_store.ip_day_max_fails(), 60)
+            os.environ["WELORA_KUAT_IP_DAY_MAX_FAILS"] = "0"
+            self.assertEqual(academy_store.ip_day_max_fails(), 0)
+        finally:
+            os.environ.pop("WELORA_KUAT_IP_DAY_MAX_FAILS", None)
+            if prev is not None:
+                os.environ["WELORA_KUAT_IP_DAY_MAX_FAILS"] = prev
+
+    def test_client_ip_never_trusts_forwarded_headers_from_a_public_peer(self):
+        from welora import auth_ratelimit as rl
+
+        hdr = {"X-Forwarded-For": "1.2.3.4", "CF-Connecting-IP": "5.6.7.8", "X-Real-IP": "9.9.9.9"}
+        self.assertEqual(rl.client_ip("203.0.113.7", headers=hdr), "203.0.113.7")
+        self.assertEqual(rl.ip_bucket("2001:db8:1:2::aaaa"), rl.ip_bucket("2001:db8:1:2:ffff::1"))
+        src = (ROOT / "welora" / "api" / "app.py").read_text(encoding="utf-8")
+        self.assertIn("rl.client_ip(request.client.host if request.client else None, headers=request.headers)", src)
+
+    def test_verified_definition_shared_with_guest_claim(self):
+        src = (ROOT / "welora" / "guest_claim.py").read_text(encoding="utf-8")
+        self.assertIn("auth_svc.has_verified_contact(conn, acc)", src)
+        st = (ROOT / "welora" / "academy_store.py").read_text(encoding="utf-8")
+        self.assertIn("has_verified_contact(conn, row)", st)
 
 
 class TestServerHeldAttempt(_Env):

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""GP P0b round 2 — KUAT brute-force simulation (reproduces the CoS review attacks on a REAL uvicorn).
+"""GP P0b rounds 2–3 — KUAT brute-force simulation (reproduces the CoS review attacks on a REAL uvicorn).
 
     python scripts/kuat_attack_sim.py [--root <checkout>] [--pg postgresql://…/db] [--out result.json]
+                                      [--skip a,b,c,d] [--max-days 120] [--max-fails 1500]
 
 --root  the checkout to attack (default: this repo) — run it on an older commit to get "before" numbers.
 --pg    attack a PostgreSQL 17 database (schema ``public`` is dropped first — throwaway DB only);
@@ -18,9 +19,20 @@ Attacks (all from ONE client IP, via X-Forwarded-For through a trusted local pro
       then every returned attempt submitted in parallel (wrong) → graded fails vs cap;
       plus 20 guests on the IP each submitting one wrong attempt at the same moment.
   (c) strategy pass rate (in-process Monte Carlo over the checkout's real draw/shuffle/grade):
-      'longest', 'shortest', 'middle', 'random' for N02-01 and N02-02.
+      'longest', 'shortest', 'middle', 'random' and (round 3) the opening patterns 'pick an option
+      starting with Không', 'avoid Không…', 'avoid Không, trừ khi…' for N02-01 and N02-02.
+  (d) round 3 — throwaway accounts: register a new account (e-mail + password, no OTP) for every
+      probe, all from ONE IP, and learn the key from pass/fail only with an exact Bayesian attacker
+      (posterior over all 4^12 keys per node, Thompson-sampled picks; needs numpy). Whenever the
+      server answers 429 the simulation "waits" retry_after seconds by ageing every rate-limit
+      event in the database by that much (simulated clock — no real waiting). Reports graded fails
+      per IP in the first 24 h, simulated time until the attacker is confident (every marginal
+      ≥ 0.99) and whether a fresh OTP-verified account on another IP then passes N02-01 + N02-02
+      first try. Bounded by --max-days (simulated) and --max-fails.
 The /auth/device new-guest limit is raised for the run (WELORA_RL_DEVICE_NEW_IP_MAX) so only the KUAT
-limits are measured (worst case: an attacker who paces guest creation).
+limits are measured (worst case: an attacker who paces guest creation). /auth/register keeps its real
+limit (WELORA_RL_IP_MAX, 20 / IP / 15 min); in (d) a 429 there makes the attacker wait one window on
+the simulated clock. WELORA_OTP_ECHO=1 (staging pilot flag) lets the script create phone-OTP accounts.
 """
 
 from __future__ import annotations
@@ -63,15 +75,17 @@ class Server:
         env.update(db_env)
         env.update({"PORT": str(self.port), "PYTHONPATH": str(root), "WELORA_ENV": "staging",
                     "WELORA_DEMO_AUTOSEED": "0", "WELORA_RL_DEVICE_NEW_IP_MAX": "100000",
-                    "WELORA_RL_REGISTER_IP_MAX": "100000",
+                    "WELORA_OTP_ECHO": "1",
                     "PATH": os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", ""),
                     **(extra or {})})
+        # server output → a file (an unread PIPE fills up on long runs and blocks the server)
+        self.log = tempfile.NamedTemporaryFile(prefix="kuat-sim-server-", suffix=".log", delete=False)
         self.proc = subprocess.Popen(["bash", str(root / "start.sh")], cwd=str(root), env=env,
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                     stdout=self.log, stderr=subprocess.STDOUT)
         t = time.time() + 90
         while time.time() < t:
             if self.proc.poll() is not None:
-                raise SystemExit("server exited: " + self.proc.stdout.read().decode("utf-8", "replace")[-3000:])
+                raise SystemExit("server exited: " + Path(self.log.name).read_text("utf-8", "replace")[-3000:])
             try:
                 urllib.request.urlopen(f"http://127.0.0.1:{self.port}/health", timeout=1)
                 return
@@ -143,6 +157,16 @@ def account(srv: Server, ip: str = "203.0.113.50"):
                                                 "password": "Mat-khau-that-dai-1"}, ip=ip)
     assert st in (200, 201), (st, j)
     return j["user_id"], j["token"]
+
+
+def verified_account(srv: Server, ip: str = "198.51.100.77"):
+    """Phone-OTP account (consumed OTP challenge = verified contact)."""
+    phone = "09" + "%08d" % random.randrange(10 ** 8)
+    st, req = srv.call("POST", "/auth/otp/request", {"phone": phone}, ip=ip)
+    assert st == 200 and req.get("pilot_code"), (st, req)
+    st, ver = srv.call("POST", "/auth/otp/verify", {"challenge_id": req["challenge_id"], "code": req["pilot_code"]}, ip=ip)
+    assert st == 200, (st, ver)
+    return ver["user_id"], ver["token"]
 
 
 def start(srv, uid, tok, node, ip="203.0.113.50"):
@@ -287,8 +311,8 @@ def attack_oracle(srv: Server, budget: int) -> dict:
                           "ip_lockout" if blocked_streak >= 3 else "budget"),
            "key_inferred_at": inferred_at,
            "model": {n: models[n].summary() for n in NODES}, "last_events": events[-4:]}
-    # real account with the inferred key (fresh IP: the attacker's IP is locked)
-    uid, tok = account(srv, ip="198.51.100.77")
+    # real (OTP-verified) account with the inferred key (fresh IP: the attacker's IP is locked)
+    uid, tok = verified_account(srv, ip="198.51.100.77")
     first_try = {}
     for node in NODES:
         st, att = start(srv, uid, tok, node, ip="198.51.100.77")
@@ -346,6 +370,168 @@ def attack_burst(srv: Server, env: dict) -> dict:
     }
 
 
+# ------------------------------------------------------------------------------------------ (d) throwaway accounts
+class Posterior:
+    """Pass/fail-only attacker: exact Bayesian posterior over every answer key of the prompts seen so
+    far (4 options each → 4^n keys, n ≤ 12), Thompson-sampled picks. Hard flags are hidden, so a fail
+    with exactly 4/5 right is explained by 'the wrong one was hard' with probability h; eps keeps a
+    mis-modelled observation from zeroing the true key."""
+
+    def __init__(self, seed=0, h=0.6, eps=1e-3):
+        import numpy as np
+
+        self.np = np
+        self.prompts, self.opts, self.idx = [], [], {}
+        self.w = np.ones(1)
+        self.h, self.eps = h, eps
+        self.rng = np.random.default_rng(seed)
+        self._dig = []
+
+    def learn(self, questions):
+        np = self.np
+        for q in questions:
+            if q["prompt"] in self.idx:
+                continue
+            self.idx[q["prompt"]] = len(self.prompts)
+            self.prompts.append(q["prompt"])
+            self.opts.append(sorted(q["choices"]))
+            self.w = np.tile(self.w, len(q["choices"]))
+            ar = np.arange(self.w.size, dtype=np.int64)
+            self._dig = [((ar // (4 ** i)) % 4).astype(np.uint8) for i in range(len(self.prompts))]
+
+    def observe(self, picks, passed):
+        np = self.np
+        cnt = np.zeros(self.w.size, dtype=np.uint8)
+        for p, c in picks.items():
+            i = self.idx[p]
+            cnt += self._dig[i] == self.opts[i].index(c)
+        n = len(picks)
+        need = int(np.ceil(0.7 * n - 1e-9))
+        if passed:
+            like = np.where(cnt == n, 1.0, np.where(cnt >= need, 1 - self.h, self.eps))
+        else:
+            like = np.where(cnt == n, self.eps, np.where(cnt >= need, self.h, 1.0))
+        self.w *= like
+        self.w /= self.w.sum()
+
+    def marginals(self):
+        return [self.np.bincount(d, weights=self.w, minlength=4) for d in self._dig]
+
+    def picks(self, questions, greedy=False):
+        self.learn(questions)
+        if greedy:
+            m = self.marginals()
+            return {q["prompt"]: self.opts[self.idx[q["prompt"]]][int(m[self.idx[q["prompt"]]].argmax())] for q in questions}
+        cs = self.np.cumsum(self.w)
+        key = int(self.np.searchsorted(cs, self.rng.random() * cs[-1]))
+        return {q["prompt"]: self.opts[self.idx[q["prompt"]]][int(self._dig[self.idx[q["prompt"]]][key])] for q in questions}
+
+    def confidence(self):
+        return float(min(m.max() for m in self.marginals())) if len(self.prompts) >= 12 else 0.0
+
+
+def age_rate_events(env: dict, seconds: float) -> None:
+    """Simulated waiting: move every rate-limit event ``seconds`` into the past."""
+    from datetime import datetime, timedelta
+
+    rows = db_query(env, "SELECT event_id, created_at FROM auth_rate_events")
+    url = env["WELORA_DB_URL"]
+    upd = [((datetime.fromisoformat(str(c)) - timedelta(seconds=seconds)).isoformat(), e) for e, c in rows]
+    if url.startswith("sqlite"):
+        import sqlite3
+
+        con = sqlite3.connect(url.split("sqlite:///", 1)[1])
+        try:
+            con.executemany("UPDATE auth_rate_events SET created_at=? WHERE event_id=?", upd)
+            con.commit()
+        finally:
+            con.close()
+        return
+    import psycopg
+
+    with psycopg.connect(url) as con:
+        with con.cursor() as cur:
+            cur.executemany("UPDATE auth_rate_events SET created_at=%s WHERE event_id=%s", upd)
+
+
+def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip: str = "203.0.113.70") -> dict:
+    models = {n: Posterior(seed=i + 1) for i, n in enumerate(NODES)}
+    clock = 0.0
+    fails = {n: 0 for n in NODES}
+    passes = {n: 0 for n in NODES}
+    first_day_fails = 0
+    accounts = 0
+    waits: dict = {}
+    learned_at: dict = {}
+    started = time.time()
+
+    def wait(r):
+        nonlocal clock
+        d = r.get("detail") or {}
+        sec = float(d.get("retry_after") or 60) + 1
+        waits[d.get("reason") or "?"] = waits.get(d.get("reason") or "?", 0) + 1
+        age_rate_events(env, sec)
+        clock += sec
+
+    while clock < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
+        st, j = srv.call("POST", "/auth/register", {"email": f"t-{uuid.uuid4().hex[:12]}@example.test",
+                                                    "password": "Mat-khau-that-dai-1"}, ip=ip)  # register only — no OTP
+        if st == 429:  # register limit (20 / IP / 15 min): pace account creation
+            waits["register"] = waits.get("register", 0) + 1
+            age_rate_events(env, 901)
+            clock += 901
+            continue
+        assert st in (200, 201), (st, j)
+        uid, tok = j["user_id"], j["token"]
+        accounts += 1
+        for node in NODES:
+            m = models[node]
+            st, att = start(srv, uid, tok, node, ip=ip)
+            if st == 429:
+                wait(att)
+                break
+            if st != 200:
+                break
+            picks = m.picks(att["questions"], greedy=node in learned_at)
+            st, r = submit(srv, uid, tok, node, att, picks, ip=ip)
+            if st == 429:
+                wait(r)
+                break
+            if st != 200:
+                break
+            ok = bool((r.get("kuat_result") or {}).get("passed"))
+            m.observe(picks, ok)
+            if node not in learned_at and (fails[node] + passes[node]) % 5 == 0 and m.confidence() >= 0.99:
+                learned_at[node] = {"sim_hours": round(clock / 3600, 2), "fails_total": sum(fails.values())}
+            if ok:
+                passes[node] += 1
+                continue  # same account goes on to N02-02
+            fails[node] += 1
+            if clock < 86400:
+                first_day_fails += 1
+            break
+    out = {"ip": ip, "accounts_registered": accounts, "graded_fails": fails, "graded_passes": passes,
+           "graded_fails_first_24h_one_ip": first_day_fails, "lock_reasons": waits,
+           "simulated_days": round(clock / 86400, 2), "key_learned_at": learned_at,
+           "stopped_by": ("key_learned" if len(learned_at) == len(NODES) else
+                          "max_days" if clock >= max_days * 86400 else "max_fails"),
+           "confidence": {n: round(models[n].confidence(), 3) for n in NODES}, "wall_s": round(time.time() - started)}
+    uid, tok = verified_account(srv, ip="198.51.100.78")
+    first = {}
+    for node in NODES:
+        st, att = start(srv, uid, tok, node, ip="198.51.100.78")
+        if st != 200:
+            first[node] = f"start {st}"
+            break
+        st, r = submit(srv, uid, tok, node, att, models[node].picks(att["questions"], greedy=True), ip="198.51.100.78")
+        first[node] = bool((r.get("kuat_result") or {}).get("passed")) if st == 200 else f"submit {st}"
+        if first[node] is not True:
+            break
+    out["verified_account_first_try"] = first
+    out["verified_account_gate_mastery"] = all(first.get(n) is True for n in NODES)
+    return out
+
+
 # ------------------------------------------------------------------------------------------ (c) Monte Carlo
 def strategy_rates(root: Path, trials: int) -> dict:
     sys.path.insert(0, str(root))
@@ -353,9 +539,17 @@ def strategy_rates(root: Path, trials: int) -> dict:
 
     rng = random.Random(2026)
 
+    def starts(c, prefix):
+        return c.strip().lower().startswith(prefix)
+
     def pick(strategy, choices):
         if strategy == "random":
             return rng.randrange(len(choices))
+        if strategy in ("pick_khong", "avoid_khong", "avoid_khong_tru_khi"):  # round 3: opening patterns
+            prefix = "không, trừ khi" if strategy == "avoid_khong_tru_khi" else "không"
+            hit = [i for i, c in enumerate(choices) if starts(c, prefix)]
+            pool = hit if strategy == "pick_khong" else [i for i in range(len(choices)) if i not in hit]
+            return rng.choice(pool) if pool else rng.randrange(len(choices))
         order = sorted(range(len(choices)), key=lambda i: (len(choices[i]), rng.random()))
         if strategy == "longest":
             return order[-1]
@@ -368,7 +562,7 @@ def strategy_rates(root: Path, trials: int) -> dict:
     for node in NODES:
         by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
         out[node] = {}
-        for strategy in ("longest", "shortest", "middle", "random"):
+        for strategy in ("longest", "shortest", "middle", "random", "pick_khong", "avoid_khong", "avoid_khong_tru_khi"):
             passed = 0
             for _ in range(trials):
                 served = academy._draw(node)
@@ -390,7 +584,9 @@ def main() -> None:
     ap.add_argument("--budget", type=int, default=80)
     ap.add_argument("--trials", type=int, default=20000)
     ap.add_argument("--out", default="")
-    ap.add_argument("--skip", default="", help="comma list of a,b,c to skip")
+    ap.add_argument("--skip", default="", help="comma list of a,b,c,d to skip")
+    ap.add_argument("--max-days", type=float, default=120.0, help="(d) simulated-time bound")
+    ap.add_argument("--max-fails", type=int, default=1500, help="(d) graded-fail bound")
     a = ap.parse_args()
     root = Path(a.root).resolve()
     skip = set(filter(None, a.skip.split(",")))
@@ -408,6 +604,13 @@ def main() -> None:
                 res["a_oracle"] = attack_oracle(srv, a.budget)
             if "b" not in skip:
                 res["b_burst"] = attack_burst(srv, env)
+        finally:
+            srv.stop()
+    if "d" not in skip:  # own, fresh database (its simulated clock ages every rate-limit event)
+        env = db_env(a.pg or None, tempfile.mkdtemp(prefix="kuat-sim-d-"))
+        srv = Server(root, env)
+        try:
+            res["d_throwaway"] = attack_throwaway(srv, env, a.max_days, a.max_fails)
         finally:
             srv.stop()
     if "c" not in skip:

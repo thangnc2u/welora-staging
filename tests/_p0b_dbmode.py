@@ -219,7 +219,7 @@ def scenario_guest_limits() -> dict:
     per_guest = [_fail_once(c, u, t, "N02-01", ip) for u, t in guests]
     msg = c.post("/academy/kuat/start", json={"user_id": guests[6][0], "node_id": "N02-01"},
                  headers=_h(guests[6][1], ip)).json().get("detail") or {}
-    acc = _register(c, f"p0b-r2-{uuid.uuid4().hex[:6]}@example.test", "192.0.2.211")
+    acc = _phone_otp_account(c)  # round 3: a VERIFIED account (register alone is "unverified" = guest budget)
     real_same_ip = _fail_once(c, acc["user_id"], acc["token"], "N02-01", ip)
     other_ip_guest = _fail_once(c, *_guest(c), "N02-01", "198.51.100.250" if not ip.endswith(".250") else "198.51.100.251")
     # one guest, no IP header: 3 fails on N02-01 (its per-node cooldown) + 3 on N01-01 → device cap
@@ -231,6 +231,185 @@ def scenario_guest_limits() -> dict:
     return {"per_guest": per_guest, "guest_ip_msg": msg.get("message"), "guest_ip_reason": msg.get("reason"),
             "real_same_ip": real_same_ip, "other_ip_guest": other_ip_guest, "device": dev, "device_next": dev_next,
             "device_msg": dev_msg}
+
+
+# --------------------------------------------------------------------------- round 3: throwaway accounts
+def _rand_ip(prefix="198.51.100."):
+    return prefix + str(uuid.uuid4().int % 200 + 1)
+
+
+def _phone_otp_account(c, creation_ip=None):
+    """A phone-OTP account (consumed challenge = verified contact). WELORA_OTP_ECHO=1 (staging pilot)."""
+    os.environ["WELORA_OTP_ECHO"] = "1"
+    phone = "09" + "%08d" % (uuid.uuid4().int % 10 ** 8)
+    hdr = {"CF-Connecting-IP": creation_ip or _rand_ip("192.0.2.")}
+    req = c.post("/auth/otp/request", json={"phone": phone}, headers=hdr)
+    assert req.status_code == 200, req.text
+    ver = c.post("/auth/otp/verify", json={"challenge_id": req.json()["challenge_id"], "code": req.json()["pilot_code"]},
+                 headers=hdr)
+    assert ver.status_code == 200, ver.text
+    return ver.json()
+
+
+def _mark_email_verified(uid):
+    """``users.email_verified_at`` exactly as verify_email_otp writes it (e-mail OTP is admin-listed
+    only today, so a regular account cannot complete it over HTTP — same approach as the #239 tests)."""
+    from welora.auth_ratelimit import _iso
+    from welora.db.connection import get_connection
+    import time as _t
+
+    conn = get_connection(None)
+    try:
+        conn.execute("UPDATE users SET email_verified_at=? WHERE user_id=?", (_iso(_t.time()), uid))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _kind(uid):
+    from welora import academy_store
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        return academy_store._identity(conn, uid)[0]
+    finally:
+        conn.close()
+
+
+def scenario_throwaway_accounts() -> dict:
+    """Round 3 blocking: accounts that only registered (password + e-mail/phone, no OTP) count as
+    guests — they share the 6 / IP / 24 h guest bucket with device guests. OTP-verified accounts and
+    the demo personas P1–P6 keep the account budgets."""
+    from tests._followup2_dbmode import _register
+    from welora import partner_demo_seed
+
+    c = _client()
+    ip = _rand_ip()
+    accs = [_register(c, f"p0b-r3-{uuid.uuid4().hex[:8]}@example.test", _rand_ip("192.0.2.")) for _ in range(8)]
+    per_acc = [_fail_once(c, a["user_id"], a["token"], "N02-01", ip) for a in accs]
+    detail = c.post("/academy/kuat/start", json={"user_id": accs[7]["user_id"], "node_id": "N02-01"},
+                    headers=_h(accs[7]["token"], ip)).json().get("detail") or {}
+    guest_after = _fail_once(c, *_guest(c), "N02-01", ip)  # device guests share the same bucket
+    # the same kind of account counts as verified once its e-mail is OTP-verified
+    email = f"p0b-r3-ver-{uuid.uuid4().hex[:8]}@example.test"
+    reg = _register(c, email, _rand_ip("192.0.2."))
+    kind_before = _kind(reg["user_id"])
+    blocked_before = _fail_once(c, reg["user_id"], reg["token"], "N02-01", ip)
+    _mark_email_verified(reg["user_id"])
+    email_verified = [_kind(reg["user_id"]), *_fail_once(c, reg["user_id"], reg["token"], "N02-01", ip)]
+    ph = _phone_otp_account(c)
+    phone_verified = [_kind(ph["user_id"]), *_fail_once(c, ph["user_id"], ph["token"], "N02-01", ip)]
+    seed = partner_demo_seed.seed_partner_rich_demo()
+    demo_kinds = {pid: _kind(b["user_id"]) for pid, b in (seed.get("personas") or {}).items()}
+    p1 = seed["personas"]["P1"]
+    from welora import auth as auth_svc
+
+    login = c.post("/auth/login", json={"email": partner_demo_seed.DEMO_P1_EMAIL, "password": auth_svc.DEMO_PASSWORD})
+    demo_fail = _fail_once(c, p1["user_id"], login.json()["token"], "N02-01", ip) if login.status_code == 200 else [login.status_code]
+    g_uid, _ = _guest(c)
+    return {"per_account": per_acc, "reason": detail.get("reason"), "message": detail.get("message"),
+            "retry_after": detail.get("retry_after"), "guest_after": guest_after,
+            "kind_registered": kind_before, "blocked_before_otp": blocked_before, "email_verified": email_verified,
+            "phone_verified": phone_verified, "demo_kinds": demo_kinds, "demo_fail": demo_fail,
+            "kind_device_guest": _kind(g_uid), "kind_unknown": _kind("u-does-not-exist")}
+
+
+def _insert_fail_events(scope, key, n, now, spread=(2 * 3600, 20 * 3600)):
+    from welora import academy_store
+    from welora.auth_ratelimit import _iso
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        for i in range(n):
+            age = spread[0] + (spread[1] - spread[0]) * i / max(1, n - 1)
+            conn.execute("INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
+                         (str(uuid.uuid4()), "kuat_fail", scope, academy_store._key_hash(scope, key), _iso(now - age)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _count_events(scope, key):
+    from welora import academy_store
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        return int(conn.execute("SELECT COUNT(*) AS n FROM auth_rate_events WHERE action='kuat_fail' AND scope=? "
+                                "AND key_hash=?", (scope, academy_store._key_hash(scope, key))).fetchone()["n"])
+    finally:
+        conn.close()
+
+
+def _attempt_row(aid):
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        r = conn.execute("SELECT used_at, outcome FROM academy_kuat_attempts WHERE attempt_id=?", (aid,)).fetchone()
+        return [r["used_at"], r["outcome"]]
+    finally:
+        conn.close()
+
+
+def scenario_ip_day_cap() -> dict:
+    """Round 3 blocking: every account (verified or not) shares 60 failed KUATs / client IP / 24 h
+    (IPv6 → /64). The cap is reserved before grading: hitting it → 429 ip_day (VI + retry), the
+    attempt is re-opened (not consumed) and can be submitted once the window frees up."""
+    import time as _t
+
+    from tests._kuat import solve
+    from welora import academy_store
+    from welora.auth_ratelimit import ip_bucket
+
+    c = _client()
+    net = "2001:db8:%x:%x" % (uuid.uuid4().int % 0xffff, uuid.uuid4().int % 0xffff)
+    ip_a, ip_b, ip_other = net + "::1", net + "::beef:2", "2001:db8:ffff:%x::1" % (uuid.uuid4().int % 0xffff)
+    now = _t.time()
+    _insert_fail_events("kuat_ip_day", ip_bucket(ip_a), academy_store.ip_day_max_fails() - 1, now)
+    a, b = _phone_otp_account(c), _phone_otp_account(c)
+    hb = _h(b["token"], ip_b)
+    c.post("/academy/nodes/N02-01/read", json={"user_id": b["user_id"], "node_id": "N02-01"}, headers=hb)
+    att_b = c.post("/academy/kuat/start", json={"user_id": b["user_id"], "node_id": "N02-01"}, headers=hb).json()
+    last_ok = _fail_once(c, a["user_id"], a["token"], "N02-01", ip_a)  # the 60th fail of this /64
+    wrong = solve("N02-01", att_b["questions"], correct=False)
+    r = c.post("/academy/kuat", json={"user_id": b["user_id"], "node_id": "N02-01", "attempt_id": att_b["attempt_id"],
+                                      "answers": wrong}, headers=hb)
+    d = r.json().get("detail") or {}
+    capped = {"status": r.status_code, "reason": d.get("reason"), "message": d.get("message"),
+              "retry_after": d.get("retry_after"), "retry_header": r.headers.get("Retry-After"),
+              "retry_at": d.get("retry_at")}
+    attempt_after_429 = _attempt_row(att_b["attempt_id"])
+    events_after_429 = _count_events("kuat_ip_day", ip_bucket(ip_a))
+    again = c.post("/academy/kuat/start", json={"user_id": b["user_id"], "node_id": "N02-01"}, headers=hb).json()
+    other = _fail_once(c, *_guest_or_verified(c), "N02-01", ip_other)
+    # the window frees up (age every event by 24 h) → the SAME attempt is graded
+    from welora.auth_ratelimit import _iso
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        rows = conn.execute("SELECT event_id, created_at FROM auth_rate_events WHERE action='kuat_fail'").fetchall()
+        for row in rows:
+            conn.execute("UPDATE auth_rate_events SET created_at=? WHERE event_id=?",
+                         (_iso(academy_store._ts(row["created_at"]) - 86400 - 60), row["event_id"]))
+        conn.commit()
+    finally:
+        conn.close()
+    later = c.post("/academy/kuat", json={"user_id": b["user_id"], "node_id": "N02-01", "attempt_id": att_b["attempt_id"],
+                                          "answers": wrong}, headers=hb)
+    return {"last_ok": last_ok, "capped": capped, "attempt_after_429": attempt_after_429,
+            "events_after_429": events_after_429, "max": academy_store.ip_day_max_fails(),
+            "same_attempt_on_restart": again.get("attempt_id") == att_b["attempt_id"] if isinstance(again, dict) else None,
+            "start_detail": (again.get("detail") or {}).get("reason") if isinstance(again, dict) else None,
+            "other_net": other, "later": [later.status_code, (later.json().get("kuat_result") or {}).get("passed")]}
+
+
+def _guest_or_verified(c):
+    a = _phone_otp_account(c)
+    return a["user_id"], a["token"]
 
 
 def scenario_stale_tab() -> dict:

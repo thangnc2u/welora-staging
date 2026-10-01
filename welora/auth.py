@@ -212,6 +212,20 @@ def _is_pure_device_guest(conn, row) -> bool:
     return True
 
 
+def has_verified_contact(conn, row) -> bool:
+    """The account PROVED it owns a contact (CoS review #239 definition, minus the password rule):
+    an e-mail verified by e-mail OTP (``users.email`` + ``users.email_verified_at``), or a consumed
+    phone-OTP challenge owned by the account (``otp_challenges.user_id`` + ``consumed=1``).
+    Registering with password + e-mail/phone proves nothing (nobody checked the address), so such
+    an account is NOT verified until it completes an OTP. Used by guest_claim (claim targets) and
+    the KUAT budgets (GP P0b round 3)."""
+    if str(row["email"] or "").strip() and str(row["email_verified_at"] or "").strip():
+        return True
+    return bool(conn.execute(
+        "SELECT 1 FROM otp_challenges WHERE user_id=? AND consumed=1 LIMIT 1", (row["user_id"],)
+    ).fetchone())
+
+
 def device_guest_exists(device_id: str | None, *, url: str | None = None) -> bool:
     """True when a users row already carries this device_id (POST /auth/device would reuse it,
     not create a new guest) — used only to pick the /auth/device rate-limit bucket."""

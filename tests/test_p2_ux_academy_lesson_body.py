@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import unittest
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -21,7 +22,9 @@ class TestP2UxAcademyLessonBody(unittest.TestCase):
     def setUp(self) -> None:
         self.client = authed(TestClient(create_app()))
         self.html = HTML.read_text(encoding="utf-8")
-        auth = self.client.post("/auth/device", json={"device_id": "uat-lesson-body-01"})
+        # GP P0b: KUAT attempts / cooldowns are DB-backed per user → a fixed device id on the shared
+        # default test DB would carry them across runs; use a fresh device per run.
+        auth = self.client.post("/auth/device", json={"device_id": "uat-lesson-body-" + uuid.uuid4().hex[:10]})
         self.assertEqual(auth.status_code, 200)
         self.uid = auth.json()["user_id"]
 
@@ -81,9 +84,10 @@ class TestP2UxAcademyLessonBody(unittest.TestCase):
             "/academy/kuat",
             json={"user_id": self.uid, "node_id": "N02-01", "answers": answers},
         )
-        self.assertIn(kr.status_code, (200, 403))
-        if kr.status_code == 200:
-            self.assertIn("kuat_result", kr.json())
+        # GP P0b: a fresh guest device per run (setUp) → no cooldown carried over; the answers go to
+        # the server-held attempt issued with the lesson (k1…kN slots) and are graded normally.
+        self.assertEqual(kr.status_code, 200, kr.text)
+        self.assertIn("kuat_result", kr.json())
 
     def test_health_gate(self):
         self.assertEqual(TARGET_MONTHS, 3)

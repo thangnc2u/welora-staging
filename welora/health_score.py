@@ -170,10 +170,9 @@ def compute_health_score(
 
 def health_score_for_user(user_id: str) -> dict[str, Any]:
     goal = goals_api.STORE.get_active_for_user(user_id)
-    flags = goals_api.get_user_flags(user_id)
-    # Parity with service_safety_gate: DNA has_dangerous_debt_self + debt_payoff
-    # must feed components.debt / embedded safety_gate via the same helper.
-    flags = goals_api._apply_debt_goal_flags(user_id, flags)
+    # GP P0b: the SAME flag resolution as /safety-gate (persisted row + server mastery after a
+    # restart, DNA + debt_payoff goal) — never only this process's memory.
+    flags = goals_api.gate_flags(user_id)
     if not goal:
         return compute_health_score(
             user_id=user_id,

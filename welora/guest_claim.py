@@ -113,12 +113,7 @@ def _has_verified_login(conn, acc) -> bool:
     phone = bool(str(acc["phone"] or "").strip())
     if pw and (email or phone):
         return True
-    if email and str(acc["email_verified_at"] or "").strip():
-        return True
-    row = conn.execute(
-        "SELECT 1 FROM otp_challenges WHERE user_id=? AND consumed=1 LIMIT 1", (acc["user_id"],)
-    ).fetchone()
-    return bool(row)
+    return auth_svc.has_verified_contact(conn, acc)  # e-mail OTP or consumed phone OTP (shared)
 
 
 def claim_guest_data(account_uid: str, guest_token: str) -> dict[str, Any]:
@@ -257,7 +252,28 @@ def _move_db(tx, guest: str, account: str) -> tuple[dict[str, int], dict[str, st
         )
         moved["user_flags"] = int(cur.rowcount or 0)
         if not moved["user_flags"]:
-            skipped["user_flags"] = "account_has_flags"
+            # GP P0b: the account already has a flags row. Its debt flags stay. Mastery: a row with
+            # a trusted source (academy / seed / internal) wins; an old row WITHOUT a trusted source
+            # (pre-016 / self-set) reads as not_started, so the guest's REAL (trusted, server-set)
+            # mastery is carried over. Untrusted guest mastery never transfers.
+            from welora.db.repos import TRUSTED_MASTERY_SOURCES
+
+            acc = tx.execute("SELECT mastery_source AS s FROM user_flags WHERE user_id=?", (account,)).fetchone()
+            g = tx.execute("SELECT mastery_no_efund_invest AS m, mastery_source AS s FROM user_flags WHERE user_id=?",
+                           (guest,)).fetchone()
+            acc_trusted = bool(acc) and (acc["s"] in TRUSTED_MASTERY_SOURCES)
+            g_real = bool(g) and g["s"] in TRUSTED_MASTERY_SOURCES and str(g["m"] or "not_started") != "not_started"
+            if not acc_trusted and g_real:
+                tx.execute(
+                    "UPDATE user_flags SET mastery_no_efund_invest=?, mastery_source=?, updated_at=datetime('now') "
+                    "WHERE user_id=?",
+                    (g["m"], g["s"], account),
+                )
+                tx.execute("UPDATE user_flags SET mastery_no_efund_invest='not_started', mastery_source=NULL "
+                           "WHERE user_id=?", (guest,))
+                moved["mastery"] = 1
+            else:
+                skipped["user_flags"] = "account_has_flags"
     cur = tx.execute(
         "UPDATE mastery_nodes SET user_id=? WHERE user_id=? AND node_id NOT IN "
         "(SELECT m2.node_id FROM mastery_nodes m2 WHERE m2.user_id=?)",
@@ -266,6 +282,24 @@ def _move_db(tx, guest: str, account: str) -> tuple[dict[str, int], dict[str, st
     moved["mastery_nodes"] = int(cur.rowcount or 0)
     cur = tx.execute("UPDATE decision_logs SET user_id=? WHERE user_id=?", (account, guest))
     moved["decision_logs"] = int(cur.rowcount or 0)
+
+    # Academy progress (GP P0b, migration 017): move it, or merge into the account's progress
+    # (account kept; the guest's mastered nodes / read lessons / XP added). Open guest attempts end.
+    g_prof = tx.execute("SELECT profile_json FROM academy_profiles WHERE user_id=?", (guest,)).fetchone()
+    if g_prof:
+        a_prof = tx.execute("SELECT profile_json FROM academy_profiles WHERE user_id=?", (account,)).fetchone()
+        if not a_prof:
+            tx.execute("UPDATE academy_profiles SET user_id=?, rev=rev+1 WHERE user_id=?", (account, guest))
+        else:
+            from welora import academy
+
+            merged = academy.merge_profiles(json.loads(a_prof["profile_json"]), json.loads(g_prof["profile_json"]))
+            tx.execute("UPDATE academy_profiles SET profile_json=?, rev=rev+1, updated_at=? WHERE user_id=?",
+                       (json.dumps(merged, ensure_ascii=False, sort_keys=True), _now(), account))
+            tx.execute("DELETE FROM academy_profiles WHERE user_id=?", (guest,))
+        moved["academy_profiles"] = 1
+    tx.execute("UPDATE academy_kuat_attempts SET used_at=?, outcome='superseded' WHERE user_id=? AND used_at IS NULL",
+               (_now(), guest))
 
     # OS ledger bundle
     present = OS_TABLES  # migrations 004–007 (a failed probe would abort the PG transaction)
@@ -321,5 +355,33 @@ def _move_memory(guest: str, account: str, moved: dict[str, int], skipped: dict[
             n += 1
         if n:
             moved["goals"] = moved.get("goals", 0) + n
+    from welora import academy, mastery
+
+    if goals_api._use_db_store():
+        # DB store: the rows above are the truth — drop this process's copies so the next read of
+        # flags / mastery / Academy progress (gate, health score, tree) comes from the DB.
+        for uid in (guest, account):
+            goals_api.USER_FLAGS.pop(uid, None)
+            mastery._STORE.pop(uid, None)
+            academy._PROFILES.pop(uid, None)
+            academy._REVS.pop(uid, None)
+        return
+    # memory store (local / unit tests): every in-process value is server-written
     if guest in goals_api.USER_FLAGS and account not in goals_api.USER_FLAGS:
         goals_api.USER_FLAGS[account] = goals_api.USER_FLAGS.pop(guest)
+    elif guest in goals_api.USER_FLAGS:
+        gm = goals_api.USER_FLAGS[guest].get("mastery_no_efund_invest") or "not_started"
+        if (goals_api.USER_FLAGS[account].get("mastery_no_efund_invest") or "not_started") == "not_started" \
+                and gm != "not_started":
+            goals_api.USER_FLAGS[account]["mastery_no_efund_invest"] = gm
+            moved["mastery"] = 1
+    g_nodes = mastery._STORE.pop(guest, None) or {}
+    a_nodes = mastery._STORE.setdefault(account, {})
+    for nid, node in g_nodes.items():
+        if nid not in a_nodes or a_nodes[nid].state == "not_started":
+            a_nodes[nid] = node
+    if guest in academy._PROFILES:
+        gp = academy._PROFILES.pop(guest)
+        academy._PROFILES[account] = (academy.merge_profiles(academy._PROFILES[account], gp)
+                                      if account in academy._PROFILES else gp)
+        moved["academy_profiles"] = 1

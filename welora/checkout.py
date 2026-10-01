@@ -1264,7 +1264,7 @@ def _usage_academy_lessons(user_id: str) -> int:
     try:
         from welora import academy
 
-        prof = academy._PROFILES.get(user_id) or {}
+        prof = academy.profile_snapshot(user_id)  # persisted progress (GP P0b), not only this process
         done = set(prof.get("read") or [])
         for nid, st in (prof.get("nodes") or {}).items():
             if (st or {}).get("mastery_level") not in (None, "not_started"):

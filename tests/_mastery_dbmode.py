@@ -46,13 +46,11 @@ def _row(uid):
         conn.close()
 
 
-def _pass_kuat(c, uid, tok, node_id):
-    from welora import academy
+def _pass_kuat(c, uid, tok, node_id, correct=True):
+    from tests._kuat import pass_kuat_http
 
-    answers = [{"question_id": q["id"], "choice": q["answer"]} for q in academy.QUESTIONS[node_id]]
-    c.post(f"/academy/nodes/{node_id}/read", json={"user_id": uid, "node_id": node_id}, headers=_h(tok))
-    r = c.post("/academy/kuat", json={"user_id": uid, "node_id": node_id, "answers": answers}, headers=_h(tok))
-    return r.status_code, (r.json().get("kuat_result") or {}).get("passed")
+    code, passed, _body = pass_kuat_http(c, uid, _h(tok), node_id, correct=correct)
+    return code, passed
 
 
 def scenario_mastery_server_only() -> dict:
@@ -97,11 +95,7 @@ def scenario_mastery_server_only() -> dict:
                                 headers=_h(tok)).status_code  # prerequisite N02-01 not passed yet
     out["kuat_prereq"] = list(_pass_kuat(c, uid, tok, "N02-01"))
     out["gate_after_prereq"] = _gate(c, uid, tok)
-    out["kuat_wrong"] = (lambda r: [r.status_code, (r.json().get("kuat_result") or {}).get("passed")])(
-        c.post("/academy/kuat", json={"user_id": uid, "node_id": academy.GATE_NODE,
-                                      "answers": [{"question_id": q["id"], "choice": (q["answer"] + 1) % 3}
-                                                  for q in academy.QUESTIONS[academy.GATE_NODE]]},
-               headers=_h(tok)))
+    out["kuat_wrong"] = list(_pass_kuat(c, uid, tok, academy.GATE_NODE, correct=False))
     out["gate_after_wrong"] = _gate(c, uid, tok)
     out["kuat_gate"] = list(_pass_kuat(c, uid, tok, academy.GATE_NODE))
     out["gate_after_kuat"] = _gate(c, uid, tok)

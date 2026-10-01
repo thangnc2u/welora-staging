@@ -283,7 +283,13 @@ class CategorySeedBody(BaseModel):
 class AcademyKuatBody(BaseModel):
     user_id: str
     node_id: str
+    attempt_id: Optional[str] = None  # GP P0b: server-issued, single-use (GET node / POST /academy/kuat/start)
     answers: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AcademyKuatStartBody(BaseModel):
+    user_id: Optional[str] = None
+    node_id: str
 
 
 def _respond(code: int, body: dict) -> dict:
@@ -1095,12 +1101,23 @@ def create_app() -> FastAPI:
         uid = _owner(authorization, user_id)
         return _respond(*academy_svc.service_get_tree(uid))
 
+    def _kuat_ip(request: Request) -> str:
+        from welora import auth_ratelimit as rl
+
+        return rl.client_ip(request.client.host if request.client else None, headers=request.headers)
+
+    def _kuat_respond(code: int, body: dict) -> dict:
+        if code == 429:  # GP P0b: KUAT cooldown (VI message + retry time)
+            raise HTTPException(status_code=429, detail=body, headers={"Retry-After": str(body.get("retry_after") or 60)})
+        return _respond(code, body)
+
     @app.get("/academy/nodes/{node_id}", tags=["academy"])
     def academy_node(
-        node_id: str, user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None),
+        node_id: str, request: Request, user_id: Optional[str] = Query(None),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
         uid = _owner(authorization, user_id)
-        return _respond(*academy_svc.service_get_node(uid, node_id))
+        return _respond(*academy_svc.service_get_node(uid, node_id, ip=_kuat_ip(request)))
 
     @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
     def academy_read(node_id: str, body: AcademyReadBody, authorization: Optional[str] = Header(None)) -> dict:
@@ -1110,10 +1127,20 @@ def create_app() -> FastAPI:
         payload["node_id"] = node_id or payload.get("node_id")
         return _respond(*academy_svc.service_mark_read(payload))
 
-    @app.post("/academy/kuat", tags=["academy"])
-    def academy_kuat(body: AcademyKuatBody, authorization: Optional[str] = Header(None)) -> dict:
+    @app.post("/academy/kuat/start", tags=["academy"])
+    def academy_kuat_start(body: AcademyKuatStartBody, request: Request,
+                           authorization: Optional[str] = Header(None)) -> dict:
+        """GP P0b: issue a fresh KUAT attempt (random questions from the bank, shuffled options)."""
         uid = _owner(authorization, body.user_id)
-        return _respond(*academy_svc.service_submit_kuat({**body.model_dump(), "user_id": uid}))
+        return _kuat_respond(*academy_svc.service_start_kuat({"user_id": uid, "node_id": body.node_id},
+                                                             ip=_kuat_ip(request)))
+
+    @app.post("/academy/kuat", tags=["academy"])
+    def academy_kuat(body: AcademyKuatBody, request: Request, authorization: Optional[str] = Header(None)) -> dict:
+        """Graded on the server against the attempt it issued; returns pass/fail + total score only."""
+        uid = _owner(authorization, body.user_id)
+        return _kuat_respond(*academy_svc.service_submit_kuat({**body.model_dump(), "user_id": uid},
+                                                              ip=_kuat_ip(request)))
 
     @app.post("/goals", tags=["goals"], status_code=201)
     def goals_create(body: GoalCreateBody, authorization: Optional[str] = Header(None)) -> dict:

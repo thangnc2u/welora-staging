@@ -51,7 +51,8 @@ services:
       # WELORA_RL_VERIFY_TARGET_MAX, WELORA_RL_VERIFY_IP_MAX — set in the Dashboard only if needed.
       # /auth/login counts FAILED attempts only (shared demo accounts never lock): per account+IP
       # WELORA_RL_LOGIN_PAIR_MAX (10), per account from all IPs WELORA_RL_LOGIN_ACCOUNT_MAX (50),
-      # per IP across accounts WELORA_RL_LOGIN_IP_MAX (30).
+      # per IP across accounts WELORA_RL_LOGIN_IP_MAX (30). "Account" = the resolved user (email and
+      # phone share one budget); a login sending both email and phone is rejected (400).
       # Client IP for limits: CF-Connecting-IP → True-Client-IP → first X-Forwarded-For → peer, headers
       # trusted only when the TCP peer is a private/loopback proxy (Render behind Cloudflare).
       # Login-token lifetime (P0 follow-up): WELORA_TOKEN_TTL_DAYS (default 30) for password / OTP /

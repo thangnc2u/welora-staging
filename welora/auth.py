@@ -978,7 +978,55 @@ def service_register(body: dict) -> tuple[int, dict]:
         return 403, {"error": str(e)}
 
 
+LOGIN_ONE_IDENTIFIER_MSG = "Chỉ nhập email hoặc số điện thoại để đăng nhập, không nhập cả hai."
+
+
+def login_identifier_conflict(email: str | None, phone: str | None) -> bool:
+    """True when a login names both an email and a phone (rejected with 400 — the lookup would
+    silently fall back from one to the other, which defeated per-account rate limits)."""
+    return bool((email or "").strip()) and bool((phone or "").strip())
+
+
+def login_rate_key(*, email: str | None = None, phone: str | None = None, url: str | None = None) -> str:
+    """Rate-limit account key for /auth/login, resolved exactly like login_guest's lookup.
+
+    Existing account → ``user:<user_id>`` (one budget whether the email or the phone is used).
+    Unknown account  → ``email:<normalised>`` / ``phone:<normalised>`` — the identifier the lookup
+    used, so failures against non-existent accounts still count per identifier. The caller treats
+    both cases identically (same limits, same responses) → nothing reveals whether it exists.
+    Call only after login_identifier_conflict() was rejected. "" when no identifier at all."""
+    raw_e = (email or "").strip()
+    raw_p = (phone or "").strip()
+    if raw_e:
+        col, raw = "email", raw_e
+        try:
+            norm = _norm_email(raw_e)
+        except ValueError:
+            norm = None
+    elif raw_p:
+        col, raw = "phone", raw_p
+        try:
+            norm = _norm_phone(raw_p)
+        except ValueError:
+            norm = None
+    else:
+        return ""
+    if norm:
+        ensure_auth_schema(url)
+        conn = get_connection(url)
+        try:
+            row = conn.execute(f"SELECT user_id FROM users WHERE {col}=?", (norm,)).fetchone()
+        finally:
+            conn.close()
+        if row and row["user_id"]:
+            return "user:" + str(row["user_id"])
+        return f"{col}:{norm}"
+    return f"{col}:invalid:{raw.lower()}"
+
+
 def service_login(body: dict) -> tuple[int, dict]:
+    if login_identifier_conflict(body.get("email"), body.get("phone")):
+        return 400, {"error": LOGIN_ONE_IDENTIFIER_MSG}
     try:
         out = login_guest(
             email=body.get("email"),

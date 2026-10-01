@@ -948,25 +948,35 @@ def create_app() -> FastAPI:
 
     @app.post("/auth/login", tags=["auth"])
     def auth_login(body: GuestLoginBody, request: Request) -> dict:
-        """Rate limit counts FAILED logins only (per account+IP, per account, per IP) — shared demo
-        accounts and correct passwords from other IPs are never locked out by someone else's typos."""
+        """Rate limit counts FAILED logins only, per RESOLVED account+IP, per account, per IP.
+        Both email and phone → 400 (the lookup's email→phone fallback let a fresh junk email per
+        request dodge the account buckets). The attempt is reserved before the password hash so a
+        concurrent burst cannot exceed the limit; a correct login releases it."""
         from welora import auth_ratelimit as rl
 
+        if auth_svc.login_identifier_conflict(body.email, body.phone):
+            _respond(400, {"error": auth_svc.LOGIN_ONE_IDENTIFIER_MSG})
         ip = rl.client_ip(request.client.host if request.client else None, headers=request.headers)
-        target = body.email or body.phone
+        account = auth_svc.login_rate_key(email=body.email, phone=body.phone)
         try:
-            rl.login_check(ip=ip, target=target)
+            attempt = rl.login_reserve(ip=ip, account=account)
         except rl.RateLimited as e:
             raise HTTPException(
                 status_code=429,
                 detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
                 headers={"Retry-After": str(e.retry_after)},
             )
-        code, out = auth_svc.service_login(body.model_dump())
+        try:
+            code, out = auth_svc.service_login(body.model_dump())
+        except Exception:
+            rl.login_release(attempt)
+            raise
         if code == 401:
-            rl.login_record_failure(ip=ip, target=target)
-        elif code == 200:
-            rl.login_clear_pair(ip=ip, target=target)
+            rl.login_commit_failure(attempt)
+        else:
+            rl.login_release(attempt)
+            if code == 200:
+                rl.login_clear_pair(ip=ip, account=account)
         return _respond(code, out)
 
     @app.post("/auth/logout", tags=["auth"])

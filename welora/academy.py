@@ -6,7 +6,7 @@ import json
 import math
 import random
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 KUAT_PASS_THRESHOLD = 0.70
@@ -962,7 +962,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
             questions = att["questions"]
             kuat.update({"attempt_id": att["attempt_id"], "expires_at": att["expires_at"]})
         except store.KuatCooldown as e:
-            kuat.update({"cooldown": cooldown_payload(e)})
+            kuat.update({"cooldown": cooldown_payload(e, node_id)})
     n.update(
         {
             "status": st["status"],
@@ -1110,7 +1110,7 @@ def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None) -> di
     from welora import academy_store as store
 
     store.check_kuat_allowed(user_id, node_id, ip)
-    att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id))
+    att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id), ip=ip)
     return {**kuat_info(node_id), "attempt_id": att["attempt_id"], "expires_at": att["expires_at"],
             "node_id": node_id, "questions": _served_public(node_id, att["served"])}
 
@@ -1173,31 +1173,56 @@ def _wait_vi(seconds: int) -> str:
     return f"{h} giờ" + (f" {mm} phút" if mm else "")
 
 
+# Round 4: every message carries the retry time in Vietnam time ({at}, UTC+7 — no DST) next to the
+# duration; the payload also has retry_at (ISO, UTC) and a link back to the lesson. The network
+# messages never ask for an OTP / verification: a password-registered account has no way to verify
+# today (e-mail OTP is admin-listed only, phone OTP creates a separate account).
+_RETRY = "sau khoảng {wait} (từ {at}, giờ Việt Nam)"
+_REVIEW = " Trong lúc chờ, mời bạn ôn lại bài «{lesson}» — nắm vững nội dung bài là cách chắc chắn nhất để đạt."
 COOLDOWN_MSG_VI = {
-    "fails": "Bạn đã làm bài KUAT này chưa đạt vài lần liền. Hãy ôn lại bài học rồi thử lại sau khoảng {wait}.",
-    "daily": "Hôm nay bạn đã làm bài KUAT này chưa đạt nhiều lần. Hãy nghỉ ngơi, ôn lại bài và quay lại sau khoảng {wait}.",
-    "ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Vui lòng thử lại sau khoảng {wait}.",
-    "ip_day": "Hôm nay mạng này đã có quá nhiều lượt KUAT chưa đạt. Vui lòng thử lại sau khoảng {wait}.",
-    "unverified_ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này (tài khoản chưa xác thực bằng mã OTP dùng chung giới hạn với khách). Vui lòng thử lại sau khoảng {wait}.",
-    "unverified_device": "Tài khoản chưa xác thực bằng mã OTP đã làm bài KUAT chưa đạt nhiều lần. Hãy ôn lại bài và thử lại sau khoảng {wait}.",
-    "guest_ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Hãy đăng nhập tài khoản của bạn hoặc thử lại sau khoảng {wait}.",
-    "device": "Thiết bị này đã làm bài KUAT chưa đạt nhiều lần. Hãy ôn lại bài, đăng nhập tài khoản của bạn hoặc thử lại sau khoảng {wait}.",
-    "starts": "Bạn đã mở bài KUAT này quá nhiều lần. Vui lòng thử lại sau khoảng {wait}.",
+    "fails": "Bạn đã làm bài KUAT này chưa đạt vài lần liền. Hãy ôn lại bài học rồi thử lại " + _RETRY + ".",
+    "daily": "Hôm nay bạn đã làm bài KUAT này chưa đạt nhiều lần. Hãy nghỉ ngơi, ôn lại bài và quay lại " + _RETRY + ".",
+    "ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Vui lòng thử lại " + _RETRY + ".",
+    "ip_day": "Hôm nay mạng này đã có quá nhiều lượt KUAT chưa đạt. Vui lòng thử lại " + _RETRY + ".",
+    "unverified_ip": ("Bài KUAT này tạm dừng trên mạng bạn đang dùng vì đã có nhiều lượt chưa đạt từ mạng này "
+                      "trong 24 giờ qua. Bạn có thể làm lại " + _RETRY + "." + _REVIEW),
+    "unverified_device": ("Bạn đã làm bài KUAT này chưa đạt nhiều lần trong 24 giờ qua. Bạn có thể làm lại "
+                          + _RETRY + "." + _REVIEW),
+    "demo_ip": ("Bài KUAT này tạm dừng cho tài khoản demo trên mạng bạn đang dùng vì đã có nhiều lượt chưa đạt từ "
+                "mạng này trong 24 giờ qua. Bạn có thể làm lại " + _RETRY + "." + _REVIEW),
+    "guest_ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Hãy đăng nhập tài khoản của bạn hoặc thử lại " + _RETRY + ".",
+    "device": "Thiết bị này đã làm bài KUAT chưa đạt nhiều lần. Hãy ôn lại bài, đăng nhập tài khoản của bạn hoặc thử lại " + _RETRY + ".",
+    "starts": "Bạn đã mở bài KUAT này quá nhiều lần. Vui lòng thử lại " + _RETRY + ".",
 }
+VN_TZ = timezone(timedelta(hours=7), "ICT")
 ATTEMPT_INVALID_MSG_VI = "Lượt KUAT này đã hết hạn hoặc đã được nộp. Hãy tải lại bài để làm lượt mới."
 RELOAD_MSG_VI = "Bài KUAT trên trang này đã cũ. Vui lòng tải lại trang để làm lượt mới."
 NO_ANSWERS_MSG_VI = "Bạn chưa chọn câu trả lời nào."
 
 
-def cooldown_payload(e: Any) -> dict[str, Any]:
+def _vn_time(at: datetime) -> str:
+    """'05:12' today (Vietnam time), else '05:12 ngày 03/10'."""
+    local, today = at.astimezone(VN_TZ), datetime.now(VN_TZ).date()
+    return local.strftime("%H:%M") + ("" if local.date() == today else local.strftime(" ngày %d/%m"))
+
+
+def cooldown_payload(e: Any, node_id: Optional[str] = None) -> dict[str, Any]:
     retry_at = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + e.retry_after, tz=timezone.utc)
-    return {
+    n = _NODE_BY_ID.get(node_id or "") or {}
+    lesson = str(n.get("title") or "học")
+    at_vn = _vn_time(retry_at)
+    out = {
         "error_code": "KUAT_COOLDOWN",
         "reason": e.reason,
-        "message": COOLDOWN_MSG_VI.get(e.reason, COOLDOWN_MSG_VI["fails"]).format(wait=_wait_vi(e.retry_after)),
+        "message": COOLDOWN_MSG_VI.get(e.reason, COOLDOWN_MSG_VI["fails"]).format(
+            wait=_wait_vi(e.retry_after), at=at_vn, lesson=lesson),
         "retry_after": int(e.retry_after),
         "retry_at": retry_at.isoformat(),
+        "retry_at_vn": at_vn,
     }
+    if n:
+        out.update({"lesson_title": lesson, "lesson_href": "/app/content?key=" + str(n.get("principle_key") or "")})
+    return out
 
 
 def service_get_tree(user_id: str) -> tuple[int, dict]:
@@ -1242,7 +1267,7 @@ def service_start_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, di
     try:
         return 200, start_attempt(user_id, node_id, ip=ip)
     except store.KuatCooldown as e:
-        return 429, cooldown_payload(e)
+        return 429, cooldown_payload(e, node_id)
 
 
 def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, dict]:
@@ -1256,7 +1281,7 @@ def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, d
     try:
         out = submit_kuat_attempt(user_id, node_id, (body or {}).get("attempt_id"), answers, ip=ip)
     except store.KuatCooldown as e:
-        return 429, cooldown_payload(e)
+        return 429, cooldown_payload(e, node_id)
     if out.get("error") == "locked":
         return 403, out
     if out.get("error") == "attempt_invalid":

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""GP P0b rounds 2–3 — KUAT brute-force simulation (reproduces the CoS review attacks on a REAL uvicorn).
+"""GP P0b rounds 2–4 — KUAT brute-force simulation (reproduces the CoS review attacks on a REAL uvicorn).
 
     python scripts/kuat_attack_sim.py [--root <checkout>] [--pg postgresql://…/db] [--out result.json]
-                                      [--skip a,b,c,d] [--max-days 120] [--max-fails 1500]
+                                      [--skip a,b,c,d,e] [--max-days 120] [--max-fails 1500] [--demo-ips 1]
 
 --root  the checkout to attack (default: this repo) — run it on an older commit to get "before" numbers.
 --pg    attack a PostgreSQL 17 database (schema ``public`` is dropped first — throwaway DB only);
@@ -29,6 +29,11 @@ Attacks (all from ONE client IP, via X-Forwarded-For through a trusted local pro
       per IP in the first 24 h, simulated time until the attacker is confident (every marginal
       ≥ 0.99) and whether a fresh OTP-verified account on another IP then passes N02-01 + N02-02
       first try. Bounded by --max-days (simulated) and --max-fails.
+  (e) round 4 — demo personas P1–P6 (public password): (e1) outsiders on three networks each fail P2's
+      N02-01 until the server refuses for the day (short cooldowns waited out on the simulated clock);
+      then the partner on its own network: can it still take the KUAT with P2? (e2) the (d) attacker,
+      but probing with the six demo personas from --demo-ips client IPs (rotating): graded fails per
+      24 h, simulated time until the key is learned, does a fresh OTP-verified account pass first try.
 The /auth/device new-guest limit is raised for the run (WELORA_RL_DEVICE_NEW_IP_MAX) so only the KUAT
 limits are measured (worst case: an attacker who paces guest creation). /auth/register keeps its real
 limit (WELORA_RL_IP_MAX, 20 / IP / 15 min); in (d) a 429 there makes the attacker wait one window on
@@ -456,7 +461,7 @@ def age_rate_events(env: dict, seconds: float) -> None:
 
 def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip: str = "203.0.113.70") -> dict:
     models = {n: Posterior(seed=i + 1) for i, n in enumerate(NODES)}
-    clock = 0.0
+    waited = 0.0
     fails = {n: 0 for n in NODES}
     passes = {n: 0 for n in NODES}
     first_day_fails = 0
@@ -465,21 +470,24 @@ def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip
     learned_at: dict = {}
     started = time.time()
 
+    def now_sim():  # simulated time = waited-out seconds + real seconds the run itself took (round 4)
+        return waited + (time.time() - started)
+
     def wait(r):
-        nonlocal clock
+        nonlocal waited
         d = r.get("detail") or {}
         sec = float(d.get("retry_after") or 60) + 1
         waits[d.get("reason") or "?"] = waits.get(d.get("reason") or "?", 0) + 1
         age_rate_events(env, sec)
-        clock += sec
+        waited += sec
 
-    while clock < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
+    while now_sim() < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
         st, j = srv.call("POST", "/auth/register", {"email": f"t-{uuid.uuid4().hex[:12]}@example.test",
                                                     "password": "Mat-khau-that-dai-1"}, ip=ip)  # register only — no OTP
         if st == 429:  # register limit (20 / IP / 15 min): pace account creation
             waits["register"] = waits.get("register", 0) + 1
             age_rate_events(env, 901)
-            clock += 901
+            waited += 901
             continue
         assert st in (200, 201), (st, j)
         uid, tok = j["user_id"], j["token"]
@@ -502,19 +510,19 @@ def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip
             ok = bool((r.get("kuat_result") or {}).get("passed"))
             m.observe(picks, ok)
             if node not in learned_at and (fails[node] + passes[node]) % 5 == 0 and m.confidence() >= 0.99:
-                learned_at[node] = {"sim_hours": round(clock / 3600, 2), "fails_total": sum(fails.values())}
+                learned_at[node] = {"sim_hours": round(now_sim() / 3600, 2), "fails_total": sum(fails.values())}
             if ok:
                 passes[node] += 1
                 continue  # same account goes on to N02-02
             fails[node] += 1
-            if clock < 86400:
+            if now_sim() < 86400:
                 first_day_fails += 1
             break
     out = {"ip": ip, "accounts_registered": accounts, "graded_fails": fails, "graded_passes": passes,
            "graded_fails_first_24h_one_ip": first_day_fails, "lock_reasons": waits,
-           "simulated_days": round(clock / 86400, 2), "key_learned_at": learned_at,
+           "simulated_days": round(now_sim() / 86400, 2), "key_learned_at": learned_at,
            "stopped_by": ("key_learned" if len(learned_at) == len(NODES) else
-                          "max_days" if clock >= max_days * 86400 else "max_fails"),
+                          "max_days" if now_sim() >= max_days * 86400 else "max_fails"),
            "confidence": {n: round(models[n].confidence(), 3) for n in NODES}, "wall_s": round(time.time() - started)}
     uid, tok = verified_account(srv, ip="198.51.100.78")
     first = {}
@@ -524,6 +532,151 @@ def attack_throwaway(srv: Server, env: dict, max_days: float, max_fails: int, ip
             first[node] = f"start {st}"
             break
         st, r = submit(srv, uid, tok, node, att, models[node].picks(att["questions"], greedy=True), ip="198.51.100.78")
+        first[node] = bool((r.get("kuat_result") or {}).get("passed")) if st == 200 else f"submit {st}"
+        if first[node] is not True:
+            break
+    out["verified_account_first_try"] = first
+    out["verified_account_gate_mastery"] = all(first.get(n) is True for n in NODES)
+    return out
+
+
+# ------------------------------------------------------------------------------------------ (e) demo personas
+def demo_logins(srv: Server) -> dict:
+    """Log in as P1–P6 with the public demo password (the server seeds them at start-up)."""
+    sys.path.insert(0, str(HERE))
+    emails = {"P1": "demo-p1@welora.demo", "P2": "partner@welora.demo", "P3": "demo-p3@welora.demo",
+              "P4": "demo-p4@welora.demo", "P5": "demo-p5@welora.demo", "P6": "demo-p6@welora.demo"}
+    out = {}
+    deadline = time.time() + 120
+    for pid, email in emails.items():
+        while True:
+            st, j = srv.call("POST", "/auth/login", {"email": email, "password": "WeloraDemo1!"},
+                             ip="192.0.2.%d" % (int(pid[1]) + 10))
+            if st == 200:
+                out[pid] = (j["user_id"], j["token"])
+                break
+            if time.time() > deadline:
+                raise SystemExit(f"demo login {pid}: {st} {j}")
+            time.sleep(1)
+    return out
+
+
+def attack_demo_burn(srv: Server, env: dict, personas: dict) -> dict:
+    uid, tok = personas["P2"]
+    nets = ["203.0.113.81", "203.0.113.82", "203.0.113.83"]
+    per_net, reasons = {}, {}
+    for ip in nets:
+        graded, waited = 0, 0.0
+        while waited < 86400:
+            st, att = start(srv, uid, tok, "N02-01", ip=ip)
+            r = att
+            if st == 200:
+                st, r = submit(srv, uid, tok, "N02-01", att, _wrong(att), ip=ip)
+                if st == 200:
+                    graded += 1
+                    continue
+            if st != 429:
+                break
+            d = r.get("detail") or {}
+            if d.get("reason") in ("fails", "ip", "starts") and float(d.get("retry_after") or 0) <= 3600:
+                age_rate_events(env, float(d["retry_after"]) + 1)  # short cooldown: wait it out
+                waited += float(d["retry_after"]) + 1
+                continue
+            reasons[ip] = d.get("reason")
+            break
+        per_net[ip] = graded
+    st, att = start(srv, uid, tok, "N02-01", ip="198.51.100.90")  # the partner's own network
+    partner = {"start": st, "reason": (att.get("detail") or {}).get("reason") if st != 200 else None}
+    if st == 200:
+        st2, r = submit(srv, uid, tok, "N02-01", att, _wrong(att), ip="198.51.100.90")
+        partner["submit"] = st2
+        partner["graded"] = st2 == 200
+    return {"outsider_graded_fails_per_network": per_net, "outsider_stopped_by": reasons,
+            "partner_other_network": partner}
+
+
+def attack_demo_learn(srv: Server, env: dict, personas: dict, max_days: float, max_fails: int, n_ips: int) -> dict:
+    ips = ["203.0.113.%d" % (100 + i) for i in range(n_ips)]
+    models = {n: Posterior(seed=11 + i) for i, n in enumerate(NODES)}
+    waited = 0.0
+    fails = {n: 0 for n in NODES}
+    passes = {n: 0 for n in NODES}
+    first_day_fails = 0
+    waits: dict = {}
+    learned_at: dict = {}
+    started = time.time()
+    blocked: set = set()  # (persona, ip) refused since the last wait
+    order = [(pid, ip) for ip in ips for pid in sorted(personas)]
+    k = 0
+
+    def wait_min(sec):
+        nonlocal waited
+        age_rate_events(env, sec)
+        waited += sec
+        blocked.clear()
+
+    def now_sim():  # simulated time = waited-out seconds + real seconds the run itself took
+        return waited + (time.time() - started)
+
+    pending_wait = []
+    timeline = []
+    while now_sim() < max_days * 86400 and sum(fails.values()) < max_fails and len(learned_at) < len(NODES):
+        if len(blocked) >= len(order):  # every persona on every IP refused → wait the shortest retry
+            wait_min(min(pending_wait) + 1)
+            pending_wait.clear()
+            continue
+        pid, ip = order[k % len(order)]
+        k += 1
+        if (pid, ip) in blocked:
+            continue
+        uid, tok = personas[pid]
+        for node in NODES:
+            m = models[node]
+            st, att = start(srv, uid, tok, node, ip=ip)
+            r = att
+            if st == 200:
+                picks = m.picks(att["questions"], greedy=node in learned_at)
+                st, r = submit(srv, uid, tok, node, att, picks, ip=ip)
+            if len(timeline) < 40:
+                timeline.append([round(now_sim() / 3600, 2), pid, ip, node, st, (r.get("detail") or {}).get("reason") if st != 200 else
+                                 (r.get("kuat_result") or {}).get("passed")])
+            if st == 429:
+                d = r.get("detail") or {}
+                waits[d.get("reason") or "?"] = waits.get(d.get("reason") or "?", 0) + 1
+                pending_wait.append(float(d.get("retry_after") or 60))
+                blocked.add((pid, ip))
+                break
+            if st == 403:  # N02-02 locked: this persona's N02-01 is not mastered (yet)
+                break
+            if st != 200:
+                break
+            ok = bool((r.get("kuat_result") or {}).get("passed"))
+            m.observe(picks, ok)
+            if node not in learned_at and (fails[node] + passes[node]) % 5 == 0 and m.confidence() >= 0.99:
+                learned_at[node] = {"sim_hours": round(now_sim() / 3600, 2), "fails_total": sum(fails.values())}
+            if ok:
+                passes[node] += 1
+                continue
+            fails[node] += 1
+            if now_sim() < 86400:
+                first_day_fails += 1
+            break
+    out = {"ips": n_ips, "graded_fails": fails, "graded_passes": passes,
+           "graded_fails_first_24h": first_day_fails,
+           "graded_fails_first_24h_per_ip": round(first_day_fails / n_ips, 1), "lock_reasons": waits,
+           "simulated_days": round(now_sim() / 86400, 2), "key_learned_at": learned_at,
+           "stopped_by": ("key_learned" if len(learned_at) == len(NODES) else
+                          "max_days" if now_sim() >= max_days * 86400 else "max_fails"),
+           "confidence": {n: round(models[n].confidence(), 3) for n in NODES}, "wall_s": round(time.time() - started),
+           "timeline_first_40": timeline}
+    uid, tok = verified_account(srv, ip="198.51.100.79")
+    first = {}
+    for node in NODES:
+        st, att = start(srv, uid, tok, node, ip="198.51.100.79")
+        if st != 200:
+            first[node] = f"start {st}"
+            break
+        st, r = submit(srv, uid, tok, node, att, models[node].picks(att["questions"], greedy=True), ip="198.51.100.79")
         first[node] = bool((r.get("kuat_result") or {}).get("passed")) if st == 200 else f"submit {st}"
         if first[node] is not True:
             break
@@ -587,6 +740,7 @@ def main() -> None:
     ap.add_argument("--skip", default="", help="comma list of a,b,c,d to skip")
     ap.add_argument("--max-days", type=float, default=120.0, help="(d) simulated-time bound")
     ap.add_argument("--max-fails", type=int, default=1500, help="(d) graded-fail bound")
+    ap.add_argument("--demo-ips", type=int, default=1, help="(e2) client IPs the demo-persona attacker rotates over")
     a = ap.parse_args()
     root = Path(a.root).resolve()
     skip = set(filter(None, a.skip.split(",")))
@@ -611,6 +765,16 @@ def main() -> None:
         srv = Server(root, env)
         try:
             res["d_throwaway"] = attack_throwaway(srv, env, a.max_days, a.max_fails)
+        finally:
+            srv.stop()
+    if "e" not in skip:  # demo personas: own database, seeded by the server at start-up
+        env = db_env(a.pg or None, tempfile.mkdtemp(prefix="kuat-sim-e-"))
+        srv = Server(root, env, {"WELORA_DEMO_AUTOSEED": "1", "WELORA_GUEST_DEMO": "1"})
+        try:
+            personas = demo_logins(srv)
+            res["e1_demo_burn"] = attack_demo_burn(srv, env, personas)
+            age_rate_events(env, 2 * 86400)  # a fresh day for the learning attacker
+            res["e2_demo_learn"] = attack_demo_learn(srv, env, personas, a.max_days, a.max_fails, a.demo_ips)
         finally:
             srv.stop()
     if "c" not in skip:

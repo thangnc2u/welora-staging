@@ -222,15 +222,38 @@ def scenario_guest_limits() -> dict:
     acc = _phone_otp_account(c)  # round 3: a VERIFIED account (register alone is "unverified" = guest budget)
     real_same_ip = _fail_once(c, acc["user_id"], acc["token"], "N02-01", ip)
     other_ip_guest = _fail_once(c, *_guest(c), "N02-01", "198.51.100.250" if not ip.endswith(".250") else "198.51.100.251")
-    # one guest, no IP header: 3 fails on N02-01 (its per-node cooldown) + 3 on N01-01 → device cap
+    # one guest, no IP header (round 4: the device bucket counts per GATE node): 3 fails on N02-01
+    # (its per-node cooldown), 30 min later 3 more → device cap on N02-01; non-gate nodes unaffected
     du, dt = _guest(c)
-    dev = [_fail_once(c, du, dt, "N02-01") for _ in range(3)] + [_fail_once(c, du, dt, "N01-01") for _ in range(3)]
-    dev_next = _fail_once(c, du, dt, "N03-01")
-    dev_msg = (c.post("/academy/kuat/start", json={"user_id": du, "node_id": "N03-01"}, headers=_h(dt)).json()
+    dev = [_fail_once(c, du, dt, "N02-01") for _ in range(3)]
+    _age_kuat_events(1801)
+    dev += [_fail_once(c, du, dt, "N02-01") for _ in range(3)]
+    _age_kuat_events(1801)
+    dev_next = _fail_once(c, du, dt, "N02-01")
+    dev_msg = (c.post("/academy/kuat/start", json={"user_id": du, "node_id": "N02-01"}, headers=_h(dt)).json()
                .get("detail") or {}).get("message")
+    dev_non_gate = [_fail_once(c, du, dt, n) for n in ("N01-01", "N03-01", "N04-01")]
     return {"per_guest": per_guest, "guest_ip_msg": msg.get("message"), "guest_ip_reason": msg.get("reason"),
             "real_same_ip": real_same_ip, "other_ip_guest": other_ip_guest, "device": dev, "device_next": dev_next,
-            "device_msg": dev_msg}
+            "device_msg": dev_msg, "device_non_gate": dev_non_gate}
+
+
+def _age_kuat_events(seconds: float) -> None:
+    """Simulated waiting: move every KUAT rate-limit event ``seconds`` into the past."""
+    from welora import academy_store
+    from welora.auth_ratelimit import _iso
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        rows = conn.execute("SELECT event_id, created_at FROM auth_rate_events WHERE action IN ('kuat_fail','kuat_start')"
+                            ).fetchall()
+        for row in rows:
+            conn.execute("UPDATE auth_rate_events SET created_at=? WHERE event_id=?",
+                         (_iso(academy_store._ts(row["created_at"]) - seconds), row["event_id"]))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------------------- round 3: throwaway accounts
@@ -368,7 +391,7 @@ def scenario_ip_day_cap() -> dict:
     net = "2001:db8:%x:%x" % (uuid.uuid4().int % 0xffff, uuid.uuid4().int % 0xffff)
     ip_a, ip_b, ip_other = net + "::1", net + "::beef:2", "2001:db8:ffff:%x::1" % (uuid.uuid4().int % 0xffff)
     now = _t.time()
-    _insert_fail_events("kuat_ip_day", ip_bucket(ip_a), academy_store.ip_day_max_fails() - 1, now)
+    _insert_fail_events("kuat_ip_day", academy_store.ip_bucket_day(ip_a), academy_store.ip_day_max_fails() - 1, now)
     a, b = _phone_otp_account(c), _phone_otp_account(c)
     hb = _h(b["token"], ip_b)
     c.post("/academy/nodes/N02-01/read", json={"user_id": b["user_id"], "node_id": "N02-01"}, headers=hb)
@@ -382,7 +405,7 @@ def scenario_ip_day_cap() -> dict:
               "retry_after": d.get("retry_after"), "retry_header": r.headers.get("Retry-After"),
               "retry_at": d.get("retry_at")}
     attempt_after_429 = _attempt_row(att_b["attempt_id"])
-    events_after_429 = _count_events("kuat_ip_day", ip_bucket(ip_a))
+    events_after_429 = _count_events("kuat_ip_day", academy_store.ip_bucket_day(ip_a))
     again = c.post("/academy/kuat/start", json={"user_id": b["user_id"], "node_id": "N02-01"}, headers=hb).json()
     other = _fail_once(c, *_guest_or_verified(c), "N02-01", ip_other)
     # the window frees up (age every event by 24 h) → the SAME attempt is graded
@@ -446,6 +469,151 @@ def scenario_stale_tab() -> dict:
                                        "answers": solve("N02-01", st["questions"])}, headers=h)
     return {"same_attempt": same, "stale": stale, "slot": slot, "fails_recorded": int(fails),
             "then_pass": [ok.status_code, (ok.json().get("kuat_result") or {}).get("passed")]}
+
+
+# --------------------------------------------------------------------------- round 4
+def _detail(r):
+    try:
+        return r.json().get("detail") or {}
+    except Exception:
+        return {}
+
+
+def scenario_gate_scope() -> dict:
+    """Round 4 item 1: the network buckets (guest/unverified 6 / network / 24 h, IP 30 / 30 min,
+    IP 60 / 24 h) count GATE KUAT fails only (N02-01, N02-02), the guest one per gate node. Non-gate
+    nodes keep the per-user limits. Item 2: the unverified 429 copy."""
+    from tests._followup2_dbmode import _register
+    from tests._kuat import pass_kuat_http
+    from welora import academy_store
+    from welora.auth_ratelimit import ip_bucket
+
+    c = _client()
+    ip = _rand_ip("198.51.100.")
+    out: dict = {}
+    # the CoS repro: A fails N02-01 ×3 + N01-01 ×3 → B (same IP) on N04-01
+    a = _guest(c)
+    c_pre = _guest(c)  # passes N02-01 before the network bucket fills (for the per-node check)
+    out["c_pre_pass"] = list(pass_kuat_http(c, c_pre[0], _h(c_pre[1], ip), "N02-01")[:2])
+    out["a"] = [_fail_once(c, *a, "N02-01", ip) for _ in range(3)] + [_fail_once(c, *a, "N01-01", ip) for _ in range(3)]
+    b = _guest(c)
+    out["b_n04"] = _fail_once(c, *b, "N04-01", ip)
+    out["b_n01"] = _fail_once(c, *b, "N01-01", ip)
+    out["b_n02"] = _fail_once(c, *b, "N02-01", ip)  # 4th gate fail of the network: still graded
+    out["guest_bucket_n02_01"] = _count_events("kuat_guest_ip", f"{academy_store.ip_bucket_day(ip)}|node:N02-01")
+    out["guest_bucket_non_gate"] = sum(_count_events("kuat_guest_ip", f"{academy_store.ip_bucket_day(ip)}|node:{n}")
+                                       for n in ("N01-01", "N04-01"))
+    out["ip_bucket_events"] = [_count_events("kuat_ip", ip_bucket(ip)), _count_events("kuat_ip_day", ip_bucket(ip))]
+    # fill N02-01 for the network with register-only (unverified) accounts
+    accs = [_register(c, f"p0b-r4-{uuid.uuid4().hex[:8]}@example.test", _rand_ip("192.0.2.")) for _ in range(3)]
+    out["fill"] = [_fail_once(c, x["user_id"], x["token"], "N02-01", ip) for x in accs[:2]]
+    u = accs[2]
+    hu = _h(u["token"], ip)
+    c.post("/academy/nodes/N02-01/read", json={"user_id": u["user_id"], "node_id": "N02-01"}, headers=hu)
+    st = c.post("/academy/kuat/start", json={"user_id": u["user_id"], "node_id": "N02-01"}, headers=hu)
+    d = _detail(st)
+    out["unverified_429"] = {"status": st.status_code, "reason": d.get("reason"), "message": d.get("message"),
+                             "retry_after": d.get("retry_after"), "retry_at": d.get("retry_at"),
+                             "retry_at_vn": d.get("retry_at_vn"), "lesson_href": d.get("lesson_href"),
+                             "lesson_title": d.get("lesson_title"), "retry_header": st.headers.get("Retry-After")}
+    node = c.get("/academy/nodes/N02-01", params={"user_id": u["user_id"]}, headers=hu).json()
+    out["node_cooldown_reason"] = ((node.get("kuat") or {}).get("cooldown") or {}).get("reason")
+    out["node_lesson_served"] = bool(node.get("body_markdown"))
+    # same network, gate bucket of N02-01 full: non-gate nodes and N02-02 (own bucket) still graded
+    out["after_full_n04"] = _fail_once(c, u["user_id"], u["token"], "N04-01", ip)
+    out["after_full_n03"] = _fail_once(c, *_guest(c), "N03-01", ip)
+    out["after_full_n02_02"] = _fail_once(c, *c_pre, "N02-02", ip)
+    out["after_full_guest_n02_01"] = _fail_once(c, *_guest(c), "N02-01", ip)
+    # verified accounts: non-gate fails never reach the IP buckets
+    ip2 = _rand_ip("203.0.113.")
+    v = _phone_otp_account(c)
+    out["verified_non_gate"] = [_fail_once(c, v["user_id"], v["token"], n, ip2) for n in ("N01-01", "N03-01", "N04-01")]
+    out["verified_ip_events_non_gate"] = [_count_events("kuat_ip", ip_bucket(ip2)), _count_events("kuat_ip_day", ip_bucket(ip2))]
+    out["verified_gate"] = _fail_once(c, v["user_id"], v["token"], "N02-01", ip2)
+    out["verified_ip_events_gate"] = [_count_events("kuat_ip", ip_bucket(ip2)), _count_events("kuat_ip_day", ip_bucket(ip2))]
+    # IPv6: 24 h network bucket per /56, short-window IP bucket per /64
+    net = "2001:db8:%x:%02x" % (uuid.uuid4().int % 0xffff, uuid.uuid4().int % 0xfe + 1)
+    ip6a, ip6b = net + "00::1", net + "ff::1"  # two /64s of one /56
+    out["v6_same_56"] = academy_store.ip_bucket_day(ip6a) == academy_store.ip_bucket_day(ip6b)
+    out["v6_diff_64"] = ip_bucket(ip6a) != ip_bucket(ip6b)
+    for _ in range(3):
+        _fail_once(c, *_guest(c), "N02-01", ip6a)
+    out["v6_after_3_on_a"] = [_fail_once(c, *_guest(c), "N02-01", ip6b) for _ in range(4)]
+    return out
+
+
+def scenario_seed_demo() -> dict:
+    from welora import partner_demo_seed
+
+    seed = partner_demo_seed.seed_partner_rich_demo()
+    return {pid: b["user_id"] for pid, b in (seed.get("personas") or {}).items()}
+
+
+def _demo_login(c, pid):
+    from welora import auth as auth_svc, partner_demo_seed
+
+    email = partner_demo_seed.DEMO_PERSONA_ALIASES[pid]["email"]
+    r = c.post("/auth/login", json={"email": email, "password": auth_svc.DEMO_PASSWORD},
+               headers={"CF-Connecting-IP": _rand_ip("192.0.2.")})
+    assert r.status_code == 200, r.text
+    return r.json()["user_id"], r.json()["token"]
+
+
+def scenario_demo_personas() -> dict:
+    """Round 4 item 3: outsiders burning a demo persona from their networks never block the persona
+    on the partner's network; demo personas share the guest network bucket of the gate KUATs."""
+    from tests._kuat import pass_kuat_http
+    from welora import academy_store
+    from welora.auth_ratelimit import ip_bucket
+
+    seeded = scenario_seed_demo()
+    c = _client()
+    out: dict = {"kinds": {pid: _kind(uid) for pid, uid in seeded.items()}}
+    p2 = _demo_login(c, "P2")
+    ip_a, ip_a2, ip_b = _rand_ip("203.0.113."), "198.18.0.%d" % (uuid.uuid4().int % 200 + 1), "198.51.100.%d" % (
+        uuid.uuid4().int % 200 + 1)
+    burn = []
+    for ip in (ip_a, ip_a2):  # two outsider networks, each fails P2's N02-01 until refused
+        seq = [_fail_once(c, *p2, "N02-01", ip) for _ in range(4)]
+        _age_kuat_events(1801)
+        seq += [_fail_once(c, *p2, "N02-01", ip) for _ in range(4)]
+        burn.append(seq)
+    out["burn"] = burn
+    out["burn_detail_reason"] = _detail(c.post("/academy/kuat/start", json={"user_id": p2[0], "node_id": "N02-01"},
+                                               headers=_h(p2[1], ip_a))).get("reason")
+    out["graded_outsider_fails"] = sum(1 for seq in burn for x in seq if x == [200, False])
+    # the partner on its own network: still takes (and can pass) the KUAT with P2
+    out["partner_fail"] = _fail_once(c, *p2, "N02-01", ip_b)
+    out["partner_pass"] = list(pass_kuat_http(c, p2[0], _h(p2[1], ip_b), "N02-01")[:2])
+    out["partner_n02_02"] = list(pass_kuat_http(c, p2[0], _h(p2[1], ip_b), "N02-02")[:2])
+    # per (persona, network) keys; the outsider network's non-gate KUATs keep only the per-user limit
+    un = f"user:{p2[0]}|node:N02-01"
+    out["user_node_day_events"] = {"ip_a": _count_events("kuat_user_node_day", f"{un}|ip:{ip_bucket(ip_a)}"),
+                                   "ip_b": _count_events("kuat_user_node_day", f"{un}|ip:{ip_bucket(ip_b)}"),
+                                   "global": _count_events("kuat_user_node_day", un)}
+    out["outsider_non_gate"] = _fail_once(c, *p2, "N04-01", ip_a)
+    # other personas from the burnt outsider network share its demo / guest bucket (6 per gate node)
+    others = [_demo_login(c, pid) for pid in ("P1", "P3", "P4", "P5", "P6")]
+    out["other_personas_ip_a"] = [_fail_once(c, *o, "N02-01", ip_a) for o in others]
+    out["guest_on_ip_a"] = _fail_once(c, *_guest(c), "N02-01", ip_a)
+    # start limit per (persona, network)
+    out["start_events"] = {"ip_a": _count_events_action("kuat_start", "kuat_start", f"{un}|ip:{ip_bucket(ip_a)}"),
+                           "ip_b": _count_events_action("kuat_start", "kuat_start", f"{un}|ip:{ip_bucket(ip_b)}"),
+                           "global": _count_events_action("kuat_start", "kuat_start", un)}
+    out["demo_ip_bucket"] = _count_events("kuat_guest_ip", f"{academy_store.ip_bucket_day(ip_a)}|node:N02-01")
+    return out
+
+
+def _count_events_action(action, scope, key):
+    from welora import academy_store
+    from welora.db.connection import get_connection
+
+    conn = get_connection(None)
+    try:
+        return int(conn.execute("SELECT COUNT(*) AS n FROM auth_rate_events WHERE action=? AND scope=? AND key_hash=?",
+                                (action, scope, academy_store._key_hash(scope, key))).fetchone()["n"])
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------------------- guest claim

@@ -32,6 +32,12 @@ services:
       # Unset/sqlite path = ephemeral (reset on every deploy/restart/spin-down on Free).
       - key: WELORA_DB_URL
         sync: false
+      # Mail: Render Free blocks outbound SMTP → Resend HTTP API (HTTPS 443). Set in the Dashboard:
+      # WELORA_MAIL_PROVIDER "resend" + the Resend key (secret, re_…). sync:false → never overwritten.
+      - key: WELORA_MAIL_PROVIDER
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

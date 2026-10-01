@@ -15,7 +15,7 @@ from welora.api.app import create_app
 from welora.fixtures import reset_all_stores
 from welora.goal_emergency_fund import InMemoryEmergencyFundStore
 from welora.goals_api import use_store
-from welora.mastery import reset_mastery_store, set_state
+from welora.mastery import record_mastery, reset_mastery_store, set_state
 from welora.safety_gate import TARGET_MONTHS
 
 
@@ -57,8 +57,10 @@ class TestP2E4MasteryGate(unittest.TestCase):
             "/goals",
             json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
         )
-        r = self.client.patch(f"/users/{uid}/mastery", json={"state": "familiar"})
-        self.assertEqual(r.status_code, 200)
+        # P0 "mastery chỉ từ server": the user cannot write mastery; the server (Academy) does
+        self.assertEqual(self.client.patch(f"/users/{uid}/mastery", json={"state": "familiar"}).status_code, 403)
+        record_mastery(uid, "familiar", source="academy")
+        r = self.client.get(f"/users/{uid}/mastery")
         self.assertEqual(r.json()["state"], "familiar")
         self.assertFalse(r.json()["meets_gate"])
         gate = self.client.get(f"/users/{uid}/safety-gate").json()
@@ -72,7 +74,9 @@ class TestP2E4MasteryGate(unittest.TestCase):
             "/goals",
             json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
         )
-        r = self.client.patch(f"/users/{uid}/mastery", json={"state": "apply"})
+        self.assertEqual(self.client.patch(f"/users/{uid}/mastery", json={"state": "apply"}).status_code, 403)
+        record_mastery(uid, "apply", source="academy")  # = KUAT passed (server-graded)
+        r = self.client.get(f"/users/{uid}/mastery")
         self.assertTrue(r.json()["meets_gate"])
         gate = self.client.get(f"/users/{uid}/safety-gate").json()
         self.assertEqual(gate["status"], "passed")
@@ -129,7 +133,7 @@ class TestP2E4MasterySqlite(unittest.TestCase):
             "/goals",
             json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
         )
-        self.client.patch(f"/users/{uid}/mastery", json={"state": "familiar"})
+        record_mastery(uid, "familiar", source="academy")
         gate = self.client.get(f"/users/{uid}/safety-gate").json()
         self.assertEqual(gate["status"], "not_passed")
         self.assertIn("mastery_missing", gate["reasons"])
@@ -140,7 +144,8 @@ class TestP2E4MasterySqlite(unittest.TestCase):
             "/goals",
             json={"user_id": uid, "essential_expense_monthly": 10_000_000, "current_amount": 30_000_000},
         )
-        self.client.patch(f"/users/{uid}/mastery", json={"state": "apply"})
+        self.assertEqual(self.client.patch(f"/users/{uid}/mastery", json={"state": "apply"}).status_code, 403)
+        record_mastery(uid, "apply", source="academy")  # = KUAT passed (server-graded), persisted
         gate = self.client.get(f"/users/{uid}/safety-gate").json()
         self.assertEqual(gate["status"], "passed")
 

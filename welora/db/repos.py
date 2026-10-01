@@ -21,12 +21,18 @@ from welora.goal_emergency_fund import (
 from welora import onboarding as ob
 
 
+# Mastery provenance (P0 "mastery chỉ từ server"): a mastery value counts only when the row says
+# which server path wrote it. Legacy rows (NULL source — possibly self-set through the removed
+# PATCH /users/{id}/mastery) read as not_started until the Academy or the demo seed rewrites them.
+TRUSTED_MASTERY_SOURCES = ("academy", "seed", "internal")
+
+
 def get_user_flags_db(user_id: str, *, url: str | None = None) -> dict[str, Any]:
     migrate(url)
     conn = get_connection(url)
     try:
         row = conn.execute(
-            "SELECT has_dangerous_debt, debt_on_track, mastery_no_efund_invest, recent_violations "
+            "SELECT has_dangerous_debt, debt_on_track, mastery_no_efund_invest, mastery_source, recent_violations "
             "FROM user_flags WHERE user_id=?",
             (user_id,),
         ).fetchone()
@@ -35,12 +41,18 @@ def get_user_flags_db(user_id: str, *, url: str | None = None) -> dict[str, Any]
                 "has_dangerous_debt": False,
                 "debt_on_track": True,
                 "mastery_no_efund_invest": "not_started",
+                "mastery_source": None,
                 "recent_violations": 0,
             }
+        source = row["mastery_source"] or None
+        mastery = row["mastery_no_efund_invest"] or "not_started"
+        if source not in TRUSTED_MASTERY_SOURCES:
+            mastery = "not_started"  # unproven (legacy / self-set) → never opens the gate
         return {
             "has_dangerous_debt": bool(row["has_dangerous_debt"]),
             "debt_on_track": bool(row["debt_on_track"]),
-            "mastery_no_efund_invest": row["mastery_no_efund_invest"] or "not_started",
+            "mastery_no_efund_invest": mastery,
+            "mastery_source": source,
             "recent_violations": int(row["recent_violations"] or 0),
         }
     finally:
@@ -52,10 +64,15 @@ def set_user_flags_db(
     *,
     has_dangerous_debt: bool = False,
     debt_on_track: bool = True,
-    mastery_no_efund_invest: str = "not_started",
+    mastery_no_efund_invest: Optional[str] = "not_started",
+    mastery_source: Optional[str] = "internal",
     recent_violations: int = 0,
     url: str | None = None,
 ) -> None:
+    """Upsert the flags row. ``mastery_no_efund_invest=None`` keeps the stored mastery and its
+    source (debt sync must never touch mastery). A given mastery must name a trusted server source."""
+    if mastery_no_efund_invest is not None and mastery_source not in TRUSTED_MASTERY_SOURCES:
+        raise ValueError(f"untrusted mastery source: {mastery_source}")
     migrate(url)
     conn = get_connection(url)
     try:
@@ -63,18 +80,58 @@ def set_user_flags_db(
             "INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING",
             (user_id,),
         )
+        if mastery_no_efund_invest is None:
+            conn.execute(
+                """
+                INSERT INTO user_flags(user_id, has_dangerous_debt, debt_on_track, recent_violations)
+                VALUES (?,?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  has_dangerous_debt=excluded.has_dangerous_debt,
+                  debt_on_track=excluded.debt_on_track,
+                  recent_violations=excluded.recent_violations,
+                  updated_at=datetime('now')
+                """,
+                (user_id, int(has_dangerous_debt), int(debt_on_track), recent_violations),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO user_flags(user_id, has_dangerous_debt, debt_on_track, mastery_no_efund_invest,
+                                       mastery_source, recent_violations)
+                VALUES (?,?,?,?,?,?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  has_dangerous_debt=excluded.has_dangerous_debt,
+                  debt_on_track=excluded.debt_on_track,
+                  mastery_no_efund_invest=excluded.mastery_no_efund_invest,
+                  mastery_source=excluded.mastery_source,
+                  recent_violations=excluded.recent_violations,
+                  updated_at=datetime('now')
+                """,
+                (user_id, int(has_dangerous_debt), int(debt_on_track), mastery_no_efund_invest, mastery_source,
+                 recent_violations),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_user_mastery_db(user_id: str, state: str, *, source: str, url: str | None = None) -> None:
+    """Write ONLY mastery (+ its source); debt flags of an existing row are kept."""
+    if source not in TRUSTED_MASTERY_SOURCES:
+        raise ValueError(f"untrusted mastery source: {source}")
+    migrate(url)
+    conn = get_connection(url)
+    try:
+        conn.execute("INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING", (user_id,))
         conn.execute(
             """
-            INSERT INTO user_flags(user_id, has_dangerous_debt, debt_on_track, mastery_no_efund_invest, recent_violations)
-            VALUES (?,?,?,?,?)
+            INSERT INTO user_flags(user_id, mastery_no_efund_invest, mastery_source) VALUES (?,?,?)
             ON CONFLICT(user_id) DO UPDATE SET
-              has_dangerous_debt=excluded.has_dangerous_debt,
-              debt_on_track=excluded.debt_on_track,
               mastery_no_efund_invest=excluded.mastery_no_efund_invest,
-              recent_violations=excluded.recent_violations,
+              mastery_source=excluded.mastery_source,
               updated_at=datetime('now')
             """,
-            (user_id, int(has_dangerous_debt), int(debt_on_track), mastery_no_efund_invest, recent_violations),
+            (user_id, state, source),
         )
         conn.commit()
     finally:

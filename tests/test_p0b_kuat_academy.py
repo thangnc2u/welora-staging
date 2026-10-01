@@ -13,6 +13,10 @@ reuses the open attempt, stale tab → 409 KUAT_RELOAD (not counted).
 Round 3 (Founder 01/10 21:19): accounts without a verified contact (register only, no OTP) count as
 guests; 60 failed KUATs / client IP / 24 h for ALL accounts (reserved before grading, attempt
 re-opened on 429); q01d giveaway removed; option openings diversified + Monte Carlo opening-pattern test.
+Round 4 (Founder 02/10 04:48): the network buckets count GATE KUATs only (N02-01 / N02-02; the guest
+bucket per gate node), non-gate nodes keep the per-user limits; the unverified 429 copy asks for no
+OTP and names the retry time in Vietnam time + a lesson link; demo personas P1–P6 get per (persona,
+network) budgets and share the guest network bucket; IPv6 /56 for the 24 h network buckets.
 DB scenarios run in subprocesses (tests/_p0b_dbmode.py) on SQLite, or PG via WELORA_TEST_POSTGRES_URL.
 """
 
@@ -184,10 +188,11 @@ class TestGuestLimitsAggregatedDb(unittest.TestCase):
         self.assertEqual(self.out["real_same_ip"], [200, False])
         self.assertEqual(self.out["other_ip_guest"], [200, False])
 
-    def test_guest_device_capped_across_nodes(self):
+    def test_guest_device_capped_per_gate_node(self):
         self.assertEqual(self.out["device"], [[200, False]] * 6)
         self.assertEqual(self.out["device_next"], [429, "device"])
         self.assertRegex(self.out["device_msg"], VI)
+        self.assertEqual(self.out["device_non_gate"], [[200, False]] * 3)  # round 4: gate nodes only
 
 
 class TestStaleTabAndOpenAttemptDb(unittest.TestCase):
@@ -219,18 +224,20 @@ class TestThrowawayAccountsDb(unittest.TestCase):
         self.assertEqual(o["per_account"], [[200, False]] * 6 + [[429, "unverified_ip"]] * 2)
         self.assertEqual(o["reason"], "unverified_ip")
         self.assertRegex(o["message"], VI)
-        self.assertIn("OTP", o["message"])
+        self.assertNotRegex(o["message"], r"(?i)OTP|xác thực|xác minh")  # round 4: no verification demand
         self.assertIn("24 giờ", o["message"])
         self.assertGreater(o["retry_after"], 23 * 3600)
         self.assertEqual(o["guest_after"], [429, "guest_ip"])  # device guests and throwaways share it
         self.assertEqual(o["blocked_before_otp"], [429, "unverified_ip"])
 
-    def test_verified_accounts_and_demo_personas_unaffected(self):
+    def test_verified_accounts_unaffected_demo_personas_share_the_network_bucket(self):
         o = self.out
         self.assertEqual(o["email_verified"], ["verified", 200, False])
         self.assertEqual(o["phone_verified"], ["verified", 200, False])
-        self.assertEqual(o["demo_kinds"], {f"P{i}": "verified" for i in range(1, 7)})
-        self.assertEqual(o["demo_fail"], [200, False])
+        # round 4: demo personas are their own kind (per persona + network budgets), not "verified"
+        self.assertEqual(o["demo_kinds"], {f"P{i}": "demo" for i in range(1, 7)})
+        # … and share the network bucket the throwaway accounts filled (TestDemoPersonasDb: other networks)
+        self.assertEqual(o["demo_fail"], [429, "demo_ip"])
 
     def test_guest_kinds(self):
         self.assertEqual((self.out["kind_device_guest"], self.out["kind_unknown"]), ("guest", "guest"))
@@ -261,6 +268,93 @@ class TestIpDayCapDb(unittest.TestCase):
     def test_other_network_unaffected_and_same_attempt_graded_later(self):
         self.assertEqual(self.out["other_net"], [200, False])
         self.assertEqual(self.out["later"], [200, False])
+
+
+class TestGateScopeDb(unittest.TestCase):
+    """Round 4 item 1 (+ item 2 copy, optional IPv6 /56): network buckets count gate KUATs only."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("gate_scope", {**db_env(tempfile.mkdtemp()), "WELORA_OTP_ECHO": "1"})
+
+    def test_cos_repro_non_gate_fails_do_not_block_another_user(self):
+        o = self.out
+        self.assertEqual(o["a"], [[200, False]] * 6)  # N02-01 ×3 + N01-01 ×3
+        self.assertEqual(o["b_n04"], [200, False])  # was 429 for 24 h at c398b6c
+        self.assertEqual(o["b_n01"], [200, False])
+        self.assertEqual(o["b_n02"], [200, False])
+        self.assertEqual(o["guest_bucket_n02_01"], 4)
+        self.assertEqual(o["guest_bucket_non_gate"], 0)
+        self.assertEqual(o["ip_bucket_events"], [4, 4])  # only the 4 gate fails (the pass was released)
+
+    def test_full_gate_bucket_blocks_only_that_gate_node(self):
+        o = self.out
+        self.assertEqual(o["fill"], [[200, False]] * 2)
+        self.assertEqual(o["unverified_429"]["status"], 429)
+        self.assertEqual(o["node_cooldown_reason"], "unverified_ip")
+        self.assertTrue(o["node_lesson_served"])
+        self.assertEqual(o["after_full_n04"], [200, False])
+        self.assertEqual(o["after_full_n03"], [200, False])
+        self.assertEqual(o["after_full_n02_02"], [200, False])  # per gate node
+        self.assertEqual(o["after_full_guest_n02_01"], [429, "guest_ip"])
+
+    def test_unverified_copy_no_otp_demand_with_vn_retry_time_and_lesson_link(self):
+        u = self.out["unverified_429"]
+        self.assertEqual(u["reason"], "unverified_ip")
+        self.assertRegex(u["message"], VI)
+        self.assertNotRegex(u["message"], r"(?i)OTP|xác thực|xác minh|đăng nhập")
+        self.assertIn(u["retry_at_vn"], u["message"])
+        self.assertIn("giờ Việt Nam", u["message"])
+        self.assertRegex(u["retry_at_vn"], r"^\d\d:\d\d( ngày \d\d/\d\d)?$")
+        self.assertTrue(u["retry_at"])
+        self.assertEqual(u["retry_header"], str(u["retry_after"]))
+        self.assertGreater(u["retry_after"], 23 * 3600)
+        self.assertEqual(u["lesson_href"], "/app/content?key=SAFE-01")
+        self.assertIn("«" + u["lesson_title"] + "»", u["message"])
+        self.assertIn("ôn lại bài", u["message"])
+
+    def test_verified_ip_caps_gate_only(self):
+        o = self.out
+        self.assertEqual(o["verified_non_gate"], [[200, False]] * 3)
+        self.assertEqual(o["verified_ip_events_non_gate"], [0, 0])
+        self.assertEqual(o["verified_gate"], [200, False])
+        self.assertEqual(o["verified_ip_events_gate"], [1, 1])
+
+    def test_ipv6_day_bucket_per_56(self):
+        o = self.out
+        self.assertTrue(o["v6_same_56"] and o["v6_diff_64"])
+        self.assertEqual(o["v6_after_3_on_a"], [[200, False]] * 3 + [[429, "guest_ip"]])
+
+
+class TestDemoPersonasDb(unittest.TestCase):
+    """Round 4 item 3: outsiders on other networks cannot use up a demo persona for the partner."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.out = run("demo_personas", db_env(tempfile.mkdtemp()))
+
+    def test_identified_by_seed(self):
+        self.assertEqual(self.out["kinds"], {f"P{i}": "demo" for i in range(1, 7)})
+
+    def test_outsiders_capped_per_network(self):
+        o = self.out
+        per_net = [[200, False]] * 3 + [[429, "fails"]] + [[200, False]] * 3 + [[429, "demo_ip"]]
+        self.assertEqual(o["burn"], [per_net, per_net])
+        self.assertEqual(o["burn_detail_reason"], "demo_ip")
+        self.assertEqual(o["graded_outsider_fails"], 12)  # 6 per outsider network per gate node / 24 h
+        self.assertEqual(o["demo_ip_bucket"], 6)
+        self.assertEqual(o["other_personas_ip_a"], [[429, "demo_ip"]] * 5)  # personas share the network bucket
+        self.assertEqual(o["guest_on_ip_a"], [429, "guest_ip"])  # … with guests / register-only accounts
+
+    def test_partner_network_unaffected(self):
+        o = self.out
+        self.assertEqual(o["partner_fail"], [200, False])
+        self.assertEqual(o["partner_pass"], [200, True])
+        self.assertEqual(o["partner_n02_02"], [200, True])
+        self.assertEqual(o["user_node_day_events"], {"ip_a": 6, "ip_b": 1, "global": 0})
+        self.assertEqual(o["start_events"]["global"], 0)
+        self.assertGreaterEqual(o["start_events"]["ip_b"], 1)
+        self.assertEqual(o["outsider_non_gate"], [200, False])
 
 
 # --------------------------------------------------------------------------- real uvicorn concurrency
@@ -409,11 +503,15 @@ class TestRealConcurrencyDb(unittest.TestCase):
         self.assertLessEqual(graded, 6)
         self.assertGreaterEqual(graded, 1)
         self.assertEqual(graded + sum(1 for s, _ in subs if s == 429), 14)
-        self.assertLessEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), 6)
-        self.assertEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), graded)
+        self.assertLessEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N02-01"), 6)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N02-01"), graded)
 
-    def test_parallel_submits_of_one_guest_across_nodes_capped_by_device(self):
+    def test_parallel_submits_of_one_guest_across_nodes_only_gate_node_counted(self):
+        """Round 4: one guest submitting on 5 nodes at once — every non-gate submit is graded
+        (per-user limits only); only the gate node touches the device / network buckets."""
         from concurrent.futures import ThreadPoolExecutor
+
+        from welora.auth_ratelimit import ip_bucket
 
         ip = "203.0.113.23"
         uid, tok = self.srv.guest(ip)
@@ -424,11 +522,11 @@ class TestRealConcurrencyDb(unittest.TestCase):
             atts.append((node, a))
         with ThreadPoolExecutor(5) as ex:
             subs = list(ex.map(lambda t: self.srv.wrong(uid, tok, t[0], t[1], ip), atts))
-        graded = sum(1 for s, _ in subs if s == 200)
-        self.assertLessEqual(graded, 3)  # WELORA_KUAT_GUEST_DEVICE_MAX_FAILS=3 for this server
-        self.assertEqual(graded + sum(1 for s, _ in subs if s == 429), 5)
+        self.assertEqual([s for s, _ in subs], [200] * 5)
         dev = self.srv.q("SELECT device_id FROM users WHERE user_id=?", (uid,))[0][0]
-        self.assertEqual(self.srv.fails("kuat_guest_device", dev), graded)
+        self.assertEqual(self.srv.fails("kuat_guest_device", f"{dev}|node:N02-01"), 1)
+        self.assertEqual(sum(self.srv.fails("kuat_guest_device", f"{dev}|node:{n}") for n in ("N01-01", "N03-01", "N04-01", "N05-01")), 0)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N02-01"), 1)
 
 
 class TestRealConcurrencyRound3Db(unittest.TestCase):
@@ -500,7 +598,81 @@ class TestRealConcurrencyRound3Db(unittest.TestCase):
         self.assertEqual(graded + len(refused), 12)
         # at the boundary a parallel burst may also see the (higher) 24 h IP bucket over its cap
         self.assertLessEqual({(r.get("detail") or {}).get("reason") for r in refused}, {"unverified_ip", "ip_day"})
-        self.assertEqual(self.srv.fails("kuat_guest_ip", ip_bucket(ip)), graded)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N02-01"), graded)
+
+
+class TestRealConcurrencyRound4Db(unittest.TestCase):
+    """Round 4: a parallel burst on a NON-gate node is graded per user (no network bucket); demo
+    personas bursting from one network (IPv4, or several /64s of one IPv6 /56) stay within the
+    shared network cap; the partner on its own network is unaffected."""
+
+    @classmethod
+    def setUpClass(cls):
+        env = db_env(tempfile.mkdtemp())
+        run("seed_demo", env)
+        cls.srv = _Uvicorn({**env, "WELORA_KUAT_GUEST_IP_MAX_FAILS": "3"})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.stop()
+
+    def _login(self, pid):
+        from welora import auth as auth_svc, partner_demo_seed
+
+        st, j = self.srv.call("/auth/login", {"email": partner_demo_seed.DEMO_PERSONA_ALIASES[pid]["email"],
+                                              "password": auth_svc.DEMO_PASSWORD}, ip="192.0.2.%d" % (int(pid[1]) + 40))
+        self.assertEqual(st, 200, j)
+        return j["user_id"], j["token"]
+
+    def _burst(self, accounts, node, ips):
+        from concurrent.futures import ThreadPoolExecutor
+
+        atts = []
+        for (uid, tok), ip in zip(accounts, ips):
+            st, a = self.srv.start(uid, tok, node, ip)
+            self.assertEqual(st, 200, a)
+            atts.append((uid, tok, a, ip))
+        with ThreadPoolExecutor(len(atts)) as ex:
+            return list(ex.map(lambda t: self.srv.wrong(t[0], t[1], node, t[2], t[3]), atts))
+
+    def test_non_gate_burst_graded_and_gate_still_open(self):
+        from welora.auth_ratelimit import ip_bucket
+
+        ip = "203.0.113.41"
+        subs = self._burst([self.srv.guest(ip) for _ in range(14)], "N04-01", [ip] * 14)
+        self.assertEqual([s for s, _ in subs], [200] * 14)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N04-01"), 0)
+        self.assertEqual(self.srv.fails("kuat_ip", ip_bucket(ip)), 0)
+        uid, tok = self.srv.guest(ip)
+        st, a = self.srv.start(uid, tok, "N02-01", ip)
+        self.assertEqual(st, 200, a)
+        self.assertEqual(self.srv.wrong(uid, tok, "N02-01", a, ip)[0], 200)
+
+    def test_demo_personas_burst_capped_per_network_partner_unaffected(self):
+        from welora import academy_store
+        from welora.auth_ratelimit import ip_bucket
+
+        personas = [self._login(f"P{i}") for i in range(1, 7)]
+        ip = "203.0.113.42"
+        subs = self._burst(personas, "N02-01", [ip] * 6)
+        graded = sum(1 for s, _ in subs if s == 200)
+        self.assertGreaterEqual(graded, 1)
+        self.assertLessEqual(graded, 3)  # WELORA_KUAT_GUEST_IP_MAX_FAILS=3 for this server
+        self.assertEqual(graded + sum(1 for s, _ in subs if s == 429), 6)
+        self.assertLessEqual({(r.get("detail") or {}).get("reason") for s, r in subs if s == 429}, {"demo_ip"})
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{ip_bucket(ip)}|node:N02-01"), graded)
+        # the same personas from six /64s of ONE IPv6 /56 — one 24 h network bucket
+        net = "2001:db8:4242:42"
+        ips6 = [f"{net}{i:02x}::7" for i in range(6)]
+        subs6 = self._burst(personas, "N02-01", ips6)
+        graded6 = sum(1 for s, _ in subs6 if s == 200)
+        self.assertLessEqual(graded6, 3)
+        self.assertEqual(self.srv.fails("kuat_guest_ip", f"{academy_store.ip_bucket_day(ips6[0])}|node:N02-01"), graded6)
+        # the partner (P2) on its own network
+        uid, tok = personas[1]
+        st, a = self.srv.start(uid, tok, "N02-01", "198.51.100.42")
+        self.assertEqual(st, 200, a)
+        self.assertEqual(self.srv.wrong(uid, tok, "N02-01", a, "198.51.100.42")[0], 200)
 
 
 # =========================================================================== in-process
@@ -768,6 +940,61 @@ class TestRound3Limits(unittest.TestCase):
         self.assertIn("has_verified_contact(conn, row)", st)
 
 
+class TestRound4Limits(unittest.TestCase):
+    def test_gate_nodes_are_the_gate_kuat_and_its_prerequisite(self):
+        self.assertEqual(academy_store.GATE_KUAT_NODES, ("N02-01", "N02-02"))
+        self.assertIn(academy.GATE_NODE, academy_store.GATE_KUAT_NODES)
+        gate = academy._NODE_BY_ID[academy.GATE_NODE]
+        self.assertEqual(set(gate["prereq_node_ids"]) | {academy.GATE_NODE}, set(academy_store.GATE_KUAT_NODES))
+        self.assertEqual(academy._NODE_BY_ID["N02-01"]["prereq_node_ids"], [])
+        self.assertFalse(academy_store.is_gate_node("N04-01"))
+
+    def test_non_gate_buckets_are_per_user_only(self):
+        conn = academy_store._conn()
+        try:
+            scopes = {b[0] for b in academy_store._keys(conn, _uid(), "N04-01", "203.0.113.5")[0]}
+            gate = {b[0] for b in academy_store._keys(conn, _uid(), "N02-02", "203.0.113.5")[0]}
+        finally:
+            conn.close()
+        self.assertEqual(scopes, {"kuat_user_node", "kuat_user_node_day"})
+        self.assertEqual(gate, {"kuat_user_node", "kuat_user_node_day", "kuat_ip", "kuat_ip_day", "kuat_guest_ip"})
+
+    def test_ipv6_day_prefix(self):
+        self.assertEqual(academy_store.ip_bucket_day("2001:db8:1:2ab::9"), "2001:db8:1:200::/56")
+        self.assertEqual(academy_store.ip_bucket_day("203.0.113.5"), "203.0.113.5")
+        self.assertEqual(academy_store.ip_bucket_day("::ffff:203.0.113.5"), "203.0.113.5")
+        old = os.environ.get("WELORA_KUAT_IP6_DAY_PREFIX")
+        try:
+            os.environ["WELORA_KUAT_IP6_DAY_PREFIX"] = "64"
+            self.assertEqual(academy_store.ip_bucket_day("2001:db8:1:2ab::9"), "2001:db8:1:2ab::/64")
+            os.environ["WELORA_KUAT_IP6_DAY_PREFIX"] = "8"  # clamped to 48
+            self.assertEqual(academy_store.ip_bucket_day("2001:db8:1:2ab::9"), "2001:db8:1::/48")
+        finally:
+            if old is None:
+                os.environ.pop("WELORA_KUAT_IP6_DAY_PREFIX", None)
+            else:
+                os.environ["WELORA_KUAT_IP6_DAY_PREFIX"] = old
+
+    def test_every_cooldown_copy_has_vn_time_and_network_copy_asks_no_verification(self):
+        for reason in academy.COOLDOWN_MSG_VI:
+            e = academy_store.KuatCooldown(5400, reason)
+            d = academy.cooldown_payload(e, "N02-02")
+            self.assertIn(d["retry_at_vn"], d["message"], reason)
+            self.assertIn("giờ Việt Nam", d["message"], reason)
+            self.assertIn("1 giờ 30 phút", d["message"], reason)
+            self.assertEqual(d["lesson_href"], "/app/content?key=SAFE-02")
+            self.assertNotIn("{", d["message"])
+        for reason in ("unverified_ip", "unverified_device", "demo_ip"):
+            m = academy.cooldown_payload(academy_store.KuatCooldown(60, reason), "N02-01")["message"]
+            self.assertNotRegex(m, r"(?i)OTP|xác thực|xác minh|đăng nhập", reason)
+            self.assertIn("«Xây dựng quỹ khẩn cấp»", m)
+
+    def test_vn_time_format(self):
+        from datetime import datetime, timezone
+
+        self.assertEqual(academy._vn_time(datetime(2020, 1, 2, 22, 5, tzinfo=timezone.utc)), "05:05 ngày 03/01")
+
+
 class TestServerHeldAttempt(_Env):
     def test_grading_uses_served_permutation_and_ignores_client_picks(self):
         served = [{"q": "q02a", "perm": [1, 0, 3, 2]}, {"q": "q02b", "perm": [2, 0, 1, 3]},
@@ -1006,6 +1233,12 @@ class TestFrontendAcademy(unittest.TestCase):
         self.assertIn("'CHƯA ĐẠT — ôn lại bài", s)
         self.assertIn("KUAT_RELOAD", s)
         self.assertIn("Hãy chọn đáp án cho mọi câu trước khi nộp.", s)
+        # round 4: the server copy carries the VN retry time (no duplicate), a same-origin lesson link
+        self.assertIn("c.retry_at_vn", s)
+        self.assertIn("timeZone:'Asia/Ho_Chi_Minh'", s)
+        self.assertIn("c.lesson_href", s)
+        self.assertIn("href.indexOf('/app/')===0", s)
+        self.assertNotIn("out.textContent='CHƯA ĐẠT — '+out.textContent", s)  # would drop the link
 
     @unittest.skipUnless(__import__("shutil").which("node"), "node not installed")
     def test_academy_script_parses(self):

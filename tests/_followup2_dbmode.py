@@ -182,6 +182,51 @@ def scenario_guest_claim_memory() -> dict:
     }
 
 
+def scenario_guest_claim_otp() -> dict:
+    """CoS review #239: phone-OTP-only and e-mail-OTP-only accounts (no password) are valid targets."""
+    import os
+
+    from welora import auth as auth_svc
+    from welora.db.connection import get_connection
+
+    os.environ["WELORA_OTP_ECHO"] = "1"
+    c = _client()
+    out: dict = {}
+    g = _guest_onboard(c, ESS_A)
+    req = c.post("/auth/otp/request", json={"phone": "0966 555 444"}, headers={"CF-Connecting-IP": "192.0.2.170"})
+    ver = c.post("/auth/otp/verify", json={"challenge_id": req.json()["challenge_id"],
+                                           "code": req.json()["pilot_code"]},
+                 headers={"CF-Connecting-IP": "192.0.2.170"}).json()
+    code, body = _claim(c, ver["token"], g["token"])
+    out["phone_otp"] = [code, body.get("already"), body.get("moved", {}).get("goals"), _ef(c, ver["token"])]
+    out["phone_otp_again"] = list(_claim(c, ver["token"], g["token"]))[0]
+
+    # e-mail-OTP-only account (email_verified_at, no password) — row as written by verify_email_otp
+    g2 = _guest_onboard(c, ESS_B)
+    auth_svc.ensure_auth_schema()
+    conn = get_connection(None)
+    try:
+        uid = "email-otp-" + uuid.uuid4().hex[:8]
+        conn.execute("INSERT INTO users(user_id, display_name, device_id, email, role, email_verified_at) "
+                     "VALUES (?,?,?,?,?,?)", (uid, "e", auth_svc.internal_device_key("email:"),
+                                              uid + "@example.test", "guest", "2026-10-01T00:00:00+00:00"))
+        etok = auth_svc._insert_token(conn, uid, kind="email_otp")
+        # unverified e-mail account without password (not a real login) → still refused
+        uid2 = "email-unverified-" + uuid.uuid4().hex[:8]
+        conn.execute("INSERT INTO users(user_id, display_name, device_id, email, role) VALUES (?,?,?,?,?)",
+                     (uid2, "u", auth_svc.internal_device_key("email:"), uid2 + "@example.test", "guest"))
+        utok = auth_svc._insert_token(conn, uid2, kind="email_otp")
+        conn.commit()
+    finally:
+        conn.close()
+    code2, body2 = _claim(c, etok, g2["token"])
+    out["email_otp"] = [code2, body2.get("moved", {}).get("goals"), _ef(c, etok)]
+    g3 = _guest_onboard(c, ESS_A)
+    code3, body3 = _claim(c, utok, g3["token"])
+    out["unverified"] = [code3, (body3.get("detail") or {}).get("error_code")]
+    return out
+
+
 if __name__ == "__main__":
     name = sys.argv[1]
     result = globals()["scenario_" + name]()

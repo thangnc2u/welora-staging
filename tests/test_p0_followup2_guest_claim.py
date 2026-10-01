@@ -164,13 +164,15 @@ console.log('RESULT='+JSON.stringify(out));"""
     def test_guest_claim_js_flow(self):
         js = r"""
 const fs=require('fs'),vm=require('vm');const src=fs.readFileSync('guest-claim.js','utf8');
-async function run(store, claimStatus, deviceCreated){
+async function run(store, claimStatus, deviceCreated, deviceStatus, already){
   const calls=[];
   const ctx={window:{},setTimeout,Promise,JSON,localStorage:{getItem:k=>store[k]===undefined?null:store[k],setItem:(k,v)=>{store[k]=v;},removeItem:k=>{delete store[k];}}};
   ctx.window.localStorage=ctx.localStorage;
   ctx.fetch=async(url,init)=>{calls.push([url,(init.headers||{}).Authorization||'',init.body||'']);
-    if(url==='/auth/device') return {ok:true,status:200,json:async()=>({token:'GUESTTOK',created:!!deviceCreated})};
-    return {ok:claimStatus===200,status:claimStatus,json:async()=>({ok:claimStatus===200,already:false,moved:{goals:1},skipped:{}})};};
+    if(url==='/auth/device'){ const ds=deviceStatus||200; return {ok:ds===200,status:ds,json:async()=>(ds===200?{token:'GUESTTOK',created:!!deviceCreated}:{detail:'x'})}; }
+    if(claimStatus==='throw') throw new Error('network');
+    const body=claimStatus===200?{ok:true,already:!!already,moved:already?{}:{goals:1},skipped:{}}:{detail:{error_code:'X',message:'m'}};
+    return {ok:claimStatus===200,status:claimStatus,json:async()=>body};};
   vm.runInNewContext(src+';this.G=window.WeloraGuestClaim;',ctx);
   const res=await ctx.G.run('ACCTOK');
   return {calls, marker:store.welora_guest_claim||null, res:res&&res.status, summary:ctx.G.summary(res)};
@@ -182,6 +184,9 @@ async function run(store, claimStatus, deviceCreated){
   out.taken=await run({welora_guest_claim:'1',welora_device_id:'web-abc'},409);
   out.none=await run({welora_device_id:'web-abc'},200);
   out.fresh=await run({welora_guest_claim:'1',welora_device_id:'web-new'},200,true);
+  out.already=await run({welora_guest_claim:'1',welora_device_id:'web-abc'},200,false,200,true);
+  for(const st of [400,401,403,404,500,503,'throw']) out['claim_'+st]=await run({welora_guest_claim:'1',welora_device_id:'web-abc'},st);
+  for(const st of [400,403,429,500]) out['device_'+st]=await run({welora_guest_claim:'1',welora_device_id:'web-abc'},200,false,st);
   console.log('RESULT='+JSON.stringify(out));
 })();"""
         out = node(js)
@@ -193,9 +198,17 @@ async function run(store, claimStatus, deviceCreated){
         self.assertIsNone(ok["marker"])
         self.assertEqual(ok["summary"], "Đã lưu kết quả onboarding vào tài khoản.")
         self.assertEqual(out["rate"]["marker"], "1")  # retried at the next login
-        self.assertIsNone(out["taken"]["marker"])
+        # CoS review #239: the marker is cleared ONLY on 200 claimed/already, never on errors
+        self.assertEqual(out["taken"]["marker"], "1")
+        self.assertIsNone(out["already"]["marker"])
+        self.assertEqual(out["already"]["summary"], "Kết quả onboarding đã được lưu trước đó.")
+        for k in ("claim_400", "claim_401", "claim_403", "claim_404", "claim_500", "claim_503", "claim_throw",
+                  "device_400", "device_403", "device_429", "device_500"):
+            self.assertEqual(out[k]["marker"], "1", k)
+        self.assertEqual([c[0] for c in out["device_403"]["calls"]], ["/auth/device"])
         self.assertEqual(out["none"]["calls"], [])  # no marker → nothing happens
-        self.assertEqual([c[0] for c in out["fresh"]["calls"]], ["/auth/device"])  # nothing to claim
+        # a fresh (empty) guest is claimed like any other → 200 → cleared
+        self.assertEqual([c[0] for c in out["fresh"]["calls"]], ["/auth/device", "/auth/guest/claim"])
         self.assertIsNone(out["fresh"]["marker"])
 
 

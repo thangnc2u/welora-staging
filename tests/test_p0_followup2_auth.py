@@ -334,14 +334,19 @@ class TestPhoneE164Http(_Base):
         self.assertEqual(self.reg("+84911222333").status_code, 400)
         self.assertEqual(auth_svc.login_rate_key(phone="+84 911 222 333"), "user:legacy-1")
 
-    def test_exact_e164_wins_and_ambiguous_legacy_refused(self):
+    def test_ambiguous_number_refused_for_both_accounts(self):
+        # CoS review #239: '+84…' no longer wins over a legacy '0…' row of ANOTHER account
         self.legacy_user("e164-owner", "+84933444555")
         self.legacy_user("legacy-dup", "0933444555", password="khac-mat-khau-9")
-        self.assertEqual(self.login("0933444555").json()["user_id"], "e164-owner")
-        self.assertEqual(self.login("0933444555", password="khac-mat-khau-9").status_code, 401)
+        for pw in (PW, "khac-mat-khau-9"):
+            r = self.login("0933444555", password=pw)
+            self.assertEqual((r.status_code, r.json()["detail"]["error_code"]), (409, "PHONE_CONFLICT_USE_EMAIL"))
+            self.assertIn("email", r.json()["detail"]["message"])
+        self.assertEqual(self.login("+84933444555", password="sai-mat-khau-0").status_code, 401)
         self.legacy_user("amb-a", "0922333444")
         self.legacy_user("amb-b", "84922333444")
-        self.assertEqual(self.login("0922333444").status_code, 401)  # two legacy rows → refused, never a guess
+        self.assertEqual(self.login("0922333444").status_code, 409)  # two legacy rows → refused, never a guess
+        self.assertEqual(self.login("0922333444", password="sai-mat-khau-0").status_code, 401)
         self.assertEqual(self.reg("+84922333444").status_code, 400)
 
     def test_otp_normalized_and_legacy_challenge_owner_kept(self):
@@ -404,8 +409,9 @@ class TestPhoneMigration(_Base):
         finally:
             conn.close()
         self.assertEqual((again["users_updated"], again["otp_updated"]), (0, 0))
-        # the collided accounts stay reachable: exact E.164 row wins, legacy row by its own form
-        self.assertEqual(self.client.post("/auth/login", json={"phone": "0988000111", "password": PW}).json()["user_id"], "m-col-b")
+        # CoS review #239: a reported number signs NEITHER account in by phone (use e-mail instead)
+        r = self.client.post("/auth/login", json={"phone": "0988000111", "password": PW})
+        self.assertEqual((r.status_code, r.json()["detail"]["error_code"]), (409, "PHONE_CONFLICT_USE_EMAIL"))
 
 
 # --- item 10 -----------------------------------------------------------------------------------

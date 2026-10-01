@@ -10,6 +10,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.agent import CONFIDENCE_THRESHOLD
 from welora.api.app import create_app
 from welora.fixtures import load_pair, reset_all_stores
@@ -32,7 +34,7 @@ class TestP2AgentModeCHardenGate(unittest.TestCase):
 
     def setUp(self) -> None:
         reset_mode_c_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.passed = self.pair["passed"]
         self.not_passed = self.pair["not_passed"]
 

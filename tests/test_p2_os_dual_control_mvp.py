@@ -11,6 +11,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
     HARD,
@@ -54,7 +56,7 @@ class TestP2OsDualControlMvp(unittest.TestCase):
 
     def setUp(self) -> None:
         reset_mode_c_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.primary = self.pair["passed"]["user_id"]
         self.companion = "user_companion_dual_01"
         # Ensure companion also exists as a distinct id (no fixture required).

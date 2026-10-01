@@ -28,6 +28,7 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 <div class="card"><div class="label">Gọi LLM</div><div class="val" id="llmCalled">—</div></div>
 <div class="card"><div class="label">Cổng</div><div class="val" id="gateStatus">—</div></div>
 <div class="card"><div class="label">Phản hồi</div><div class="val" id="reply">—</div></div>
+<script src="/static/session.js"></script>
 <script>
 const KEY='welora_device_id';
 function deviceId(){
@@ -52,9 +53,15 @@ document.getElementById('go').addEventListener('click', async()=>{
   const message=document.getElementById('q').value.trim();
   if(!message){document.getElementById('err').textContent='Nhập câu hỏi';return;}
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    const uid=a.user_id||a.user||'';
+    /* P0: logged-in welora_token first; device (guest) token only when there is none */
+    let uid='';
+    if(window.WeloraSession&&WeloraSession.resolveUserId){
+      uid=await WeloraSession.resolveUserId();
+    }else{
+      const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+      const a=await auth.json();
+      uid=a.user_id||a.user||'';
+    }
     const r=await fetch('/agent/pre-rule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,message})});
     const d=await r.json();
     if(!r.ok){document.getElementById('err').textContent='Không chạy được Pre-Rule';return;}

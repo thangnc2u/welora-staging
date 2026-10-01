@@ -56,12 +56,24 @@
     </div>
   </div>
 <script src="/static/friendly_labels.js"></script>
+<script src="/static/session.js"></script>
   <script>
     const KEY = 'welora_device_id';
     let draftEssential = 0;
     let existingGoal = null;
     let budgetDraft = null;
     let existingBudget = null;
+    /* P0: reuse the logged-in welora_token identity; mint a device (guest) token only when there is none */
+    async function weloraUid(){
+      if (window.WeloraSession && WeloraSession.resolveUserId) return await WeloraSession.resolveUserId();
+      const auth = await fetch('/auth/device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId() }),
+      });
+      const a = await auth.json();
+      return a.user_id || '';
+    }
     function deviceId(){
       let d = localStorage.getItem(KEY);
       if(!d){ d = 'dev-' + Math.random().toString(36).slice(2,10); localStorage.setItem(KEY, d); }
@@ -128,13 +140,7 @@
         draftEssential = Number(gd.essential_expense_monthly || n || 0);
         const target = Number(gd.target_amount || (draftEssential * 3) || 0);
         draftEl.textContent = 'Chi tiêu/tháng: ' + vnd(draftEssential) + ' · Mục tiêu 3 tháng: ' + vnd(target);
-        const auth = await fetch('/auth/device', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_id: deviceId() }),
-        });
-        const a = await auth.json();
-        const uid = a.user_id || '';
+        const uid = await weloraUid();
         const gl = await fetch('/goals?user_id=' + encodeURIComponent(uid));
         const gj = await gl.json();
         const items = gj.items || gj.goals || [];
@@ -187,13 +193,7 @@
     };
     document.getElementById('createGoalBtn').onclick = async () => {
       if (existingGoal || draftEssential <= 0) return;
-      const auth = await fetch('/auth/device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: deviceId() }),
-      });
-      const a = await auth.json();
-      const uid = a.user_id || '';
+      const uid = await weloraUid();
       await fetch('/goals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -215,13 +215,7 @@
         note.textContent = 'Cần xác nhận trước khi lưu ngân sách.';
         return;
       }
-      const auth = await fetch('/auth/device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: deviceId() }),
-      });
-      const a = await auth.json();
-      const uid = a.user_id || '';
+      const uid = await weloraUid();
       const r = await fetch('/budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

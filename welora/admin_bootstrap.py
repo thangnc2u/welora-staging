@@ -244,7 +244,9 @@ def verify_email_otp(challenge_id: str, code: str, *, now: Optional[float] = Non
             uid = row["user_id"]
         else:
             uid = _new_user_id()
-            device_key = "email:" + hashlib.sha256(email.encode("utf-8")).hexdigest()[:16]
+            from welora.auth import internal_device_key
+
+            device_key = internal_device_key("email:")  # random internal marker (P0: not derived from email)
             conn.execute(
                 "INSERT INTO users(user_id, display_name, device_id, email, role) VALUES (?,?,?,?,?)",
                 (uid, email, device_key, email, "guest"),

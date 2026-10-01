@@ -23,6 +23,8 @@ class TestP2AuthGuestDemo(unittest.TestCase):
     def setUp(self) -> None:
         self._prev_url = os.environ.get("WELORA_DB_URL")
         self._prev_demo = os.environ.get("WELORA_GUEST_DEMO")
+        self._prev_reset_echo = os.environ.get("WELORA_RESET_ECHO")
+        os.environ["WELORA_RESET_ECHO"] = "1"  # forgot-password stub flow reads the echoed token (staging flag)
         self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self._tmp.close()
         os.environ["WELORA_DB_URL"] = self._tmp.name
@@ -42,6 +44,10 @@ class TestP2AuthGuestDemo(unittest.TestCase):
             os.environ.pop("WELORA_GUEST_DEMO", None)
         else:
             os.environ["WELORA_GUEST_DEMO"] = self._prev_demo
+        if self._prev_reset_echo is None:
+            os.environ.pop("WELORA_RESET_ECHO", None)
+        else:
+            os.environ["WELORA_RESET_ECHO"] = self._prev_reset_echo
 
     def test_register_login_logout_login_again(self):
         email = "guest.walk@welora.demo"

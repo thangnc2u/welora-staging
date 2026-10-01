@@ -5,6 +5,8 @@ P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 + Bề
 
 from __future__ import annotations
 
+import re
+
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -688,3 +690,67 @@ def service_list_content_keys() -> tuple[int, dict]:
     if "05" in modules and not modules["05"].get("title"):
         modules["05"]["title"] = "Kết Nối & Thực Hành"
     return 200, {"items": items, "modules": modules}
+
+
+# --- Display-only cleanup of internal doc headers (GP UAT FYI) --------------
+# Source WP/WA markdown starts with an editorial header block, e.g.
+#   # WP-02-01: …            **Module:** 02 – …     **Mức rủi ro:** Cao
+#   **Version:** v1.0         **Status:** Draft      **principle_key:** SAFE-01
+#   **secondary_keys:** …     ---
+# Only that leading block is removed from ``body_markdown`` as served by
+# GET /content/{key}. Keys/metadata (principle_key, wp, wa, source_file, …) and
+# the source files are untouched.
+_INTERNAL_TITLE_RE = re.compile(r"^#{1,3}\s*W[PA]-[0-9A-Za-z-]+\s*[:：]")
+_INTERNAL_META_RE = re.compile(
+    r"^\*\*\s*(module|mức rủi ro|muc rui ro|risk|version|status|trạng thái|principle_key|secondary_keys|owner|tác giả)\s*:?\s*\*\*",
+    re.IGNORECASE,
+)
+
+
+def strip_internal_headers(markdown: str) -> str:
+    """Remove internal WP/WA header blocks everywhere in the body (not just the top).
+
+    A block = internal title (``# WP-02-02: …``) and/or metadata lines (``**Module:**``,
+    ``**Mức rủi ro:**``, ``**Version:**``, ``**Status:**``, ``**principle_key:**`` …) plus the
+    blank lines and the single ``---`` that close it. At the top the title is dropped (the page
+    shows ``title``); in concatenated articles a mid-body title is kept as a plain ``##`` heading
+    without the internal code. User-facing warnings such as ``- **Mức rủi ro: Cao.**`` (bullets,
+    bold text with the colon inside) never match and are kept.
+    """
+    if not markdown:
+        return markdown
+    lines = markdown.splitlines()
+    out: list[str] = []
+    i, n, changed = 0, len(lines), False
+    while i < n:
+        raw = lines[i].strip()
+        title = _INTERNAL_TITLE_RE.match(raw)
+        if not (title or _INTERNAL_META_RE.match(raw)):
+            out.append(lines[i])
+            i += 1
+            continue
+        changed = True
+        if title and any(x.strip() for x in out):
+            human = raw[title.end():].strip()
+            if human:
+                out.append("## " + human)
+                out.append("")
+        i += 1
+        while i < n and (not lines[i].strip() or _INTERNAL_META_RE.match(lines[i].strip())):
+            i += 1
+        if i < n and re.fullmatch(r"-{3,}", lines[i].strip()):
+            i += 1
+            while i < n and not lines[i].strip():
+                i += 1
+    if not changed:
+        return markdown
+    text = "\n".join(out)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip("\n")
+
+
+def strip_internal_headers_payload(art: dict) -> dict:
+    out = dict(art)
+    if isinstance(out.get("body_markdown"), str):
+        out["body_markdown"] = strip_internal_headers(out["body_markdown"])
+    return out

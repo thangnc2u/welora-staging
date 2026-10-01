@@ -39,6 +39,60 @@ def _new_user_id() -> str:
     return str(uuid4())
 
 
+# --- P0: /auth/device account-takeover guard -------------------------------------------
+# Non-device login paths stamp users.device_id with an internal namespace. Those values used
+# to be derived from public data (sha256(email|phone)[:16]) so POST /auth/device could replay
+# them and receive the victim's token. Now: (1) client device_ids in these namespaces are
+# rejected, (2) /auth/device only ever reuses a *pure device-guest* row, (3) new internal
+# keys are random and no login path looks a user up by them.
+INTERNAL_DEVICE_PREFIXES = ("guest:", "phone:", "email:", "demo:")
+DEVICE_RESERVED_MSG = "Mã thiết bị không hợp lệ (tiền tố dành riêng cho hệ thống)."
+DEVICE_NOT_GUEST_MSG = (
+    "Mã thiết bị này không dùng được cho đăng nhập khách. "
+    "Vui lòng đăng nhập bằng email hoặc số điện thoại."
+)
+
+
+class DeviceIdReserved(ValueError):
+    pass
+
+
+class DeviceNotGuest(PermissionError):
+    pass
+
+
+def is_reserved_device_id(device_id: str | None) -> bool:
+    return (device_id or "").strip().lower().startswith(INTERNAL_DEVICE_PREFIXES)
+
+
+def internal_device_key(prefix: str) -> str:
+    """Random internal device marker (never derived from email/phone, never looked up)."""
+    assert prefix in INTERNAL_DEVICE_PREFIXES
+    return prefix + secrets.token_hex(16)
+
+
+def _is_pure_device_guest(conn, row) -> bool:
+    """Only rows created by POST /auth/device: no credentials, no email/phone, guest role,
+    no internal namespace (legacy phone-OTP rows keep the phone only in device_id), and no
+    history of any other login kind (password / otp / email_otp tokens or OTP challenges) —
+    so a row stays protected even if its device_id were ever rewritten."""
+    for col in ("password_hash", "email", "phone", "email_verified_at"):
+        if str(row[col] or "").strip():
+            return False
+    if str(row["role"] or "guest").strip().lower() != "guest":
+        return False
+    if is_reserved_device_id(row["device_id"]):
+        return False
+    uid = row["user_id"]
+    if conn.execute(
+        "SELECT 1 FROM auth_tokens WHERE user_id=? AND COALESCE(kind,'device')<>'device' LIMIT 1", (uid,)
+    ).fetchone():
+        return False
+    if conn.execute("SELECT 1 FROM otp_challenges WHERE user_id=? LIMIT 1", (uid,)).fetchone():
+        return False
+    return True
+
+
 def ensure_auth_schema(url: str | None = None) -> None:
     migrate(url)
 
@@ -54,16 +108,21 @@ def login_or_register_device(
         raise ValueError("device_id is required")
     if len(device_id) < 4:
         raise ValueError("device_id too short")
+    if is_reserved_device_id(device_id):
+        raise DeviceIdReserved(DEVICE_RESERVED_MSG)
 
     ensure_auth_schema(url)
     conn = get_connection(url)
     try:
         row = conn.execute(
-            "SELECT user_id, display_name FROM users WHERE device_id=?",
+            "SELECT user_id, display_name, device_id, email, phone, password_hash, role, email_verified_at "
+            "FROM users WHERE device_id=?",
             (device_id,),
         ).fetchone()
         created = False
         if row:
+            if not _is_pure_device_guest(conn, row):
+                raise DeviceNotGuest(DEVICE_NOT_GUEST_MSG)
             _admin_login_gate(conn, row["user_id"], via="device_login")
             user_id = row["user_id"]
             name = row["display_name"]
@@ -93,6 +152,48 @@ def login_or_register_device(
         conn.close()
 
 
+def _otp_code_hash(challenge_id: str, code: str) -> str:
+    """Phone-OTP code at rest: salted per challenge like email-OTP (`sha256:` marks hashed rows)."""
+    return "sha256:" + hashlib.sha256(f"welora-phone-otp:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+
+
+def _otp_code_matches(challenge_id: str, stored: str, code: str) -> bool:
+    import hmac
+
+    stored = stored or ""
+    c = (code or "").strip()
+    if stored.startswith("sha256:"):
+        return hmac.compare_digest(stored, _otp_code_hash(challenge_id, c))
+    return bool(stored) and hmac.compare_digest(stored, c)  # in-flight legacy plaintext rows (10-min TTL)
+
+
+def otp_challenge_phone(challenge_id: str, *, url: str | None = None) -> Optional[str]:
+    """Phone of a challenge (rate-limit key for /auth/otp/verify); None if unknown."""
+    if not challenge_id:
+        return None
+    ensure_auth_schema(url)
+    conn = get_connection(url)
+    try:
+        row = conn.execute("SELECT phone FROM otp_challenges WHERE challenge_id=?", (challenge_id,)).fetchone()
+        return row["phone"] if row else None
+    finally:
+        conn.close()
+
+
+def otp_echo_enabled() -> bool:
+    """P0: the phone-OTP code is echoed in the API response ONLY when WELORA_OTP_ECHO=1
+    (staging demo). Unset / any other value → never echoed. Production must not set it."""
+    import os
+
+    return (os.environ.get("WELORA_OTP_ECHO") or "").strip() == "1"
+
+
+def sms_provider_configured() -> bool:
+    """No SMS delivery integration exists in this codebase (see renewal/push: no SMS / Zalo).
+    Kept explicit so the UI can say 'Kênh SMS chưa bật' instead of pretending a code was sent."""
+    return False
+
+
 def request_otp(
     phone: str,
     *,
@@ -119,16 +220,20 @@ def request_otp(
     try:
         conn.execute(
             "INSERT INTO otp_challenges(challenge_id, phone, code, expires_at) VALUES (?,?,?,?)",
-            (challenge_id, phone, code, _iso(expires)),
+            (challenge_id, phone, _otp_code_hash(challenge_id, code), _iso(expires)),
         )
         conn.commit()
-        return {
+        out = {
             "challenge_id": challenge_id,
             "phone_masked": _mask_phone(phone),
             "expires_at": _iso(expires),
-            "pilot_code": code,
-            "pilot_note": "Code echoed for pilot/tests only. Never in production.",
+            "sms_enabled": sms_provider_configured(),
+            "otp_echo": otp_echo_enabled(),
         }
+        if out["otp_echo"]:
+            out["pilot_code"] = code
+            out["pilot_note"] = "Code echoed because WELORA_OTP_ECHO=1 (staging demo only). Never in production."
+        return out
     finally:
         conn.close()
 
@@ -159,7 +264,7 @@ def verify_otp(
         if _now() > expires:
             raise ValueError("OTP expired")
 
-        if (code or "").strip() != row["code"]:
+        if not _otp_code_matches(challenge_id, row["code"], code):
             conn.execute(
                 "UPDATE otp_challenges SET attempts=attempts+1 WHERE challenge_id=?",
                 (challenge_id,),
@@ -171,10 +276,15 @@ def verify_otp(
         user_id = row["user_id"]
         if not user_id:
             user_id = str(uuid4())
-            device_key = "phone:" + hashlib.sha256(phone.encode()).hexdigest()[:16]
+            # Returning phone-OTP user = owner of an earlier consumed challenge for this phone
+            # (challenge.user_id is only ever set here). No lookup by a derived device_id.
             existing = conn.execute(
-                "SELECT user_id FROM users WHERE device_id=?", (device_key,)
+                "SELECT c.user_id FROM otp_challenges c JOIN users u ON u.user_id = c.user_id "
+                "WHERE c.phone=? AND c.consumed=1 AND c.user_id IS NOT NULL "
+                "ORDER BY c.created_at, c.challenge_id LIMIT 1",
+                (phone,),
             ).fetchone()
+            device_key = internal_device_key("phone:")
             if existing:
                 _admin_login_gate(conn, existing["user_id"], via="phone_otp")
                 user_id = existing["user_id"]
@@ -267,6 +377,10 @@ def service_device_login(body: dict) -> tuple[int, dict]:
             display_name=body.get("display_name"),
         )
         return 200 if not out["created"] else 201, out
+    except DeviceIdReserved as e:
+        return 403, {"error": str(e), "error_code": "DEVICE_ID_RESERVED", "message": str(e)}
+    except DeviceNotGuest as e:
+        return 403, {"error": str(e), "error_code": "DEVICE_NOT_GUEST", "message": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except ValueError as e:
@@ -433,10 +547,8 @@ def register_guest(
     pw_hash = _hash_password(pw)
     user_id = _new_user_id()
     name = (display_name or "").strip() or email_n or phone_n
-    # device_id placeholder keeps unique-ish identity for legacy device flows
-    device_key = "guest:" + hashlib.sha256(
-        (email_n or phone_n or user_id).encode()
-    ).hexdigest()[:16]
+    # internal marker only (random; login is by email/phone + password, never by device_id)
+    device_key = internal_device_key("guest:")
 
     conn = get_connection(url)
     try:
@@ -533,6 +645,17 @@ def logout_guest(token: str, *, url: str | None = None) -> dict[str, Any]:
     return {"revoked": bool(ok)}
 
 
+RESET_GENERIC_MSG = "Nếu tài khoản tồn tại, yêu cầu đặt lại mật khẩu đã được ghi nhận."
+
+
+def reset_echo_enabled() -> bool:
+    """P0: reset_token is echoed in the API response ONLY when WELORA_RESET_ECHO=1
+    (staging demo; there is no reset e-mail/SMS delivery yet). Production must not set it."""
+    import os
+
+    return (os.environ.get("WELORA_RESET_ECHO") or "").strip() == "1"
+
+
 def request_password_reset(
     *,
     email: str | None = None,
@@ -540,17 +663,28 @@ def request_password_reset(
     url: str | None = None,
 ) -> dict[str, Any]:
     """
-    Forgot-password MVP — TOKEN STUB (no email/SMS delivery).
+    Forgot-password MVP — token stub (no email/SMS delivery yet).
 
-    Staging always returns reset_token in the body when the account exists
-    so partners can walk through reset without prod mail. When the account
-    does not exist, return a generic ok (no user enumeration).
+    The response is identical whether or not the account exists (same status, keys and
+    Vietnamese message) — no account enumeration. Only with WELORA_RESET_ECHO=1 (staging)
+    is a token minted and echoed for an existing guest/demo account. The token is never logged.
     """
     ensure_auth_schema(url)
     email_n = _norm_email(email) if email else None
     phone_n = _norm_phone(phone) if phone else None
     if not email_n and not phone_n:
         raise ValueError("cần email hoặc số điện thoại")
+    echo = reset_echo_enabled()
+    base = {
+        "ok": True,
+        "approach": "token_stub",
+        "message": RESET_GENERIC_MSG,
+        "note": RESET_GENERIC_MSG,
+        "reset_echo": echo,
+        "delivery": "none",
+    }
+    if not echo:
+        return base  # no lookup, no token: nothing to deliver it with
 
     conn = get_connection(url)
     try:
@@ -563,11 +697,6 @@ def request_password_reset(
             row = conn.execute(
                 "SELECT user_id, role FROM users WHERE phone=?", (phone_n,)
             ).fetchone()
-        base = {
-            "ok": True,
-            "approach": "token_stub",
-            "note": "Staging stub — không gửi email/SMS. Dùng reset_token bên dưới (nếu có).",
-        }
         if not row:
             return base
         role = (row["role"] or "guest").strip().lower()
@@ -582,7 +711,7 @@ def request_password_reset(
         conn.commit()
         base["reset_token"] = token
         base["expires_at"] = _iso(expires)
-        base["pilot_note"] = "Token echoed for staging/partner only. Never in production."
+        base["pilot_note"] = "Token echoed because WELORA_RESET_ECHO=1 (staging only). Never in production."
         return base
     finally:
         conn.close()
@@ -621,12 +750,21 @@ def reset_password_with_token(
         role = (user["role"] or "guest").strip().lower()
         if role not in GUEST_ROLES:
             raise PermissionError("reset bị từ chối (role)")
+        # single-use, atomic across instances: only the request that flips consumed 0→1 proceeds
+        cur = conn.execute(
+            "UPDATE password_reset_tokens SET consumed=1 WHERE token=? AND consumed=0", (tok,)
+        )
+        if (cur.rowcount or 0) != 1:
+            conn.rollback()
+            raise ValueError("token đã dùng")
         conn.execute(
             "UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE user_id=?",
             (_hash_password(pw), user["user_id"]),
         )
+        # any other outstanding reset token for this user is void once the password changed
         conn.execute(
-            "UPDATE password_reset_tokens SET consumed=1 WHERE token=?", (tok,)
+            "UPDATE password_reset_tokens SET consumed=1 WHERE user_id=? AND consumed=0",
+            (user["user_id"],),
         )
         # Revoke outstanding password sessions
         conn.execute(
@@ -662,7 +800,7 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
                 "password_hint": DEMO_PASSWORD,
             }
         user_id = PARTNER_USER_ID
-        device_key = "demo:" + hashlib.sha256(DEMO_EMAIL.encode()).hexdigest()[:16]
+        device_key = internal_device_key("demo:")
         conn.execute(
             "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
             "VALUES (?,?,?,?,?,?,?)",

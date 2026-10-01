@@ -38,6 +38,17 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Phone-OTP code echo (no SMS provider exists). Staging demo only: set "1" in the Dashboard
+      # to show the code on /app/otp. Production must NOT set it. Unset/other → never echoed.
+      - key: WELORA_OTP_ECHO
+        sync: false
+      # Password-reset token echo (no reset e-mail/SMS delivery yet). Staging demo only: "1" in the
+      # Dashboard. Production must NOT set it. Unset/other → never echoed.
+      - key: WELORA_RESET_ECHO
+        sync: false
+      # Optional auth rate limits (defaults: window 900 s, 5/target, 20/IP; verify 10/target, 40/IP):
+      # WELORA_RL_WINDOW_S, WELORA_RL_TARGET_MAX, WELORA_RL_IP_MAX,
+      # WELORA_RL_VERIFY_TARGET_MAX, WELORA_RL_VERIFY_IP_MAX — set in the Dashboard only if needed.
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

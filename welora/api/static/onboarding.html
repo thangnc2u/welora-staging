@@ -137,6 +137,7 @@ button:disabled{opacity:.55}
 <script src="/static/money.js"></script>
 <script src="/static/family_context.js"></script>
 <script src="/static/form_locks.js"></script>
+<script src="/static/session.js"></script>
 <script>
 let uid=null, sid=null;
 let ctaBusy=false;
@@ -188,9 +189,13 @@ WeloraMoney.bindChips(document.getElementById('essChips'), document.getElementBy
 document.getElementById('auth').onclick=async()=>{
   document.getElementById('err0').textContent='';
   try{
-    const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
-    const d=await r.json();
-    uid=d.user_id;
+    if(window.WeloraSession&&WeloraSession.resolveUserId){
+      uid=await WeloraSession.resolveUserId();
+    }else{
+      const r=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:weloraDeviceId()})});
+      const d=await r.json();
+      uid=d.user_id;
+    }
     const s=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
     const sd=await s.json();
     sid=sd.session_id;
@@ -309,7 +314,6 @@ document.getElementById('ctaGoal').onclick=async()=>{
   }
 };
 </script>
-<script src="/static/session.js"></script>
 <script src="/static/shell.js" data-shell-tab="ops"></script>
 </body>
 </html>

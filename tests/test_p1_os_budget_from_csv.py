@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.budget import reset_budget_store
 from welora.safety_gate import TARGET_MONTHS
@@ -27,7 +29,7 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "pars
 class TestP1OsBudgetFromCsv(unittest.TestCase):
     def setUp(self) -> None:
         reset_budget_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_parse_returns_budget_draft_not_goal(self):
         r = self.client.post("/parser/csv", json={"text": SAMPLE, "filename": "s.csv"})

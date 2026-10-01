@@ -7,6 +7,9 @@ Aligned with Welora_E1_Onboarding_Spec_v1
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -114,6 +117,121 @@ SESSIONS: dict[str, OnboardingSession] = {}
 DNA_BY_USER: dict[str, dict[str, Any]] = {}
 CONSTITUTION_BY_USER: dict[str, dict[str, Any]] = {}
 
+log = logging.getLogger("welora.onboarding")
+
+
+# --- Shared-DB persistence (P0: 201-then-404 across instances/restarts) -------
+# When the app runs on a DB store (WELORA_STORE=sqlite|postgres or a Postgres
+# WELORA_DB_URL — same rule as goals/accounts), onboarding sessions and the
+# completed DNA / Personal Constitution are stored in ``onboarding_sessions`` (001_init
+# table + 012 columns; step/payload_json = current_step/steps) through the shared connection layer (Postgres on Render). The DB is the source
+# of truth; SESSIONS / DNA_BY_USER stay as a per-process cache. Memory-only mode
+# (local default, unit tests) is unchanged.
+_MIGRATED: set[str] = set()
+
+
+def _db_mode() -> bool:
+    store = (os.environ.get("WELORA_STORE") or "memory").strip().lower()
+    url = (os.environ.get("WELORA_DB_URL") or "").strip()
+    if store in ("sqlite", "postgres", "db"):
+        return True
+    return url.startswith("postgresql://") or url.startswith("postgres://")
+
+
+def _db_url() -> Optional[str]:
+    return (os.environ.get("WELORA_DB_URL") or "").strip() or None
+
+
+def _conn():
+    from welora.db.connection import get_connection
+    from welora.db.migrate import migrate
+
+    url = _db_url()
+    key = url or ""
+    if key not in _MIGRATED:
+        migrate(url)
+        _MIGRATED.add(key)
+    return get_connection(url)
+
+
+def _with_db(fn):
+    """Run fn(conn); on a missing-table error (fresh/reset DB) migrate once and retry."""
+    for attempt in (0, 1):
+        conn = _conn()
+        try:
+            out = fn(conn)
+            conn.commit()
+            return out
+        except Exception as e:
+            if attempt == 0 and ("no such table" in str(e).lower() or "does not exist" in str(e).lower()):
+                _MIGRATED.discard(_db_url() or "")
+                continue
+            raise
+        finally:
+            conn.close()
+
+
+def _row_to_session(row: Any) -> OnboardingSession:
+    steps_raw = json.loads(row["payload_json"] or "{}")
+    return OnboardingSession(
+        session_id=row["session_id"],
+        user_id=row["user_id"],
+        current_step=int(row["step"] or 0),
+        status=row["status"] or "draft",
+        steps={int(k): v for k, v in steps_raw.items()},
+        created_at=row["created_at"] or _now(),
+        updated_at=row["updated_at"] or _now(),
+        completed_at=row["completed_at"],
+        dna_id=row["dna_id"],
+        constitution_id=row["constitution_id"],
+    )
+
+
+def _db_save(s: OnboardingSession, dna: Optional[dict] = None, constitution: Optional[dict] = None) -> None:
+    steps_json = json.dumps({str(k): v for k, v in s.steps.items()}, ensure_ascii=False)
+    dna_json = json.dumps(dna, ensure_ascii=False) if dna is not None else None
+    con_json = json.dumps(constitution, ensure_ascii=False) if constitution is not None else None
+
+    def _do(conn):
+        # FK users(user_id) is enforced on Postgres — same guard as SqliteOnboardingRepository.
+        conn.execute("INSERT INTO users(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING", (s.user_id,))
+        conn.execute(
+            "INSERT INTO onboarding_sessions(session_id, user_id, step, status, payload_json, "
+            "created_at, updated_at, completed_at, dna_id, constitution_id, dna_json, constitution_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(session_id) DO UPDATE SET step=excluded.step, status=excluded.status, "
+            "payload_json=excluded.payload_json, updated_at=excluded.updated_at, completed_at=excluded.completed_at, "
+            "dna_id=excluded.dna_id, constitution_id=excluded.constitution_id, "
+            "dna_json=COALESCE(excluded.dna_json, onboarding_sessions.dna_json), "
+            "constitution_json=COALESCE(excluded.constitution_json, onboarding_sessions.constitution_json)",
+            (s.session_id, s.user_id, int(s.current_step), s.status, steps_json, s.created_at, s.updated_at,
+             s.completed_at, s.dna_id, s.constitution_id, dna_json, con_json),
+        )
+
+    _with_db(_do)
+
+
+def _db_load(session_id: str) -> Optional[OnboardingSession]:
+    row = _with_db(lambda conn: conn.execute(
+        "SELECT * FROM onboarding_sessions WHERE session_id=?", (session_id,)
+    ).fetchone())
+    return _row_to_session(row) if row else None
+
+
+def _db_latest_completed(user_id: str, column: str) -> Optional[dict[str, Any]]:
+    assert column in ("dna_json", "constitution_json")
+    row = _with_db(lambda conn: conn.execute(
+        f"SELECT {column} AS j FROM onboarding_sessions WHERE user_id=? AND status='completed' "
+        f"AND {column} IS NOT NULL ORDER BY completed_at DESC LIMIT 1",
+        (user_id,),
+    ).fetchone())
+    if not row or not row["j"]:
+        return None
+    try:
+        return json.loads(row["j"])
+    except ValueError:
+        return None
+
 
 def create_session(user_id: str) -> OnboardingSession:
     if not user_id:
@@ -125,15 +243,23 @@ def create_session(user_id: str) -> OnboardingSession:
         status="draft",
     )
     SESSIONS[s.session_id] = s
+    if _db_mode():
+        _db_save(s)
     return s
 
 
 def get_session(session_id: str) -> Optional[OnboardingSession]:
+    if _db_mode():
+        s = _db_load(session_id)
+        if s is not None:
+            SESSIONS[session_id] = s
+            return s
+        return None
     return SESSIONS.get(session_id)
 
 
 def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> OnboardingSession:
-    s = SESSIONS.get(session_id)
+    s = get_session(session_id)
     if not s:
         raise KeyError("session not found")
     if s.status == "completed":
@@ -229,6 +355,8 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
     s.steps[step] = data
     s.current_step = max(s.current_step, step)
     s.updated_at = _now()
+    if _db_mode():
+        _db_save(s)
     return s
 
 
@@ -281,7 +409,7 @@ def _build_constitution(session: OnboardingSession) -> dict[str, Any]:
 
 
 def complete_session(session_id: str) -> dict[str, Any]:
-    s = SESSIONS.get(session_id)
+    s = get_session(session_id)
     if not s:
         raise KeyError("session not found")
     if s.status == "completed":
@@ -300,6 +428,8 @@ def complete_session(session_id: str) -> dict[str, Any]:
     s.dna_id = dna["dna_id"]
     s.constitution_id = constitution["constitution_id"]
     s.current_step = 5
+    if _db_mode():
+        _db_save(s, dna=dna, constitution=constitution)
 
     snap = dna["financial_snapshot_self"]
     essential = snap.get("essential_expense_monthly") or 0
@@ -350,10 +480,24 @@ def complete_session(session_id: str) -> dict[str, Any]:
 
 
 def get_dna(user_id: str) -> Optional[dict[str, Any]]:
+    if _db_mode():
+        try:
+            d = _db_latest_completed(str(user_id), "dna_json")
+            if d is not None:
+                return d
+        except Exception as e:  # pragma: no cover - DB outage → cache fallback
+            log.warning("onboarding dna db read failed: %s", type(e).__name__)
     return DNA_BY_USER.get(user_id)
 
 
 def get_constitution(user_id: str) -> Optional[dict[str, Any]]:
+    if _db_mode():
+        try:
+            c = _db_latest_completed(str(user_id), "constitution_json")
+            if c is not None:
+                return c
+        except Exception as e:  # pragma: no cover
+            log.warning("onboarding constitution db read failed: %s", type(e).__name__)
     return CONSTITUTION_BY_USER.get(user_id)
 
 

@@ -23,6 +23,7 @@ a{color:var(--link);text-decoration:none}
 <p class="muted">Điều bạn đã xác nhận khi Bắt đầu</p>
 <p><a id="ctaOsGoal" href="/app/goals">Tạo mục tiêu quỹ khẩn cấp trên WeloraOS</a></p>
 <div id="articles"></div>
+<script src="/static/session.js"></script>
 <script>
 const KEY='welora_device_id';
 function deviceId(){
@@ -59,9 +60,14 @@ function renderArticles(list){
 }
 (async()=>{
   try{
-    const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
-    const a=await auth.json();
-    const uid=a.user_id||a.user||'';
+    let uid='';
+    if(window.WeloraSession&&WeloraSession.resolveUserId){
+      uid=await WeloraSession.resolveUserId();
+    }else{
+      const auth=await fetch('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:deviceId()})});
+      const a=await auth.json();
+      uid=a.user_id||a.user||'';
+    }
     const cr=await fetch('/users/'+encodeURIComponent(uid)+'/personal-constitution');
     if(cr.status===404||!cr.ok){showEmpty();return;}
     const data=await cr.json();
@@ -72,7 +78,6 @@ function renderArticles(list){
   }
 })();
 </script>
-<script src="/static/session.js"></script>
 <script src="/static/shell.js" data-shell-tab="ops"></script>
 </body>
 </html>

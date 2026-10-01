@@ -9,6 +9,8 @@ os.environ.setdefault("WELORA_STORE", "memory")
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import GoalCreateBody, app
 from welora.goal_emergency_fund import InMemoryEmergencyFundStore
 from welora.goals_api import USER_FLAGS, use_store
@@ -19,7 +21,7 @@ class TestGoalCreateBodyHttp(unittest.TestCase):
     def setUp(self) -> None:
         use_store(InMemoryEmergencyFundStore())
         USER_FLAGS.clear()
-        self.client = TestClient(app)
+        self.client = authed(TestClient(app))
 
     def test_model_has_optional_target_and_essential(self):
         fields = GoalCreateBody.model_fields

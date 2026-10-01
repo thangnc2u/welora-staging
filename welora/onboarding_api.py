@@ -27,6 +27,13 @@ def service_create_session(body: dict) -> tuple[int, dict]:
     return 201, s.to_dict()
 
 
+def service_get_session(session_id: str) -> tuple[int, dict]:
+    s = ob.get_session(session_id)
+    if not s:
+        return 404, {"error": "session not found"}
+    return 200, s.to_dict()
+
+
 def service_patch_step(session_id: str, step: int, body: dict) -> tuple[int, dict]:
     try:
         s = ob.patch_step(session_id, step, body)

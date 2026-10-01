@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs, service_chat
 from welora.fixtures import load_pair, reset_all_stores
@@ -26,7 +28,7 @@ class TestP2UatADenyReplyOnboardEnum(unittest.TestCase):
 
     def setUp(self) -> None:
         reset_onboarding_stores()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def _deny_chat(self, message: str) -> dict:
         seed = dict(self.pair["not_passed"]["agent_context_seed"])

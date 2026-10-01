@@ -9,6 +9,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -31,7 +33,7 @@ class TestP2UatResidualDemoPrerule(unittest.TestCase):
         os.environ["WELORA_GUEST_DEMO"] = "1"
         os.environ.pop("WELORA_DEBUG_PRERULE", None)
         os.environ["WELORA_STORE"] = "memory"
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def tearDown(self) -> None:
         try:
@@ -105,7 +107,7 @@ class TestP2UatResidualDemoPrerule(unittest.TestCase):
         r = self.client.get("/app/pre-rule")
         self.assertEqual(r.status_code, 404)
         os.environ["WELORA_DEBUG_PRERULE"] = "1"
-        client = TestClient(create_app())
+        client = authed(TestClient(create_app()))
         r2 = client.get("/app/pre-rule")
         self.assertEqual(r2.status_code, 200)
         self.assertIn('id="q"', r2.text)

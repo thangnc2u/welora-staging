@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import math
+import random
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 KUAT_PASS_THRESHOLD = 0.70
 MODULE_ID = "M02"
@@ -528,11 +531,31 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q01a", "prompt": "Quỹ khẩn cấp dùng để làm gì?", "choices": ["Chi tiêu thường ngày", "Đệm khi mất thu nhập / sốc", "All-in cổ phiếu"], "answer": 1, "hard": False},
         {"id": "q01b", "prompt": "Mục tiêu tối thiểu của Cổng An Toàn là bao nhiêu tháng chi thiết yếu?", "choices": ["1 tháng", "3 tháng", "12 tháng"], "answer": 1, "hard": True},
         {"id": "q01c", "prompt": "Có nên dùng quỹ khẩn cấp để mua sắm sale?", "choices": ["Có", "Không"], "answer": 1, "hard": False},
+        # GP P0b — ngân hàng câu hỏi lớn hơn (mỗi lượt KUAT rút ngẫu nhiên một phần)
+        {"id": "q01d", "prompt": "Chi tiêu thiết yếu của bạn khoảng 15 triệu ₫ mỗi tháng. Quỹ khẩn cấp tối thiểu cần bao nhiêu?", "choices": ["15 triệu ₫", "45 triệu ₫", "150 triệu ₫"], "answer": 1, "hard": True},
+        {"id": "q01e", "prompt": "Khoản nào nên tính vào chi tiêu thiết yếu khi đặt mục tiêu quỹ?", "choices": ["Tiền nhà, ăn uống, điện nước, đi lại", "Du lịch và mua sắm mùa sale", "Tiền định đầu tư mỗi tháng"], "answer": 0, "hard": False},
+        {"id": "q01f", "prompt": "Bắt đầu xây quỹ từ con số 0, cách nào dễ duy trì nhất?", "choices": ["Chờ có khoản thưởng lớn rồi gửi một lần", "Tự động chuyển một phần nhỏ ngay sau ngày nhận lương", "Cuối tháng còn dư bao nhiêu thì gửi bấy nhiêu"], "answer": 1, "hard": False},
+        {"id": "q01g", "prompt": "Vì sao nên để quỹ khẩn cấp ở một tài khoản riêng?", "choices": ["Để không lẫn với tiền tiêu hằng ngày và lỡ tay tiêu mất", "Để được lãi cao hơn", "Vì ngân hàng bắt buộc như vậy"], "answer": 0, "hard": False},
+        {"id": "q01h", "prompt": "Mục đích chính của quỹ khẩn cấp là gì?", "choices": ["Sinh lời thật nhanh", "Bảo vệ gia đình khi có sự cố — không phải để sinh lời", "Để dành mua xe mới"], "answer": 1, "hard": True},
+        {"id": "q01i", "prompt": "Quỹ của bạn đã đủ 1 tháng chi tiêu thiết yếu. Bước tiếp theo hợp lý là gì?", "choices": ["Dừng lại vì đã có quỹ", "Tiếp tục góp đều lên 2 rồi 3 tháng", "Rút ra đầu tư để nhanh đủ hơn"], "answer": 1, "hard": True},
+        {"id": "q01j", "prompt": "Thu nhập không đều (làm tự do, buôn bán nhỏ) thì quỹ khẩn cấp nên thế nào?", "choices": ["Nên dày hơn mức tối thiểu 3 tháng", "Không cần quỹ vì thu nhập lúc cao lúc thấp", "Chỉ cần nửa tháng là đủ"], "answer": 0, "hard": False},
+        {"id": "q01k", "prompt": "Đang xây quỹ thì có người rủ góp vốn «lời chắc 20% mỗi tháng». Bạn nên làm gì?", "choices": ["Rút quỹ góp ngay kẻo lỡ", "Giữ nguyên quỹ — quỹ khẩn cấp không dùng để đầu tư", "Vay thêm để góp cho nhiều"], "answer": 1, "hard": True},
+        {"id": "q01l", "prompt": "Quỹ chưa đủ 3 tháng chi tiêu thiết yếu thì Cổng An Toàn của Welora thế nào?", "choices": ["Vẫn ĐẠT nếu điểm sức khỏe tài chính cao", "Chưa ĐẠT — cần đủ tối thiểu 3 tháng", "ĐẠT nếu bạn tự xác nhận là ổn"], "answer": 1, "hard": True},
     ],
     "N02-02": [
         {"id": "q02a", "prompt": "Được dùng quỹ khẩn cấp để all-in ETF khi thấy cơ hội?", "choices": ["Có", "Không"], "answer": 1, "hard": True},
         {"id": "q02b", "prompt": "Quỹ khẩn cấp nên dùng khi nào?", "choices": ["Mất việc / y tế / sốc", "Cơ hội đầu tư", "Du lịch"], "answer": 0, "hard": False},
         {"id": "q02c", "prompt": "Rút quỹ khẩn cấp để đầu tư cổ phiếu?", "choices": ["Được nếu lời", "Không — phá An Toàn"], "answer": 1, "hard": True},
+        # GP P0b — ngân hàng câu hỏi lớn hơn (mỗi lượt KUAT rút ngẫu nhiên một phần)
+        {"id": "q02d", "prompt": "Tình huống nào phù hợp để rút quỹ khẩn cấp?", "choices": ["Bị cắt giảm thu nhập đột ngột", "Đặt cọc chuyến du lịch Tết", "Mua điện thoại đời mới"], "answer": 0, "hard": True},
+        {"id": "q02e", "prompt": "Hai câu hỏi nên tự hỏi trước khi rút quỹ khẩn cấp là gì?", "choices": ["Việc này có bất ngờ không, và có ảnh hưởng tới sinh hoạt thiết yếu không?", "Bạn bè có làm vậy không, và có đang giảm giá không?", "Có lời không, và có nhanh không?"], "answer": 0, "hard": False},
+        {"id": "q02f", "prompt": "Đám cưới của bạn đã lên lịch từ năm ngoái. Có nên dùng quỹ khẩn cấp để chi?", "choices": ["Có, vì là việc lớn", "Không — khoản biết trước nên để dành bằng một quỹ mục tiêu riêng"], "answer": 1, "hard": True},
+        {"id": "q02g", "prompt": "Vừa rút quỹ để lo một ca nằm viện. Việc nên làm tiếp theo là gì?", "choices": ["Nạp lại quỹ cho đủ 3 tháng trước khi nghĩ tới đầu tư", "Đầu tư phần còn lại để gỡ nhanh", "Không cần nạp lại nữa"], "answer": 0, "hard": True},
+        {"id": "q02h", "prompt": "Xe máy hỏng nặng, không đi làm được. Dùng quỹ khẩn cấp để sửa là?", "choices": ["Hợp lý — sự cố bất ngờ ảnh hưởng tới việc đi làm", "Sai — quỹ chỉ dùng khi mất việc"], "answer": 0, "hard": False},
+        {"id": "q02i", "prompt": "Tiền trong quỹ «nằm im» khiến bạn thấy tiếc. Cách nghĩ nào đúng?", "choices": ["Rút ra mua vàng cho khỏi phí", "Quỹ nằm im là đang làm đúng việc: chờ sẵn cho lúc cần", "Chuyển hết sang chứng khoán"], "answer": 1, "hard": False},
+        {"id": "q02j", "prompt": "Thị trường giảm mạnh, ai cũng bảo «bắt đáy». Còn quỹ khẩn cấp thì sao?", "choices": ["Dùng quỹ bắt đáy, có lời rồi nạp lại sau", "Không đụng quỹ — chỉ đầu tư bằng tiền ngoài quỹ, khi Cổng đã ĐẠT"], "answer": 1, "hard": True},
+        {"id": "q02k", "prompt": "Việc gấp khác việc khẩn cấp ở điểm nào?", "choices": ["Việc gấp thường vẫn xoay được bằng cách chỉnh chi tiêu; việc khẩn cấp đe dọa sinh hoạt cơ bản", "Hai việc như nhau, cứ rút quỹ"], "answer": 0, "hard": False},
+        {"id": "q02l", "prompt": "Điểm sức khỏe tài chính cao có thay được Cổng An Toàn để rút quỹ đầu tư không?", "choices": ["Có", "Không — Cổng không bị điểm số vượt qua"], "answer": 1, "hard": True},
     ],
     "N02-03": [
         {"id": "q03a", "prompt": "Nơi giữ quỹ khẩn cấp nên ưu tiên gì?", "choices": ["Lợi suất cao", "An toàn và rút được nhanh", "Tất tay crypto"], "answer": 1, "hard": True},
@@ -668,28 +691,42 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
 }
 
 _PROFILES: dict[str, dict[str, Any]] = {}
+_REVS: dict[str, int] = {}  # DB revision each cached profile was loaded from / saved as
+ATTEMPT_LOG_MAX = 20
+
+# GP P0b — KUAT draw: each attempt shows KUAT_DRAW questions picked at random from the node's bank
+# (at least KUAT_MIN_HARD "hard" ones when the bank has them), in random order, each with its
+# options in random order. Pass rule unchanged: score ≥ KUAT_PASS_THRESHOLD (70 %) AND every hard
+# question shown answered correctly → with 5 questions: ≥ 4/5 and all hard right; 3-question
+# banks: 3/3 (as before).
+KUAT_DRAW = 5
+KUAT_MIN_HARD = 2
+PASS_RULE_VI = "Đạt khi đúng từ 70% số câu trở lên và đúng mọi câu trọng tâm."
 
 
 def reset_academy_store() -> None:
     _PROFILES.clear()
+    _REVS.clear()
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _profile(user_id: str) -> dict[str, Any]:
-    p = _PROFILES.setdefault(
-        user_id,
-        {
-            "xp": 0,
-            "badges": [],
-            "awarded_xp": [],
-            "nodes": {},
-            "attempts": [],
-            "read": [],
-        },
-    )
+def _public_attempt(a: Any) -> Any:
+    """Attempt summary safe to store / return: outcome + total score only (never per-question)."""
+    if not isinstance(a, dict):
+        return a
+    return {k: a[k] for k in ("node_id", "score", "passed", "ts", "principle_keys", "question_count") if k in a}
+
+
+def _normalise(p: dict[str, Any]) -> dict[str, Any]:
+    p.setdefault("xp", 0)
+    p.setdefault("badges", [])
+    p.setdefault("awarded_xp", [])
+    p.setdefault("nodes", {})
+    p.setdefault("attempts", [])
+    p.setdefault("read", [])
     for n in NODES:
         p["nodes"].setdefault(
             n["node_id"],
@@ -700,7 +737,67 @@ def _profile(user_id: str) -> dict[str, Any]:
                 "last_kuat": None,
             },
         )
+    for st in p["nodes"].values():
+        if st.get("last_kuat"):
+            st["last_kuat"] = _public_attempt(st["last_kuat"])
+    p["attempts"] = [_public_attempt(a) for a in p["attempts"]][-ATTEMPT_LOG_MAX:]
     return p
+
+
+def _sync_from_db(user_id: str) -> None:
+    """DB-store mode: (re)load the persisted profile when this process has none or another
+    instance / request saved a newer revision. An unsaved in-process copy with the same revision is
+    kept as is."""
+    from welora import academy_store as store
+
+    if not store.use_db_profiles():
+        return
+    rev = store.profile_rev(user_id)
+    if rev is None or (user_id in _PROFILES and _REVS.get(user_id) == rev):
+        return
+    loaded = store.load_profile(user_id)
+    if loaded:
+        _PROFILES[user_id], _REVS[user_id] = loaded[0], loaded[1]
+
+
+def _profile(user_id: str) -> dict[str, Any]:
+    _sync_from_db(user_id)
+    p = _PROFILES.setdefault(user_id, {})
+    return _normalise(p)
+
+
+def _save(user_id: str) -> None:
+    from welora import academy_store as store
+
+    if store.use_db_profiles() and user_id in _PROFILES:
+        _REVS[user_id] = store.save_profile(user_id, _PROFILES[user_id])
+
+
+def profile_snapshot(user_id: str) -> dict[str, Any]:
+    """Read-only view for other modules (checkout usage): persisted progress after a restart."""
+    _sync_from_db(user_id)
+    return _PROFILES.get(user_id) or {}
+
+
+def merge_profiles(account: dict[str, Any], guest: dict[str, Any]) -> dict[str, Any]:
+    """Guest claim: keep the account's progress and add what the guest really earned (mastered
+    nodes, read lessons, XP for nodes not yet awarded to the account)."""
+    a = _normalise(json.loads(json.dumps(account or {})))
+    g = _normalise(json.loads(json.dumps(guest or {})))
+    for nid, gst in g["nodes"].items():
+        ast = a["nodes"].get(nid)
+        if gst.get("status") == STATUS_MASTERED and (ast or {}).get("status") != STATUS_MASTERED:
+            a["nodes"][nid] = dict(gst)
+            if nid in g["awarded_xp"] and nid not in a["awarded_xp"]:
+                a["awarded_xp"].append(nid)
+                a["xp"] = int(a["xp"]) + XP_PER_PASS
+    for nid in g["read"]:
+        if nid not in a["read"]:
+            a["read"].append(nid)
+    a["attempts"] = (a["attempts"] + g["attempts"])[-ATTEMPT_LOG_MAX:]
+    _refresh_locks(a)
+    _refresh_badges(a)
+    return a
 
 
 def _refresh_locks(p: dict[str, Any]) -> None:
@@ -736,11 +833,39 @@ def _refresh_badges(p: dict[str, Any]) -> None:
         p["badges"].append(BADGE_KET_NOI)
 
 
-def _public_questions(node_id: str) -> list[dict[str, Any]]:
+def _served_public(node_id: str, served: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What the learner sees for one attempt: slot ids k1…kN, options in the served order."""
+    by_id = {q["id"]: q for q in QUESTIONS.get(node_id, [])}
     out = []
-    for q in QUESTIONS.get(node_id, []):
-        out.append({"id": q["id"], "prompt": q["prompt"], "choices": list(q["choices"]), "hard": bool(q["hard"])})
+    for i, slot in enumerate(served):
+        q = by_id[slot["q"]]
+        out.append({"id": f"k{i + 1}", "prompt": q["prompt"], "choices": [q["choices"][j] for j in slot["perm"]],
+                    "hard": bool(q["hard"])})
     return out
+
+
+def _draw(node_id: str) -> list[dict[str, Any]]:
+    rng = random.SystemRandom()
+    bank = list(QUESTIONS.get(node_id, []))
+    k = min(KUAT_DRAW, len(bank))
+    hard = [q for q in bank if q["hard"]]
+    n_hard = min(KUAT_MIN_HARD, len(hard), k)
+    picked = rng.sample(hard, n_hard)
+    rest = [q for q in bank if q not in picked]
+    picked += rng.sample(rest, k - n_hard)
+    rng.shuffle(picked)
+    out = []
+    for q in picked:
+        perm = list(range(len(q["choices"])))
+        rng.shuffle(perm)
+        out.append({"q": q["id"], "perm": perm})
+    return out
+
+
+def kuat_info(node_id: str) -> dict[str, Any]:
+    return {"threshold": KUAT_PASS_THRESHOLD, "pass_rule": PASS_RULE_VI,
+            "question_count": min(KUAT_DRAW, len(QUESTIONS.get(node_id, []))),
+            "bank_size": len(QUESTIONS.get(node_id, []))}
 
 
 def get_tree(user_id: str) -> dict[str, Any]:
@@ -750,7 +875,8 @@ def get_tree(user_id: str) -> dict[str, Any]:
     for n in NODES:
         st = p["nodes"][n["node_id"]]
         item = dict(n)
-        item.update({"status": st["status"], "mastery_level": st["mastery_level"], "last_kuat": st["last_kuat"]})
+        item.update({"status": st["status"], "mastery_level": st["mastery_level"],
+                     "last_kuat": _public_attempt(st["last_kuat"])})
         nodes.append(item)
     modules = []
     for mod in MODULES:
@@ -811,7 +937,11 @@ def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
     return fb
 
 
-def get_node(user_id: str, node_id: str) -> dict[str, Any] | None:
+def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None) -> dict[str, Any] | None:
+    """Lesson + (when the node is open and the learner is not cooling down) a fresh server-held KUAT
+    attempt: ``kuat.attempt_id`` and the drawn, shuffled ``questions`` (no answers, no verdicts)."""
+    from welora import academy_store as store
+
     if node_id not in _NODE_BY_ID:
         return None
     p = _profile(user_id)
@@ -819,12 +949,22 @@ def get_node(user_id: str, node_id: str) -> dict[str, Any] | None:
     n = dict(_NODE_BY_ID[node_id])
     st = p["nodes"][node_id]
     body = _lesson_body_markdown(str(n.get("lesson_id") or ""), str(n.get("principle_key") or ""))
+    kuat: dict[str, Any] = kuat_info(node_id)
+    questions: list[dict[str, Any]] = []
+    if st["status"] != STATUS_LOCKED and issue_attempt and QUESTIONS.get(node_id):
+        try:
+            att = start_attempt(user_id, node_id, ip=ip)
+            questions = att["questions"]
+            kuat.update({"attempt_id": att["attempt_id"], "expires_at": att["expires_at"]})
+        except store.KuatCooldown as e:
+            kuat.update({"cooldown": cooldown_payload(e)})
     n.update(
         {
             "status": st["status"],
             "mastery_level": st["mastery_level"],
-            "last_kuat": st["last_kuat"],
-            "questions": _public_questions(node_id),
+            "last_kuat": _public_attempt(st["last_kuat"]),
+            "questions": questions,
+            "kuat": kuat,
             "content_href": "/app/content?key=" + n["principle_key"],
             # Learner-facing stub: VI title only — never leak principle_key / SAFE-* / DEBT-*
             "lesson_stub": n["title"],
@@ -848,59 +988,71 @@ def mark_read(user_id: str, node_id: str) -> dict[str, Any]:
         st["status"] = STATUS_KUAT_PENDING
         if st["mastery_level"] == "not_started":
             st["mastery_level"] = "learning"
+    _save(user_id)
     return {"ok": True, "xp": p["xp"], "status": st["status"], "awarded_xp": False}
 
 
-def _grade(node_id: str, answers: list[dict[str, Any]]) -> tuple[float, bool, list[dict[str, Any]]]:
-    qs = QUESTIONS.get(node_id, [])
-    by_id = {q["id"]: q for q in qs}
+def _verdict(results: list[tuple[bool, bool]]) -> tuple[float, bool]:
+    """results = [(correct, hard)] → (score, passed). Pass rule: ≥ 70 % and every hard one right."""
+    if not results:
+        return 0.0, False
+    score = sum(1 for ok, _h in results if ok) / len(results)
+    return score, score >= KUAT_PASS_THRESHOLD and all(ok for ok, h in results if h)
+
+
+def _choice(raw: Any) -> int:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return -1
+
+
+def _grade(node_id: str, answers: list[dict[str, Any]]) -> tuple[float, bool]:
+    """In-process grading against the node's whole bank by canonical question id (tests / internal
+    tools only — the HTTP API grades against a server-held attempt, ``_grade_served``)."""
     picked = {str(a.get("question_id") or a.get("id")): a.get("choice") for a in answers or []}
-    correct = 0
-    detail = []
-    hard_ok = True
-    for q in qs:
-        raw = picked.get(q["id"])
-        try:
-            choice = int(raw)
-        except (TypeError, ValueError):
-            choice = -1
-        ok = choice == q["answer"]
-        if ok:
-            correct += 1
-        elif q["hard"]:
-            hard_ok = False
-        detail.append({"id": q["id"], "correct": ok, "hard": q["hard"]})
-    score = (correct / len(qs)) if qs else 0.0
-    passed = score >= KUAT_PASS_THRESHOLD and hard_ok
-    return score, passed, detail
+    return _verdict([(_choice(picked.get(q["id"])) == q["answer"], bool(q["hard"])) for q in QUESTIONS.get(node_id, [])])
+
+
+def _grade_served(node_id: str, served: list[dict[str, Any]], answers: list[dict[str, Any]]) -> tuple[float, bool]:
+    """Grade an attempt against exactly what the server served: slot k<i> → canonical question,
+    the submitted option index → original option via the served permutation."""
+    by_id = {q["id"]: q for q in QUESTIONS.get(node_id, [])}
+    picked = {str(a.get("question_id") or a.get("id")): a.get("choice") for a in answers or []}
+    results = []
+    for i, slot in enumerate(served):
+        q = by_id.get(slot.get("q"))
+        if q is None:
+            results.append((False, True))
+            continue
+        c = _choice(picked.get(f"k{i + 1}"))
+        perm = slot.get("perm") or []
+        ok = 0 <= c < len(perm) and perm[c] == q["answer"]
+        results.append((ok, bool(q["hard"])))
+    return _verdict(results)
 
 
 def _wire_mastery(user_id: str) -> None:
     """The ONLY user-driven way to gate mastery: a KUAT for the gate node graded here on the
-    server (``_grade`` against QUESTIONS, never a client verdict) → mastery "apply" (source academy)."""
+    server (against the server-held attempt, never a client verdict) → mastery "apply" (source academy)."""
     from welora.mastery import grant_from_academy
 
     grant_from_academy(user_id)
 
 
-def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
-    if node_id not in _NODE_BY_ID:
-        return {"error": "unknown node"}
+def _apply_result(user_id: str, node_id: str, score: float, passed: bool, question_count: int) -> dict[str, Any]:
     p = _profile(user_id)
-    _refresh_locks(p)
     st = p["nodes"][node_id]
-    if st["status"] == STATUS_LOCKED:
-        return {"error": "locked", "passed": False, "xp": p["xp"]}
-    score, passed, detail = _grade(node_id, answers)
     attempt = {
         "node_id": node_id,
         "score": score,
         "passed": passed,
-        "answers": detail,
         "ts": _now(),
         "principle_keys": [_NODE_BY_ID[node_id]["principle_key"]],
+        "question_count": int(question_count),
     }
     p["attempts"].append(attempt)
+    p["attempts"] = p["attempts"][-ATTEMPT_LOG_MAX:]
     awarded = False
     if passed:
         st["status"] = STATUS_MASTERED
@@ -919,10 +1071,12 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
         st["mastery_level"] = "familiar"
         st["last_kuat"] = attempt
         _refresh_locks(p)
-    payload: dict[str, Any] = {
+    _save(user_id)
+    return {
         "kuat_result": {
             "passed": passed,
             "score": score,
+            "question_count": int(question_count),
             "node_id": node_id,
             "principle_keys": [_NODE_BY_ID[node_id]["principle_key"]],
             "ts": attempt["ts"],
@@ -934,7 +1088,81 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
         "tree": get_tree(user_id),
         "os_nudge": os_nudge_for(node_id, first_pass=bool(awarded)),
     }
-    return payload
+
+
+def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
+    """In-process only (tests / internal tools): grade against the whole bank. Not reachable over
+    HTTP — /academy/kuat goes through ``submit_kuat_attempt`` (server-held attempt + limits)."""
+    if node_id not in _NODE_BY_ID:
+        return {"error": "unknown node"}
+    p = _profile(user_id)
+    _refresh_locks(p)
+    if p["nodes"][node_id]["status"] == STATUS_LOCKED:
+        return {"error": "locked", "passed": False, "xp": p["xp"]}
+    score, passed = _grade(node_id, answers)
+    return _apply_result(user_id, node_id, score, passed, len(QUESTIONS.get(node_id, [])))
+
+
+def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None) -> dict[str, Any]:
+    """Issue a KUAT attempt (raises academy_store.KuatCooldown while cooling down / too many starts)."""
+    from welora import academy_store as store
+
+    store.check_kuat_allowed(user_id, node_id, ip)
+    served = _draw(node_id)
+    att = store.create_attempt(user_id, node_id, served)
+    return {**kuat_info(node_id), **att, "node_id": node_id, "questions": _served_public(node_id, served)}
+
+
+def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], answers: list[dict[str, Any]],
+                        *, ip: Optional[str] = None) -> dict[str, Any]:
+    from welora import academy_store as store
+
+    if node_id not in _NODE_BY_ID:
+        return {"error": "unknown node"}
+    p = _profile(user_id)
+    _refresh_locks(p)
+    if p["nodes"][node_id]["status"] == STATUS_LOCKED:
+        return {"error": "locked", "passed": False, "xp": p["xp"]}
+    store.check_kuat_allowed(user_id, node_id, ip)
+    # Old clients (page loaded before this deploy) post without attempt_id: the open attempt the
+    # server issued with the lesson is used — still server-held, still single-use.
+    aid = (attempt_id or "").strip() or store.latest_open_attempt_id(user_id, node_id)
+    served = store.consume_attempt(aid, user_id, node_id) if aid else None
+    if not served:
+        return {"error": "attempt_invalid"}
+    score, passed = _grade_served(node_id, served, answers)
+    store.finish_attempt(aid, passed=passed, score=score)
+    if not passed:
+        store.record_kuat_fail(user_id, node_id, ip)
+    return _apply_result(user_id, node_id, score, passed, len(served))
+
+
+def _wait_vi(seconds: int) -> str:
+    m = max(1, math.ceil(seconds / 60))
+    if m < 60:
+        return f"{m} phút"
+    h, mm = divmod(m, 60)
+    return f"{h} giờ" + (f" {mm} phút" if mm else "")
+
+
+COOLDOWN_MSG_VI = {
+    "fails": "Bạn đã làm bài KUAT này chưa đạt vài lần liền. Hãy ôn lại bài học rồi thử lại sau khoảng {wait}.",
+    "daily": "Hôm nay bạn đã làm bài KUAT này chưa đạt nhiều lần. Hãy nghỉ ngơi, ôn lại bài và quay lại sau khoảng {wait}.",
+    "ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Vui lòng thử lại sau khoảng {wait}.",
+    "starts": "Bạn đã mở bài KUAT này quá nhiều lần. Vui lòng thử lại sau khoảng {wait}.",
+}
+ATTEMPT_INVALID_MSG_VI = "Lượt KUAT này đã hết hạn hoặc đã được nộp. Hãy tải lại bài để làm lượt mới."
+
+
+def cooldown_payload(e: Any) -> dict[str, Any]:
+    retry_at = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + e.retry_after, tz=timezone.utc)
+    return {
+        "error_code": "KUAT_COOLDOWN",
+        "reason": e.reason,
+        "message": COOLDOWN_MSG_VI.get(e.reason, COOLDOWN_MSG_VI["fails"]).format(wait=_wait_vi(e.retry_after)),
+        "retry_after": int(e.retry_after),
+        "retry_at": retry_at.isoformat(),
+    }
 
 
 def service_get_tree(user_id: str) -> tuple[int, dict]:
@@ -943,10 +1171,10 @@ def service_get_tree(user_id: str) -> tuple[int, dict]:
     return 200, get_tree(user_id)
 
 
-def service_get_node(user_id: str, node_id: str) -> tuple[int, dict]:
+def service_get_node(user_id: str, node_id: str, *, ip: Optional[str] = None) -> tuple[int, dict]:
     if not user_id:
         return 400, {"error": "user_id is required"}
-    n = get_node(user_id, node_id)
+    n = get_node(user_id, node_id, ip=ip)
     if not n:
         return 404, {"error": "unknown node"}
     return 200, n
@@ -963,15 +1191,41 @@ def service_mark_read(body: dict) -> tuple[int, dict]:
     return 200, out
 
 
-def service_submit_kuat(body: dict) -> tuple[int, dict]:
+def service_start_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, dict]:
+    from welora import academy_store as store
+
+    user_id = (body or {}).get("user_id") or ""
+    node_id = (body or {}).get("node_id") or ""
+    if not user_id or not node_id:
+        return 400, {"error": "user_id and node_id required"}
+    if node_id not in _NODE_BY_ID or not QUESTIONS.get(node_id):
+        return 404, {"error": "unknown node"}
+    p = _profile(user_id)
+    _refresh_locks(p)
+    if p["nodes"][node_id]["status"] == STATUS_LOCKED:
+        return 403, {"error": "locked"}
+    try:
+        return 200, start_attempt(user_id, node_id, ip=ip)
+    except store.KuatCooldown as e:
+        return 429, cooldown_payload(e)
+
+
+def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, dict]:
+    from welora import academy_store as store
+
     user_id = (body or {}).get("user_id") or ""
     node_id = (body or {}).get("node_id") or ""
     answers = (body or {}).get("answers") or []
     if not user_id or not node_id:
         return 400, {"error": "user_id and node_id required"}
-    out = submit_kuat(user_id, node_id, answers)
-    if out.get("error") and out.get("error") != "locked":
-        return 400, out
+    try:
+        out = submit_kuat_attempt(user_id, node_id, (body or {}).get("attempt_id"), answers, ip=ip)
+    except store.KuatCooldown as e:
+        return 429, cooldown_payload(e)
     if out.get("error") == "locked":
         return 403, out
+    if out.get("error") == "attempt_invalid":
+        return 409, {"error_code": "KUAT_ATTEMPT_INVALID", "message": ATTEMPT_INVALID_MSG_VI}
+    if out.get("error"):
+        return 400, out
     return 200, out

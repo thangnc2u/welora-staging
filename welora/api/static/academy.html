@@ -307,9 +307,33 @@ async function openNode(id){
   }
   const a=document.getElementById('pediaLink');
   a.href=n.content_href||('/app/content?key='+(n.principle_key||''));
+  renderKuat(n.questions||[], n.kuat||{});
+}
+/* GP P0b: each KUAT is a server-issued attempt (random questions from the bank, shuffled options,
+   single-use attempt_id). The server returns only ĐẠT / CHƯA ĐẠT + total score — never which
+   question was right — and answers 429 with a retry time after repeated failures. */
+function kuatErr(d, status){
+  const x=(d&&d.detail!==undefined)?d.detail:d;
+  if(x&&typeof x==='object') return x.message||x.error||('Không nộp được KUAT ('+status+')');
+  return (typeof x==='string'&&x)?(x==='locked'?'Bài này đang khóa — hãy hoàn thành bài trước.':x):('Không nộp được KUAT ('+status+')');
+}
+function cooldownText(c){
+  let t=(c&&c.message)||'Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút.';
+  if(c&&c.retry_at){
+    try{ t+=' (từ '+new Date(c.retry_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})+')'; }catch(_e){}
+  }
+  return t;
+}
+function renderKuat(questions, kuat){
   const box=document.getElementById('kuatBox');
+  const btn=document.getElementById('btnKuat');
+  const out=document.getElementById('kuatOut');
   box.textContent='';
-  (n.questions||[]).forEach(q=>{
+  out.textContent='';
+  out.className='';
+  current.attempt_id=(kuat&&kuat.attempt_id)||'';
+  current.kuat_questions=questions||[];
+  (questions||[]).forEach(q=>{
     const wrap=document.createElement('div');
     wrap.className='q';
     wrap.dataset.qid=q.id;
@@ -326,9 +350,19 @@ async function openNode(id){
     });
     box.appendChild(wrap);
   });
-  const out=document.getElementById('kuatOut');
-  out.textContent='';
-  out.className='';
+  if(kuat&&kuat.cooldown){
+    out.className='err';
+    out.textContent=cooldownText(kuat.cooldown);
+  }
+  btn.hidden=!(questions&&questions.length);
+}
+async function newAttempt(){
+  const r=await fetch('/academy/kuat/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id})});
+  let d={};
+  try{ d=await r.json(); }catch(_e){ d={}; }
+  if(r.ok){ renderKuat(d.questions||[], d); return {ok:true}; }
+  if(r.status===429){ renderKuat([], {cooldown:d.detail||d}); return {ok:false,cooldown:true}; }
+  return {ok:false};
 }
 document.getElementById('btnRead').onclick=async()=>{
   if(!current || !uid) return;
@@ -353,20 +387,40 @@ document.getElementById('btnKuat').onclick=async()=>{
       const sel=w.querySelector('input:checked');
       answers.push({question_id:w.dataset.qid,choice:sel?Number(sel.value):-1});
     });
-    const r=await fetch('/academy/kuat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id,answers})});
+    const r=await fetch('/academy/kuat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,node_id:current.node_id,attempt_id:current.attempt_id||null,answers})});
     let d={};
     try{ d=await r.json(); }catch(_e){ d={}; }
     if(!r.ok){
-      out.className='err';
-      out.textContent=d.detail||d.error||d.message||('Không nộp được KUAT ('+r.status+')');
+      if(r.status===429){
+        renderKuat([], {cooldown:d.detail||d});
+      }else if(r.status===409){
+        await newAttempt();
+        out.className='err';
+        out.textContent=kuatErr(d, r.status)+' Đã mở lượt mới cho bạn.';
+      }else{
+        out.className='err';
+        out.textContent=kuatErr(d, r.status);
+      }
       out.scrollIntoView({behavior:'smooth',block:'nearest'});
       return;
     }
     if(d.xp!=null) setXp(d.xp);
     const kr=d.kuat_result||{};
     const passed=!!kr.passed;
-    out.className=passed?'pass':'fail';
-    out.textContent=(passed?'ĐẠT':'CHƯA ĐẠT')+' · '+(kr.score!=null?Math.round(kr.score*100)+'%':'');
+    const pct=(kr.score!=null?Math.round(kr.score*100)+'%':'');
+    if(!passed){
+      /* the attempt is used up: load a NEW random set (or the cooldown notice) */
+      await newAttempt();
+    }else{
+      document.getElementById('kuatBox').textContent='';
+      btn.hidden=true;
+    }
+    if(!out.textContent){
+      out.className=passed?'pass':'fail';
+      out.textContent=passed?('ĐẠT · '+pct):('CHƯA ĐẠT · '+pct+' — ôn lại bài rồi làm lượt mới (câu hỏi đã được đổi).');
+    }else if(!passed){
+      out.textContent='CHƯA ĐẠT · '+pct+' — '+out.textContent;
+    }
     out.scrollIntoView({behavior:'smooth',block:'nearest'});
     const nudge=document.getElementById('osNudge');
     const mastered=(current&&current.status==='mastered')||passed||(d.status==='mastered');

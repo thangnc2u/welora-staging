@@ -199,7 +199,7 @@ def _move_db(tx, guest: str, account: str) -> tuple[dict[str, int], dict[str, st
         if g_onb or _count(tx, "dna_profiles", "user_id=?", (guest,)):
             skipped["onboarding"] = "account_has_onboarding"
     else:
-        n = 0
+        n = n_dna = n_con = 0
         for r in tx.execute(
             "SELECT session_id, dna_json, constitution_json FROM onboarding_sessions WHERE user_id=?", (guest,)
         ).fetchall():
@@ -209,14 +209,19 @@ def _move_db(tx, guest: str, account: str) -> tuple[dict[str, int], dict[str, st
                  r["session_id"]),
             )
             n += 1
+            n_dna += 1 if str(r["dna_json"] or "").strip() else 0
+            n_con += 1 if str(r["constitution_json"] or "").strip() else 0
         moved["onboarding_sessions"] = n
-        for table in ("dna_profiles", "constitutions"):
+        # GP UAT: DNA / constitution live in onboarding_sessions.dna_json / constitution_json (the
+        # dna_profiles / constitutions tables are a legacy repository) — report what actually moved:
+        # session-embedded records + legacy table rows.
+        for table, embedded in (("dna_profiles", n_dna), ("constitutions", n_con)):
             cur = tx.execute(
                 f"UPDATE {table} SET user_id=? WHERE user_id=? AND NOT EXISTS "
                 f"(SELECT 1 FROM {table} t2 WHERE t2.user_id=?)",
                 (account, guest, account),
             )
-            moved[table] = int(cur.rowcount or 0)
+            moved[table] = embedded + int(cur.rowcount or 0)
 
     # goals
     n_goals = 0
@@ -286,10 +291,12 @@ def _move_memory(guest: str, account: str, moved: dict[str, int], skipped: dict[
             onboarding.DNA_BY_USER[account] = d
             moved.setdefault("onboarding_memory", 0)
             moved["onboarding_memory"] += 1
+            moved["dna_profiles"] = max(int(moved.get("dna_profiles") or 0), 1)  # memory store: DNA moved
         if onboarding.CONSTITUTION_BY_USER.get(account) is None and guest in onboarding.CONSTITUTION_BY_USER:
             c = dict(onboarding.CONSTITUTION_BY_USER.pop(guest))
             c["user_id"] = account
             onboarding.CONSTITUTION_BY_USER[account] = c
+            moved["constitutions"] = max(int(moved.get("constitutions") or 0), 1)
         for s in list(onboarding.SESSIONS.values()):
             if s.user_id == guest:
                 s.user_id = account

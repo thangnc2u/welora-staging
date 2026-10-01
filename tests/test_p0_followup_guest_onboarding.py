@@ -50,8 +50,10 @@ class TestGuestOnboardingPage(unittest.TestCase):
         self.assertIn("/app/onboarding", gate)
         self.assertIn("/app/onboarding", shell)
         auth_pages = {"/app/login", "/app/register", "/app/forgot-password", "/app/reset-password", "/app/otp"}
-        self.assertEqual(gate, auth_pages | {"/app/admin/login", "/app/onboarding"})
-        self.assertEqual(shell, auth_pages | {"/app/onboarding"})
+        # P0 follow-up 2: the guest result page (/app/onboarding/result) is exempt too.
+        guest_pages = {"/app/onboarding", "/app/onboarding/result"}
+        self.assertEqual(gate, auth_pages | {"/app/admin/login"} | guest_pages)
+        self.assertEqual(shell, auth_pages | guest_pages)
 
     def test_onboarding_html_guest_flow_wired(self):
         r = TestClient(create_app()).get("/app/onboarding")

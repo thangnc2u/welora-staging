@@ -136,11 +136,21 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
         self.assertTrue(has.json()["allowed"])
 
     def test_event_bus_and_ab_hook(self):
-        r = self.client.post(
+        # Follow-up 2 (item 7): a user session is required; the event is stamped with it
+        anon = TestClient(create_app()).post(
             "/api/core/v1/entitlements/events",
             json={"event": "pricing.view", "payload": {"path": "/pricing"}},
         )
+        self.assertEqual(anon.status_code, 401)
+        from tests._authz import bearer
+
+        r = self.client.post(
+            "/api/core/v1/entitlements/events",
+            json={"event": "pricing.view", "payload": {"path": "/pricing"}},
+            headers=bearer("u-event-1"),
+        )
         self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["event"]["payload"]["user_id"], "u-event-1")
         body = r.json()
         self.assertTrue(body["ok"])
         self.assertEqual(body["event"]["experiment"]["key"], "aca_price_ab")

@@ -317,10 +317,13 @@ a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
   }
 
   function emitView() {
+    /* Follow-up 2 (item 7): the event endpoint requires a session — anonymous visitors skip it. */
     try {
+      var tk = localStorage.getItem("welora_token") || "";
+      if (!tk) return;
       fetch("/api/core/v1/entitlements/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + tk },
         body: JSON.stringify({ event: "pricing.view", payload: { path: "/pricing" } })
       }).catch(function () {});
     } catch (_e) {}

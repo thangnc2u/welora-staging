@@ -12,6 +12,13 @@ Env (all optional): WELORA_RL_WINDOW_S (900), WELORA_RL_TARGET_MAX (5), WELORA_R
 WELORA_RL_VERIFY_TARGET_MAX (10), WELORA_RL_VERIFY_IP_MAX (40). ``register`` uses the TARGET/IP
 pair (every attempt counts). A value ≤ 0 disables that limit.
 
+``/auth/device`` (follow-up 2, item 3) is limited per client IP only — never per device_id, so a
+returning guest (same device_id, a call on every page load) is never locked out by its own id:
+  * ``device``      every call                  WELORA_RL_DEVICE_IP_MAX      (300 / window)
+  * ``device_new``  calls creating a new guest  WELORA_RL_DEVICE_NEW_IP_MAX  (30 / window)
+Normal use (re-using an existing device_id) only touches the generous ``device`` bucket; minting
+many guest users from one IP hits ``device_new``.
+
 ``/auth/login`` counts FAILED attempts only (action ``login_fail``) — partner staff share the P1–P6
 demo accounts, so correct logins must never consume quota. Buckets per window:
   * ``pair``    account + client IP     WELORA_RL_LOGIN_PAIR_MAX     (10)
@@ -26,20 +33,29 @@ limit → the reservation is deleted and 429. A wrong password keeps the rows (t
 record); a correct login (or a non-guess outcome such as 400/403) deletes them, and a correct login
 also clears its (account, IP) pair bucket. A burst therefore cannot exceed the limit; at the exact
 boundary concurrent attempts may both be refused (fail-safe), and they can simply retry.
-Client IP (``client_ip``): CF-Connecting-IP → True-Client-IP → first X-Forwarded-For hop → TCP peer,
-and the headers are honoured ONLY when the peer is a private/loopback address (the proxy). On Render
-every request arrives through Cloudflare + Render's internal proxy, so the peer is always private
-and the headers are always read; Cloudflare overwrites CF-Connecting-IP with the address that
-connected to it, so a client cannot forge its bucket that way. X-Forwarded-For is only a fallback
-(Render appends to a client-supplied XFF, so its first hop is spoofable) and True-Client-IP is
-only set by Cloudflare when that zone option is on — both are consulted only when
-CF-Connecting-IP is absent. Header values that are not valid IP addresses are skipped.
+Client IP (``client_ip``) — PR "P0 follow-up 2", item 4. Trust rules, in order:
+  1. TCP peer. Unless the peer is a TRUSTED PROXY — ``TRUSTED_PROXY_RANGES`` (RFC 1918, loopback,
+     IPv6 ULA, CGNAT ``100.64.0.0/10`` = Render's internal proxies) or an unparseable peer (test
+     client / unix socket) — the peer IS the client and every forwarding header is ignored.
+  2. Behind a trusted proxy, ``X-Forwarded-For`` is read RIGHT-TO-LEFT: trailing trusted-proxy
+     hops are skipped and the first remaining valid hop (``edge``) is the address that connected
+     to our proxy layer. Entries left of it were written by the client and are never used. An
+     invalid entry stops the scan (everything left of it is untrusted).
+  3. ``edge`` inside Cloudflare's published ranges (``CLOUDFLARE_RANGES``, override with
+     WELORA_CF_IP_RANGES) → the request came through Cloudflare, which overwrites
+     ``CF-Connecting-IP`` → use it, else ``True-Client-IP``, else ``edge``.
+  4. ``edge`` outside Cloudflare → the client reached the origin directly (e.g. *.onrender.com):
+     ``edge`` is the client; CF-Connecting-IP / True-Client-IP are spoofable there and ignored.
+  5. No public hop at all (no XFF, or only trusted hops — local proxy, tests): CF-Connecting-IP →
+     True-Client-IP → peer. Reaching this branch requires a peer inside the private network.
+  Header values that are not valid IP addresses are skipped.
 """
 
 from __future__ import annotations
 
 import hashlib
 import ipaddress
+import logging
 import os
 import re
 import time
@@ -49,8 +65,9 @@ from typing import Optional
 
 from welora.db.connection import get_connection
 
+log = logging.getLogger("welora.auth_ratelimit")
 RATE_LIMIT_MSG = "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút."
-ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register")
+ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register", "device", "device_new")
 LOGIN_FAIL_ACTION = "login_fail"
 _PRUNE_AFTER_S = 24 * 3600
 
@@ -76,6 +93,10 @@ def limits(action: str) -> tuple[int, int]:
     """(per-target max, per-IP max) for an action."""
     if action == "otp_verify":
         return _env_int("WELORA_RL_VERIFY_TARGET_MAX", 10), _env_int("WELORA_RL_VERIFY_IP_MAX", 40)
+    if action == "device":  # every POST /auth/device (guest pages call it on each load) — IP only
+        return 0, _env_int("WELORA_RL_DEVICE_IP_MAX", 300)
+    if action == "device_new":  # POST /auth/device that would CREATE a new guest user — IP only
+        return 0, _env_int("WELORA_RL_DEVICE_NEW_IP_MAX", 30)
     return _env_int("WELORA_RL_TARGET_MAX", 5), _env_int("WELORA_RL_IP_MAX", 20)
 
 
@@ -89,9 +110,12 @@ def normalise_target(value: Optional[str]) -> str:
         return ""
     if "@" in v:
         return "email:" + v
+    from welora.phone import try_normalize
+
+    e164 = try_normalize(v)
+    if e164:
+        return "phone:" + e164  # same bucket for 0900…, +84900…, 84900… (item 9)
     digits = re.sub(r"\D", "", v)
-    if digits.startswith("84") and len(digits) >= 11:
-        digits = "0" + digits[2:]
     return "phone:" + (digits or v)
 
 
@@ -100,6 +124,35 @@ def _key_hash(scope: str, key: str) -> str:
 
 
 CLIENT_IP_HEADERS = ("cf-connecting-ip", "true-client-ip")
+
+# https://www.cloudflare.com/ips-v4 + /ips-v6 (fetched 2026-10-01)
+CLOUDFLARE_RANGES = (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "141.101.64.0/18",
+    "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22", "198.41.128.0/17",
+    "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32",
+    "2a06:98c0::/29", "2c0f:f248::/32",
+)
+# Explicit (not ipaddress.is_private, which also covers documentation/benchmark ranges and differs
+# between Python versions): RFC 1918, loopback, CGNAT/Render, IPv6 ULA + loopback.
+TRUSTED_PROXY_RANGES = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+                        "100.64.0.0/10", "fc00::/7", "::1/128")
+_TRUSTED_NETS = tuple(ipaddress.ip_network(n) for n in TRUSTED_PROXY_RANGES)
+_CF_CACHE: dict[str, tuple] = {}
+
+
+def _cloudflare_networks() -> tuple:
+    raw = (os.environ.get("WELORA_CF_IP_RANGES") or "").strip()
+    if raw not in _CF_CACHE:
+        items = [x.strip() for x in raw.split(",") if x.strip()] if raw else list(CLOUDFLARE_RANGES)
+        nets = []
+        for it in items:
+            try:
+                nets.append(ipaddress.ip_network(it, strict=False))
+            except ValueError:
+                continue
+        _CF_CACHE[raw] = tuple(nets)
+    return _CF_CACHE[raw]
 
 
 def _valid_ip(value: Optional[str]) -> str:
@@ -112,39 +165,67 @@ def _valid_ip(value: Optional[str]) -> str:
         return ""
 
 
-def _peer_is_proxy(peer: str) -> bool:
-    if not peer:
+def is_trusted_proxy(addr: Optional[str]) -> bool:
+    """Private, loopback or CGNAT 100.64.0.0/10 (Render). Unparseable/empty → trusted (tests)."""
+    a = (addr or "").strip()
+    if not a:
         return True
     try:
-        ip = ipaddress.ip_address(peer)
+        ip = ipaddress.ip_address(a)
     except ValueError:
         return True  # e.g. "testclient" / unix socket
-    return ip.is_private or ip.is_loopback
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return any(ip.version == n.version and ip in n for n in _TRUSTED_NETS)
+
+
+_peer_is_proxy = is_trusted_proxy  # backwards-compatible alias
+
+
+def is_cloudflare(addr: Optional[str]) -> bool:
+    try:
+        ip = ipaddress.ip_address((addr or "").strip())
+    except ValueError:
+        return False
+    return any(ip.version == n.version and ip in n for n in _cloudflare_networks())
+
+
+def _xff_edge(forwarded_for: Optional[str]) -> str:
+    """Right-most X-Forwarded-For hop that is not a trusted proxy ("" if none)."""
+    for raw in reversed([h.strip() for h in (forwarded_for or "").split(",") if h.strip()]):
+        ip = _valid_ip(raw)
+        if not ip:
+            return ""  # garbage → nothing to its left can be trusted
+        if not is_trusted_proxy(ip):
+            return ip
+    return ""
 
 
 def client_ip(peer: Optional[str], forwarded_for: Optional[str] = None, *, headers=None) -> str:
-    """Real client IP for rate-limit buckets (see module docstring for the trust rules).
+    """Real client IP for rate-limit buckets (trust rules: module docstring).
 
     ``headers``: any mapping with case-insensitive ``.get`` (Starlette ``request.headers``) or a
     plain dict; ``forwarded_for`` is kept for callers that only have X-Forwarded-For."""
     peer = (peer or "").strip()
-    if _peer_is_proxy(peer):
-        get = None
-        if headers is not None:
-            low = {str(k).lower(): v for k, v in headers.items()} if isinstance(headers, dict) else None
-            get = (lambda k: low.get(k)) if low is not None else (lambda k: headers.get(k))
-        if get is not None:
-            for name in CLIENT_IP_HEADERS:
-                ip = _valid_ip(get(name))
-                if ip:
-                    return ip
-            if forwarded_for is None:
-                forwarded_for = get("x-forwarded-for")
-        if forwarded_for:
-            first = _valid_ip(forwarded_for.split(",")[0])
-            if first:
-                return first
-    return peer or "unknown"
+    if not is_trusted_proxy(peer):
+        return peer
+    get = lambda _k: None  # noqa: E731
+    if headers is not None:
+        if isinstance(headers, dict):
+            low = {str(k).lower(): v for k, v in headers.items()}
+            get = low.get
+        else:
+            get = headers.get
+    if forwarded_for is None:
+        forwarded_for = get("x-forwarded-for")
+    edge = _xff_edge(forwarded_for)
+    if edge and not is_cloudflare(edge):
+        return edge  # direct to origin: Cloudflare headers would be client-forged
+    for name in CLIENT_IP_HEADERS:
+        ip = _valid_ip(get(name))
+        if ip:
+            return ip
+    return edge or peer or "unknown"
 
 
 def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], url: Optional[str] = None,
@@ -271,29 +352,50 @@ def login_reserve(*, ip: Optional[str], account: Optional[str], url: Optional[st
         conn.close()
 
 
+# Post-login bookkeeping never fails the request (follow-up 2, item 10): a DB error while
+# releasing / pruning / clearing is logged and swallowed. A reservation that could not be deleted
+# simply counts as one failure until it leaves the sliding window (WELORA_RL_WINDOW_S) and is
+# pruned later — every count is bounded by ``created_at >= now - window``, so a leaked row can
+# never lock anyone out permanently.
+
+def _safe(op: str, fn) -> None:
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001 — swallow-and-log by design
+        log.warning("auth rate-limit %s failed (ignored; row expires with the window): %s", op, type(e).__name__)
+
+
 def login_commit_failure(attempt: LoginAttempt, *, now: Optional[float] = None) -> None:
     """Wrong password: the reserved rows stay as the failure record (prune old rows)."""
     if not attempt.event_ids:
         return
     t = time.time() if now is None else float(now)
-    conn = get_connection(attempt.url)
-    try:
-        conn.execute("DELETE FROM auth_rate_events WHERE created_at<?", (_iso(t - max(window_s(), _PRUNE_AFTER_S)),))
-        conn.commit()
-    finally:
-        conn.close()
+
+    def _do() -> None:
+        conn = get_connection(attempt.url)
+        try:
+            conn.execute("DELETE FROM auth_rate_events WHERE created_at<?", (_iso(t - max(window_s(), _PRUNE_AFTER_S)),))
+            conn.commit()
+        finally:
+            conn.close()
+
+    _safe("prune", _do)
 
 
 def login_release(attempt: LoginAttempt) -> None:
     """Correct login / not a password guess: drop the reservation (never consumes quota)."""
     if not attempt.event_ids:
         return
-    conn = get_connection(attempt.url)
-    try:
-        _delete_events(conn, attempt.event_ids)
-        conn.commit()
-    finally:
-        conn.close()
+
+    def _do() -> None:
+        conn = get_connection(attempt.url)
+        try:
+            _delete_events(conn, attempt.event_ids)
+            conn.commit()
+        finally:
+            conn.close()
+
+    _safe("release", _do)
     attempt.event_ids = []
 
 
@@ -303,12 +405,16 @@ def login_clear_pair(*, ip: Optional[str], account: Optional[str], url: Optional
     ipk = (ip or "").strip().lower()
     if not (acc and ipk):
         return
-    conn = get_connection(url)
-    try:
-        conn.execute(
-            "DELETE FROM auth_rate_events WHERE action=? AND scope='pair' AND key_hash=?",
-            (LOGIN_FAIL_ACTION, _key_hash("pair", acc + "|" + ipk)),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+
+    def _do() -> None:
+        conn = get_connection(url)
+        try:
+            conn.execute(
+                "DELETE FROM auth_rate_events WHERE action=? AND scope='pair' AND key_hash=?",
+                (LOGIN_FAIL_ACTION, _key_hash("pair", acc + "|" + ipk)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    _safe("clear_pair", _do)

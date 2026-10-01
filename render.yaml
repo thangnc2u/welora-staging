@@ -53,8 +53,15 @@ services:
       # WELORA_RL_LOGIN_PAIR_MAX (10), per account from all IPs WELORA_RL_LOGIN_ACCOUNT_MAX (50),
       # per IP across accounts WELORA_RL_LOGIN_IP_MAX (30). "Account" = the resolved user (email and
       # phone share one budget); a login sending both email and phone is rejected (400).
-      # Client IP for limits: CF-Connecting-IP → True-Client-IP → first X-Forwarded-For → peer, headers
-      # trusted only when the TCP peer is a private/loopback proxy (Render behind Cloudflare).
+      # Client IP for limits (P0 follow-up 2, see welora/auth_ratelimit.py): headers are read only when
+      # the TCP peer is a trusted proxy (10/8, 172.16/12, 192.168/16, 127/8, Render CGNAT 100.64/10,
+      # fc00::/7, ::1). Then X-Forwarded-For is walked right-to-left skipping trusted hops; the first
+      # untrusted hop is the edge. CF-Connecting-IP / True-Client-IP are honoured only when that edge
+      # is a Cloudflare IP (or there is no XFF edge). The leftmost XFF hop is never trusted blindly.
+      # Optional: WELORA_CF_IP_RANGES (comma CIDRs) overrides the built-in Cloudflare list.
+      # /auth/device per IP (never per device_id, so a returning guest is never locked out):
+      # WELORA_RL_DEVICE_IP_MAX (300 / window, all calls), WELORA_RL_DEVICE_NEW_IP_MAX (30 / window,
+      # calls that would CREATE a new guest).
       # Login-token lifetime (P0 follow-up): WELORA_TOKEN_TTL_DAYS (default 30) for password / OTP /
       # e-mail-OTP / demo tokens; WELORA_DEVICE_TOKEN_TTL_DAYS for guest /auth/device tokens (defaults
       # to WELORA_TOKEN_TTL_DAYS). Legacy tokens without expires_at get max(created_at+TTL, now+7d).

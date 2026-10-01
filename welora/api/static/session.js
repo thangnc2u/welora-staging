@@ -48,6 +48,7 @@
      and the page continues on the in-memory /auth/device guest token. */
   var GUEST_OK = {
     "/app/onboarding": 1,
+    "/app/onboarding/result": 1,
     "/app/login": 1,
     "/app/register": 1,
     "/app/forgot-password": 1,

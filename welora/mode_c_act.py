@@ -481,8 +481,35 @@ def resolve_server_gate_confidence(user_id: str) -> tuple[str, float]:
         return "not_passed", 0.0
 
 
+# --- Companion consent (P0 follow-up 2, item 6) --------------------------------------------
+# A link has ``status``: pending → active (companion accepted while logged in as themselves) |
+# declined (companion said no / left) | revoked (primary removed it). ONLY an active link counts for
+# dual-control (get_companion). Records written before this change carry no status and are
+# treated as PENDING (fail-closed) — the companion can still accept them. set_companion() is the
+# trusted internal path (demo seed / fixtures / service tests): it writes an active link directly.
+LINK_PENDING = "pending"
+LINK_ACTIVE = "active"
+LINK_DECLINED = "declined"
+LINK_REVOKED = "revoked"
+
+
+def _link_status(rec: Optional[dict[str, Any]]) -> str:
+    return str((rec or {}).get("status") or LINK_PENDING)
+
+
 def get_companion(user_id: str) -> Optional[dict[str, Any]]:
-    """Return companion link for primary user, or None."""
+    """Return the ACTIVE companion link for a primary user, or None (pending / declined /
+    revoked / legacy-unaccepted links never enable dual-control)."""
+    if not user_id:
+        return None
+    rec = _COMPANIONS.get(str(user_id))
+    if rec and _link_status(rec) == LINK_ACTIVE and rec.get("companion_user_id"):
+        return rec
+    return None
+
+
+def get_companion_record(user_id: str) -> Optional[dict[str, Any]]:
+    """Raw link record whatever its status (listing / consent endpoints)."""
     if not user_id:
         return None
     return _COMPANIONS.get(str(user_id))
@@ -515,6 +542,9 @@ def set_companion(
         "companion_user_id": cid,
         "linked_at": _now_iso(),
         "policy_version": POLICY_DUAL_CONTROL,
+        "status": LINK_ACTIVE,
+        "accepted_at": _now_iso(),
+        "source": "internal",
     }
     if role_norm:
         rec["role"] = role_norm
@@ -533,17 +563,163 @@ def set_companion(
     }
 
 
+def _public_link(rec: dict[str, Any]) -> dict[str, Any]:
+    out = dict(rec)
+    out["status"] = _link_status(rec)
+    return out
+
+
 def list_companions(user_id: str) -> tuple[int, dict[str, Any]]:
-    """Minimal list API — 0 or 1 companion for staging MVP."""
+    """Primary's view — 0 or 1 link. ``companion_user_id`` is set ONLY for an active link;
+    a pending invite shows as ``pending_companion_user_id`` (+ ``status``)."""
     if not user_id:
         return 400, {"error": "user_id is required"}
-    link = get_companion(user_id)
-    items = [link] if link else []
+    rec = get_companion_record(user_id)
+    status = _link_status(rec) if rec else None
+    items = [_public_link(rec)] if rec and status in (LINK_ACTIVE, LINK_PENDING) else []
+    active = get_companion(user_id)
     return 200, {
         "items": items,
-        "companion_user_id": (link or {}).get("companion_user_id"),
+        "companion_user_id": (active or {}).get("companion_user_id"),
+        "pending_companion_user_id": rec.get("companion_user_id") if rec and status == LINK_PENDING else None,
+        "status": status if items else None,
         "policy_version": POLICY_DUAL_CONTROL,
     }
+
+
+def invite_companion(
+    *,
+    user_id: str,
+    companion_user_id: str,
+    role: Optional[str] = None,
+    relation: Optional[str] = None,
+) -> tuple[int, dict[str, Any]]:
+    """HTTP POST /os/companion — creates a PENDING invite; dual-control stays off until the
+    companion accepts (accept_companion_invite) while logged in as themselves."""
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    cid = (companion_user_id or "").strip()
+    if not cid:
+        return 400, {"error": "companion_user_id is required"}
+    if cid == user_id:
+        return 400, {
+            "error": "companion_user_id must differ from user_id",
+            "reply": "Người đồng hành phải khác chính bạn.",
+        }
+    cur = get_companion_record(user_id)
+    if cur and cur.get("companion_user_id") == cid and _link_status(cur) in (LINK_ACTIVE, LINK_PENDING):
+        st = _link_status(cur)
+        return 200, {
+            "ok": True,
+            "link": _public_link(cur),
+            "status": st,
+            "reply": "Người đồng hành đã xác nhận liên kết." if st == LINK_ACTIVE
+            else "Đã gửi lời mời — chờ người đồng hành chấp nhận trên thiết bị của họ.",
+            "policy_version": POLICY_DUAL_CONTROL,
+        }
+    role_norm = (role or relation or "").strip().lower() or None
+    rec: dict[str, Any] = {
+        "user_id": user_id,
+        "companion_user_id": cid,
+        "linked_at": _now_iso(),
+        "invited_at": _now_iso(),
+        "policy_version": POLICY_DUAL_CONTROL,
+        "status": LINK_PENDING,
+        "source": "invite",
+    }
+    if role_norm:
+        rec["role"] = role_norm
+        rec["relation"] = role_norm
+    _COMPANIONS[user_id] = rec  # replaces any previous link (the old companion loses access)
+    _persist_companion(rec)
+    return 200, {
+        "ok": True,
+        "link": _public_link(rec),
+        "status": LINK_PENDING,
+        "reply": (
+            "Đã gửi lời mời đồng hành. Người đồng hành cần đăng nhập và bấm «Chấp nhận» — "
+            "trước đó các Act đồng kiểm vẫn bị từ chối."
+        ),
+        "policy_version": POLICY_DUAL_CONTROL,
+    }
+
+
+def list_companion_invites(companion_user_id: str) -> tuple[int, dict[str, Any]]:
+    """Companion's view: links naming me (pending invites + active links I can leave)."""
+    cid = (companion_user_id or "").strip()
+    if not cid:
+        return 400, {"error": "companion_user_id is required"}
+    items = []
+    for rec in list(_COMPANIONS.values()):
+        if str(rec.get("companion_user_id") or "") != cid:
+            continue
+        st = _link_status(rec)
+        if st in (LINK_PENDING, LINK_ACTIVE):
+            items.append({
+                "primary_user_id": rec.get("user_id"),
+                "status": st,
+                "role": rec.get("role"),
+                "invited_at": rec.get("invited_at") or rec.get("linked_at"),
+                "accepted_at": rec.get("accepted_at"),
+            })
+    return 200, {"items": items, "policy_version": POLICY_DUAL_CONTROL}
+
+
+def _companion_transition(companion_user_id: str, primary_user_id: str, *, to: str,
+                          allowed_from: tuple[str, ...]) -> tuple[int, dict[str, Any]]:
+    cid = (companion_user_id or "").strip()
+    pid = (primary_user_id or "").strip()
+    if not cid or not pid:
+        return 400, {"error": "primary_user_id is required"}
+    rec = get_companion_record(pid)
+    if not rec or str(rec.get("companion_user_id") or "") != cid:
+        return 404, {"error": "invite not found", "reply": "Không tìm thấy lời mời đồng hành."}
+    st = _link_status(rec)
+    if st == to:
+        return 200, {"ok": True, "already": True, "status": st, "link": _public_link(rec),
+                     "policy_version": POLICY_DUAL_CONTROL}
+    if st not in allowed_from:
+        return 409, {"error": f"invite is {st}", "status": st,
+                     "reply": "Lời mời không còn hiệu lực.", "policy_version": POLICY_DUAL_CONTROL}
+    new = dict(rec)
+    new["status"] = to
+    new[{LINK_ACTIVE: "accepted_at", LINK_DECLINED: "declined_at"}[to]] = _now_iso()
+    _COMPANIONS[pid] = new
+    _persist_companion(new)
+    reply = (
+        "Đã chấp nhận — bạn là người đồng hành; các Act đồng kiểm cần bạn xác nhận."
+        if to == LINK_ACTIVE else "Đã từ chối / rời liên kết đồng hành."
+    )
+    return 200, {"ok": True, "status": to, "link": _public_link(new), "reply": reply,
+                 "policy_version": POLICY_DUAL_CONTROL}
+
+
+def accept_companion_invite(*, companion_user_id: str, primary_user_id: str) -> tuple[int, dict[str, Any]]:
+    """Companion (token user) accepts a pending invite → link becomes active."""
+    return _companion_transition(companion_user_id, primary_user_id, to=LINK_ACTIVE,
+                                 allowed_from=(LINK_PENDING,))
+
+
+def decline_companion_invite(*, companion_user_id: str, primary_user_id: str) -> tuple[int, dict[str, Any]]:
+    """Companion declines a pending invite, or leaves an active link."""
+    return _companion_transition(companion_user_id, primary_user_id, to=LINK_DECLINED,
+                                 allowed_from=(LINK_PENDING, LINK_ACTIVE))
+
+
+def revoke_companion(*, user_id: str) -> tuple[int, dict[str, Any]]:
+    """Primary removes its link (pending or active). Dual-control acts are then denied until a
+    new companion accepts — removing the companion never bypasses dual-control."""
+    rec = get_companion_record(user_id)
+    if not rec or _link_status(rec) not in (LINK_PENDING, LINK_ACTIVE):
+        return 200, {"ok": True, "already": True, "status": _link_status(rec) if rec else None,
+                     "policy_version": POLICY_DUAL_CONTROL}
+    new = dict(rec)
+    new["status"] = LINK_REVOKED
+    new["revoked_at"] = _now_iso()
+    _COMPANIONS[str(user_id)] = new
+    _persist_companion(new)
+    return 200, {"ok": True, "status": LINK_REVOKED, "reply": "Đã gỡ người đồng hành.",
+                 "policy_version": POLICY_DUAL_CONTROL}
 
 
 def requires_dual_control(act_kind: str, user_id: Optional[str] = None) -> bool:

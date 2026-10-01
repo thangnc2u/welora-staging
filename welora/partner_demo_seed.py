@@ -350,6 +350,26 @@ def _upsert_demo_user(
     url: Optional[str] = None,
 ) -> dict[str, Any]:
     ensure_auth_schema(url)
+    phone = _norm_demo_phone(phone)
+    for _attempt in (0, 1):
+        out = _upsert_demo_user_once(user_id=user_id, email=email, phone=phone, display_name=display_name,
+                                     password=password, url=url)
+        if out is not None:
+            return out
+    raise RuntimeError("demo user upsert lost the insert race twice")  # pragma: no cover
+
+
+def _norm_demo_phone(phone: str) -> str:
+    from welora.phone import try_normalize
+
+    return try_normalize(phone) or phone
+
+
+def _upsert_demo_user_once(*, user_id: str, email: str, phone: str, display_name: str, password: str,
+                           url: Optional[str]) -> Optional[dict[str, Any]]:
+    """One SELECT → UPDATE | INSERT pass. Returns None when a concurrent seed (another thread /
+    instance, or auth.seed_partner_demo on a first login) inserted the row between our SELECT and
+    INSERT — the caller retries and takes the UPDATE branch (item 5: no 500 duplicate phone)."""
     conn = get_connection(url)
     try:
         by_email = conn.execute(
@@ -388,12 +408,14 @@ def _upsert_demo_user(
                 "email": email,
                 "role": "demo",
             }
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
-            "VALUES (?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
             (user_id, display_name, device_key, email, phone, pw, "demo"),
         )
         conn.commit()
+        if int(cur.rowcount or 0) != 1:
+            return None
         return {
             "seeded": True,
             "user_id": user_id,

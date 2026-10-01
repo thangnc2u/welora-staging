@@ -56,6 +56,7 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
     <ul id="demoList" class="demo-list" aria-label="Tài khoản demo P1–P6"></ul>
   </div>
 </div>
+<script src="/static/guest-claim.js"></script>
 <script>
 const TOKEN_KEY='welora_token';
 /* P0 follow-up: session.js sets this when an API rejected the stored token (expired/invalid). */
@@ -89,8 +90,11 @@ document.getElementById('btnLogin').addEventListener('click', async()=>{
     if(!r.ok){showErr((d.detail&&d.detail.error)||d.error||'Đăng nhập thất bại');return;}
     const tok=d.token||'';
     if(tok) localStorage.setItem(TOKEN_KEY,tok);
-    showOk('Đã đăng nhập · vào ứng dụng…');
-    setTimeout(()=>{location.href='/app';},400);
+    /* Follow-up 2: move this browser's guest onboarding result into the account (if any). */
+    const cl=window.WeloraGuestClaim?await WeloraGuestClaim.run(tok):null;
+    const note=window.WeloraGuestClaim?WeloraGuestClaim.summary(cl):'';
+    showOk((note?note+' ':'')+'Đã đăng nhập · vào ứng dụng…');
+    setTimeout(()=>{location.href='/app';},note?1200:400);
   }catch(e){showErr('Không kết nối được');}
 });
 /* CoS review (PR #237): read-only list — opening login must never reseed demo data

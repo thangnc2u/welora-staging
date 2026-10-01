@@ -41,6 +41,7 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
 </div>
 <p id="status"></p>
 <p class="err" id="otpErr"></p>
+<script src="/static/guest-claim.js"></script>
 <script>
 let challenge='';
 function showErr(msg){
@@ -83,8 +84,10 @@ document.getElementById('btnVerify').addEventListener('click', async()=>{
     if(tok) localStorage.setItem('welora_token',tok);
     const me=await fetch('/auth/me',{headers:{Authorization:'Bearer '+tok}});
     if(!me.ok){showErr('Xác thực xong nhưng chưa đọc được phiên');return;}
+    const cl=window.WeloraGuestClaim?await WeloraGuestClaim.run(tok):null;
+    const note=window.WeloraGuestClaim?WeloraGuestClaim.summary(cl):'';
     document.getElementById('status').className='ok';
-    document.getElementById('status').textContent='Đã xác thực';
+    document.getElementById('status').textContent='Đã xác thực'+(note?' · '+note:'');
   }catch(e){
     showErr('Không xác thực được');
   }

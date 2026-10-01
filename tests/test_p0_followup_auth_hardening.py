@@ -355,25 +355,33 @@ class TestLoginRegisterRateLimit(_Base):
 
 class TestClientIp(unittest.TestCase):
     def test_header_priority(self):
-        h = {"CF-Connecting-IP": "198.51.100.1", "True-Client-IP": "198.51.100.2", "X-Forwarded-For": "198.51.100.3, 10.0.0.1"}
+        # Follow-up 2 (item 4): Cloudflare headers are honoured only when the right-most untrusted
+        # XFF hop is a Cloudflare edge (or there is no public hop at all).
+        h = {"CF-Connecting-IP": "198.51.100.1", "True-Client-IP": "198.51.100.2", "X-Forwarded-For": "198.51.100.3, 172.70.1.1, 10.0.0.1"}
         self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "198.51.100.1")
         h.pop("CF-Connecting-IP")
         self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "198.51.100.2")
         h.pop("True-Client-IP")
-        self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "198.51.100.3")
+        self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "172.70.1.1")
         self.assertEqual(rl.client_ip("10.0.0.5", headers={}), "10.0.0.5")
+        # non-Cloudflare edge → the edge, client-supplied CF header ignored
+        h2 = {"CF-Connecting-IP": "198.51.100.1", "X-Forwarded-For": "198.51.100.3"}
+        self.assertEqual(rl.client_ip("10.0.0.5", headers=h2), "198.51.100.3")
 
     def test_starlette_headers_case_insensitive(self):
-        h = Headers({"cf-connecting-ip": "2001:db8::1", "x-forwarded-for": "198.51.100.3"})
+        h = Headers({"cf-connecting-ip": "2001:db8::1", "x-forwarded-for": "198.51.100.3, 2606:4700::1"})
         self.assertEqual(rl.client_ip("127.0.0.1", headers=h), "2001:db8::1")
+        self.assertEqual(rl.client_ip("127.0.0.1", headers=Headers({"cf-connecting-ip": "2001:db8::1"})), "2001:db8::1")
 
     def test_public_peer_headers_ignored(self):
         h = {"CF-Connecting-IP": "198.51.100.1", "X-Forwarded-For": "1.2.3.4"}
         self.assertEqual(rl.client_ip("8.8.8.8", headers=h), "8.8.8.8")
 
     def test_invalid_values_skipped(self):
-        h = {"CF-Connecting-IP": "not-an-ip", "True-Client-IP": "", "X-Forwarded-For": "junk, 198.51.100.9"}
+        h = {"CF-Connecting-IP": "not-an-ip", "True-Client-IP": "", "X-Forwarded-For": "junk"}
         self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "10.0.0.5")
+        h["X-Forwarded-For"] = "junk, 198.51.100.9"  # right-most valid hop is the edge
+        self.assertEqual(rl.client_ip("10.0.0.5", headers=h), "198.51.100.9")
         self.assertEqual(rl.client_ip("10.0.0.5", headers={"X-Forwarded-For": " 198.51.100.9 , 10.0.0.1"}), "198.51.100.9")
 
     def test_legacy_signature(self):

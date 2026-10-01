@@ -41,6 +41,7 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
   <p class="err" id="err"></p>
   <p class="ok" id="ok"></p>
 </div>
+<script src="/static/guest-claim.js"></script>
 <script>
 const TOKEN_KEY='welora_token';
 function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
@@ -67,8 +68,11 @@ document.getElementById('btnRegister').addEventListener('click', async()=>{
     if(!r.ok){showErr((d.detail&&d.detail.error)||d.error||'Đăng ký thất bại');return;}
     const tok=d.token||'';
     if(tok) localStorage.setItem(TOKEN_KEY,tok);
-    showOk('Tài khoản sẵn sàng · vào ứng dụng…');
-    setTimeout(()=>{location.href='/app';},400);
+    /* Follow-up 2: move this browser's guest onboarding result into the new account. */
+    const cl=window.WeloraGuestClaim?await WeloraGuestClaim.run(tok):null;
+    const note=window.WeloraGuestClaim?WeloraGuestClaim.summary(cl):'';
+    showOk((note?note+' ':'')+'Tài khoản sẵn sàng · vào ứng dụng…');
+    setTimeout(()=>{location.href='/app';},note?1200:400);
   }catch(e){showErr('Không kết nối được');}
 });
 </script>

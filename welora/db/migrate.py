@@ -128,9 +128,36 @@ def migrate(url: str | None = None) -> list[str]:
                     )
             conn.commit()
             applied.append(ver)
+        for ver, step in _data_steps():
+            if ver in done or ver in applied:
+                continue
+            step(conn, dialect)  # idempotent; commits its own work
+            _record_version(conn, dialect, ver)
+            conn.commit()
+            applied.append(ver)
         return applied
     finally:
         conn.close()
+
+
+def _record_version(conn: Any, dialect: str, ver: str) -> None:
+    if dialect == "sqlite":
+        conn.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)", (ver,))
+        return
+    inner = getattr(conn, "_conn", conn)
+    with inner.cursor() as cur:
+        cur.execute(
+            "INSERT INTO schema_migrations(version) VALUES (%s) ON CONFLICT (version) DO NOTHING", (ver,)
+        )
+
+
+def _data_steps() -> list[tuple[str, Any]]:
+    """Python data migrations, run once after the SQL files (recorded in schema_migrations under
+    their own version). Each step must be idempotent (safe to re-run if a crash hits before the
+    version row is written) and may use only tables created by the SQL files."""
+    from welora.phone_migration import normalize_existing_phones
+
+    return [("014_phone_e164_data", normalize_existing_phones)]
 
 
 def main() -> None:

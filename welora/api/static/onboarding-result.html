@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<script src="/static/auth-gate.js"></script>
+<title>Welora · Kết quả của bạn</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app);color:var(--text-primary);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:12px;padding:16px;margin:12px 0;color:var(--text-primary,#F4F1E8)}
+a.btn{display:block;width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:var(--cta-primary);color:var(--cta-primary-text);font-weight:600;text-align:center;text-decoration:none;box-sizing:border-box}
+a.btn.secondary{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-strong)}
+.muted{color:var(--text-secondary);font-size:13px}
+.err{color:var(--color-danger);font-size:13px;margin-top:8px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:8px 0 0}
+dt{color:var(--text-secondary);font-size:13px}
+dd{margin:0}
+.bar{height:8px;border-radius:99px;background:var(--border-default);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--cta-primary)}
+</style>
+</head>
+<body>
+<p><a id="navHome" href="/app/onboarding">← Bắt đầu</a></p>
+<h1>Kết quả của bạn</h1>
+<p class="muted" id="intro">Đây là DNA tài chính và quỹ khẩn cấp vừa tạo. Bạn đang dùng thử với tư cách khách — đăng ký hoặc đăng nhập để lưu vào tài khoản.</p>
+
+<div class="card" id="dnaCard">
+  <h2>DNA tài chính</h2>
+  <div id="dnaBody" class="muted">Đang tải…</div>
+</div>
+
+<div class="card" id="goalCard">
+  <h2>Quỹ khẩn cấp 3 tháng</h2>
+  <div id="goalBody" class="muted">Đang tải…</div>
+</div>
+
+<div class="card" id="debtCard" hidden>
+  <p class="muted">Bạn đã khai nợ nguy hiểm — sau khi lưu tài khoản, hãy tạo mục tiêu trả nợ trong mục Mục tiêu.</p>
+</div>
+
+<div class="card" id="saveCard">
+  <h2>Lưu kết quả</h2>
+  <p class="muted">Kết quả hiện chỉ gắn với trình duyệt này. Đăng ký (hoặc đăng nhập nếu đã có tài khoản) trên trình duyệt này — Welora sẽ tự chuyển DNA và quỹ khẩn cấp vào tài khoản của bạn. Nếu tài khoản đã có dữ liệu riêng, dữ liệu của tài khoản được giữ nguyên.</p>
+  <a class="btn" id="ctaRegister" href="/app/register">Đăng ký để lưu</a>
+  <a class="btn secondary" id="ctaLogin" href="/app/login">Đăng nhập</a>
+  <p class="err" id="err"></p>
+</div>
+
+<script src="/static/money.js"></script>
+<script src="/static/session.js"></script>
+<script src="/static/api-errors.js"></script>
+<script>
+const LABELS={
+  household:{solo:'Độc thân đô thị 18+',young_family:'Gia đình trẻ khởi đầu',couple_no_kids:'Vợ chồng không con nhỏ',sandwich_3gen:'Ba đời trên một thu nhập',pre_retire:'Cửa sổ 10 năm trước hưu',retire_companion:'Tuổi vàng và hộ đồng hành'},
+  income_stability:{stable:'Thu nhập ổn định',variable:'Thu nhập biến động'},
+  near_term_priority:{safety:'An Toàn trước',debt:'Trả nợ trước'},
+  surplus_habit:{hold:'Giữ tiền dư',spend:'Hay tiêu tiền dư'}
+};
+function lab(group, v){ return (LABELS[group]&&LABELS[group][v])||v||'—'; }
+function vnd(n){ return (window.WeloraMoney&&WeloraMoney.formatVnd)?WeloraMoney.formatVnd(Number(n)||0):(Number(n)||0).toLocaleString('vi-VN')+' ₫'; }
+function row(dl, k, v){
+  const dt=document.createElement('dt'); dt.textContent=k;
+  const dd=document.createElement('dd'); dd.textContent=v;
+  dl.appendChild(dt); dl.appendChild(dd);
+}
+function isGuest(){
+  try{ return !(WeloraSession&&WeloraSession.token&&WeloraSession.token()); }catch(_e){ return true; }
+}
+(async function(){
+  const q=new URLSearchParams(location.search);
+  document.getElementById('debtCard').hidden=q.get('debt')!=='1';
+  if(!isGuest()){
+    /* already logged in → nothing to claim; the normal app pages work */
+    document.getElementById('intro').textContent='Bạn đã đăng nhập — kết quả đã nằm trong tài khoản của bạn.';
+    document.getElementById('saveCard').hidden=true;
+  }else{
+    try{ localStorage.setItem('welora_guest_claim','1'); }catch(_e){}
+  }
+  let uid='';
+  try{ uid=await WeloraSession.resolveUserId(); }catch(_e){}
+  if(!uid){
+    document.getElementById('dnaBody').textContent='Không đọc được phiên khách — hãy làm lại phần Bắt đầu.';
+    document.getElementById('goalBody').textContent='';
+    return;
+  }
+  try{
+    const r=await fetch('/users/'+encodeURIComponent(uid)+'/dna');
+    const box=document.getElementById('dnaBody');
+    if(r.ok){
+      const d=await r.json();
+      const ic=d.identity_context||{}, fs=d.financial_snapshot_self||{}, ps=d.psychological_profile_self||{};
+      box.textContent=''; box.className='';
+      const dl=document.createElement('dl');
+      row(dl,'Hoàn cảnh',lab('household', ic.household||ic.life_stage));
+      row(dl,'Thu nhập',lab('income_stability', ic.income_stability));
+      row(dl,'Chi tiêu thiết yếu',vnd(fs.essential_expense_monthly)+'/tháng');
+      row(dl,'Nợ nguy hiểm',fs.has_dangerous_debt_self?'Có':'Không');
+      row(dl,'Ưu tiên gần',lab('near_term_priority', fs.near_term_priority));
+      if(ps.surplus_habit) row(dl,'Tiền dư',lab('surplus_habit', ps.surplus_habit));
+      if(ps.risk_tolerance) row(dl,'Chấp nhận rủi ro',String(ps.risk_tolerance)+'/5');
+      box.appendChild(dl);
+    }else{
+      box.textContent=r.status===404?'Chưa có DNA — hãy hoàn tất phần Bắt đầu.':await WeloraErrors.fromResponse(r,'Không đọc được DNA.');
+    }
+  }catch(_e){ document.getElementById('dnaBody').textContent='Không đọc được DNA.'; }
+  try{
+    const r=await fetch('/goals?type=emergency_fund');
+    const box=document.getElementById('goalBody');
+    if(!r.ok){ box.textContent=await WeloraErrors.fromResponse(r,'Không đọc được quỹ.'); return; }
+    const d=await r.json();
+    const g=(d.items||[])[0];
+    if(!g){ box.textContent='Chưa có quỹ khẩn cấp — quay lại bước «Tạo quỹ 3 tháng».'; return; }
+    box.textContent=''; box.className='';
+    const dl=document.createElement('dl');
+    row(dl,'Mục tiêu',vnd(g.target_amount));
+    row(dl,'Đã có',vnd(g.current_amount));
+    row(dl,'Số tháng',String(g.months_of_expense||3)+' tháng chi tiêu thiết yếu');
+    box.appendChild(dl);
+    const pct=Math.max(0,Math.min(100,Number(g.percent)||0));
+    const bar=document.createElement('div'); bar.className='bar';
+    const fill=document.createElement('i'); fill.style.width=pct+'%';
+    bar.appendChild(fill); box.appendChild(bar);
+  }catch(_e){ document.getElementById('goalBody').textContent='Không đọc được quỹ.'; }
+})();
+</script>
+<script src="/static/shell.js" data-shell-tab="ops"></script>
+</body>
+</html>

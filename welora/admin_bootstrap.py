@@ -261,9 +261,12 @@ def verify_email_otp(challenge_id: str, code: str, *, now: Optional[float] = Non
             "SELECT user_id, email, role, email_verified_at FROM users WHERE user_id=?", (uid,)
         ).fetchone()
         role = sync_role(conn, user, via="email_otp", keep_token=token)
+        from welora.auth import token_expiry
+
+        expires_at = token_expiry(conn, token)
         conn.commit()
-        return {"user_id": uid, "token": token, "kind": "email_otp", "created": created, "role": role,
-                "admin": role in _roles()}
+        return {"user_id": uid, "token": token, "expires_at": expires_at, "kind": "email_otp",
+                "created": created, "role": role, "admin": role in _roles()}
     finally:
         conn.close()
 

@@ -7,7 +7,7 @@ Personal finance OS — **An Toàn trước** · Cổng ≥ 3 tháng · Hard Den
 ```bash
 pip install -r requirements.txt
 export PYTHONPATH=. WELORA_STORE=sqlite WELORA_DB_URL=/tmp/welora.db WELORA_ENV=staging
-uvicorn welora.api.app:app --host 0.0.0.0 --port 8000
+uvicorn welora.api.app:app --host 0.0.0.0 --port 8000 --no-proxy-headers
 ```
 
 - `/health` · `/app/demo` · `/docs`
@@ -22,7 +22,7 @@ uvicorn welora.api.app:app --host 0.0.0.0 --port 8000
 Hoặc **Web Service** thủ công:
 - Root: `.`
 - Build: `pip install -r requirements.txt`
-- Start: `uvicorn welora.api.app:app --host 0.0.0.0 --port $PORT`
+- Start: `bash start.sh` (uvicorn với `--no-proxy-headers` — KHÔNG dùng `--proxy-headers`: Render đặt `FORWARDED_ALLOW_IPS=*`, uvicorn sẽ lấy hop X-Forwarded-For ngoài cùng bên trái do client tự ghi làm IP → rate limit bị lách. App tự xác định IP thật, xem `welora/auth_ratelimit.py`)
 - Health: `/health`
 - Env: `PYTHONPATH=.` · `WELORA_STORE=sqlite` · `WELORA_DB_URL=/tmp/welora_staging.db` · `WELORA_LLM_PROVIDER=stub` · `WELORA_ENV=staging`
 

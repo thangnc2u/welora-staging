@@ -17,6 +17,10 @@ from uuid import uuid4
 
 from welora.db.connection import get_connection
 from welora.db.migrate import migrate
+from welora.phone import PHONE_CONFLICT_MSG, PhoneConflictError, candidate_rows as phone_candidate_rows
+from welora.phone import find_user_by_phone, normalize_phone_e164, phone_conflicted, phone_taken
+from welora.phone import lookup_candidates as phone_lookup_candidates
+from welora.phone import try_normalize as try_normalize_phone
 
 OTP_TTL_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
@@ -136,6 +140,24 @@ def _insert_token(conn, user_id: str, *, kind: str, device_id: str | None = None
     return token
 
 
+def token_expiry(conn, token: str) -> Optional[str]:
+    """expires_at of a token (ISO-8601 UTC) — returned by every token-issuing response and /auth/me
+    so clients know when the session ends (P0 follow-up 2, item 8). Works before commit on the
+    connection that inserted it."""
+    row = conn.execute("SELECT expires_at FROM auth_tokens WHERE token=?", (token,)).fetchone() if token else None
+    return (row["expires_at"] if row else None) or None
+
+
+def token_expiry_of(token: str, *, url: str | None = None) -> Optional[str]:
+    if not token:
+        return None
+    conn = get_connection(url)
+    try:
+        return token_expiry(conn, token)
+    finally:
+        conn.close()
+
+
 # --- P0: /auth/device account-takeover guard -------------------------------------------
 # Non-device login paths stamp users.device_id with an internal namespace. Those values used
 # to be derived from public data (sha256(email|phone)[:16]) so POST /auth/device could replay
@@ -190,6 +212,20 @@ def _is_pure_device_guest(conn, row) -> bool:
     return True
 
 
+def device_guest_exists(device_id: str | None, *, url: str | None = None) -> bool:
+    """True when a users row already carries this device_id (POST /auth/device would reuse it,
+    not create a new guest) — used only to pick the /auth/device rate-limit bucket."""
+    d = (device_id or "").strip()
+    if not d:
+        return False
+    ensure_auth_schema(url)
+    conn = get_connection(url)
+    try:
+        return conn.execute("SELECT 1 FROM users WHERE device_id=? LIMIT 1", (d,)).fetchone() is not None
+    finally:
+        conn.close()
+
+
 def ensure_auth_schema(url: str | None = None) -> None:
     migrate(url)
 
@@ -233,10 +269,12 @@ def login_or_register_device(
             created = True
 
         token = _insert_token(conn, user_id, kind="device", device_id=device_id)
+        expires_at = token_expiry(conn, token)
         conn.commit()
         return {
             "user_id": user_id,
             "token": token,
+            "expires_at": expires_at,
             "kind": "device",
             "created": created,
             "display_name": name,
@@ -293,9 +331,10 @@ def request_otp(
     url: str | None = None,
     fixed_code: Optional[str] = None,
 ) -> dict[str, Any]:
-    phone = (phone or "").strip()
-    if not phone or len(phone) < 8:
+    raw = (phone or "").strip()
+    if not raw or len(raw) < 8:
         raise ValueError("phone is required (min 8 chars)")
+    phone = normalize_phone_e164(raw)  # stored E.164 (item 9) — ValueError (VI) when invalid
 
     ensure_auth_schema(url)
     import os
@@ -365,6 +404,12 @@ def verify_otp(
             conn.commit()
             raise ValueError("invalid code")
 
+        # CoS review #239: an ambiguous number (migration collision) never signs anyone in by OTP —
+        # the caller proved possession of the phone (right code), so telling them is no leak.
+        _otp_e164 = try_normalize_phone(row["phone"])
+        if _otp_e164 and phone_conflicted(conn, _otp_e164):
+            raise PhoneConflictError(PHONE_CONFLICT_MSG)
+
         # P0 follow-up: consume atomically BEFORE issuing anything — of two concurrent verifies
         # with the right code only the one whose conditional UPDATE hits the row (rowcount 1) wins.
         cur = conn.execute(
@@ -381,11 +426,14 @@ def verify_otp(
             user_id = str(uuid4())
             # Returning phone-OTP user = owner of an earlier consumed challenge for this phone
             # (challenge.user_id is only ever set here). No lookup by a derived device_id.
+            # phone forms: E.164 + legacy local rows not yet migrated (item 9)
+            e164 = try_normalize_phone(phone) or phone
+            cands = phone_lookup_candidates(e164) if e164.startswith("+") else [phone]
             existing = conn.execute(
                 "SELECT c.user_id FROM otp_challenges c JOIN users u ON u.user_id = c.user_id "
-                "WHERE c.phone=? AND c.consumed=1 AND c.user_id IS NOT NULL "
-                "ORDER BY c.created_at, c.challenge_id LIMIT 1",
-                (phone,),
+                "WHERE c.phone IN (" + ",".join("?" * len(cands)) + ") AND c.consumed=1 "
+                "AND c.user_id IS NOT NULL ORDER BY c.created_at, c.challenge_id LIMIT 1",
+                tuple(cands),
             ).fetchone()
             device_key = internal_device_key("phone:")
             if existing:
@@ -402,8 +450,9 @@ def verify_otp(
             (user_id, challenge_id),
         )
         token = _insert_token(conn, user_id, kind="otp")
+        expires_at = token_expiry(conn, token)
         conn.commit()
-        return {"user_id": user_id, "token": token, "kind": "otp", "created": False}
+        return {"user_id": user_id, "token": token, "expires_at": expires_at, "kind": "otp", "created": False}
     finally:
         conn.close()
 
@@ -490,6 +539,8 @@ def revoke_token(token: str, *, url: str | None = None) -> bool:
 def _mask_phone(phone: str) -> str:
     if len(phone) < 4:
         return "****"
+    if phone.startswith("+84") and len(phone) > 6:
+        phone = "0" + phone[3:]  # mask the familiar local form: 09****95
     return phone[:2] + "****" + phone[-2:]
 
 
@@ -522,6 +573,8 @@ def service_otp_verify(body: dict) -> tuple[int, dict]:
     try:
         out = verify_otp(body.get("challenge_id") or "", body.get("code") or "")
         return 200, out
+    except PhoneConflictError as e:
+        return 409, {"error_code": "PHONE_CONFLICT_USE_EMAIL", "message": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except KeyError:
@@ -600,14 +653,24 @@ def _norm_email(email: str | None) -> str | None:
 
 
 def _norm_phone(phone: str | None) -> str | None:
-    if phone is None:
-        return None
-    p = re.sub(r"[\s\-()]", "", phone.strip())
-    if not p:
-        return None
-    if len(p) < 8 or not re.match(r"^\+?[0-9]{8,15}$", p):
-        raise ValueError("số điện thoại không hợp lệ")
-    return p
+    """E.164 (+84… default) — the stored form since P0 follow-up 2 (welora/phone.py)."""
+    return normalize_phone_e164(phone)
+
+
+_DUMMY_HASH: list[str] = []
+
+
+def _dummy_password_check(password: str) -> None:
+    """Burn one PBKDF2 round for an unknown / password-less account so the response time does not
+    reveal whether the account exists (item 10)."""
+    if not _DUMMY_HASH:
+        _DUMMY_HASH.append(_hash_password(secrets.token_hex(16)))
+    _verify_password(password or "", _DUMMY_HASH[0])
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    return name in ("IntegrityError", "UniqueViolation") or "unique" in str(exc).lower()
 
 
 def _require_password(password: str) -> str:
@@ -677,23 +740,27 @@ def register_guest(
             ).fetchone()
             if hit:
                 raise ValueError("email đã được đăng ký")
-        if phone_n:
-            hit = conn.execute(
-                "SELECT user_id FROM users WHERE phone=?", (phone_n,)
-            ).fetchone()
-            if hit:
-                raise ValueError("số điện thoại đã được đăng ký")
+        if phone_n and phone_taken(conn, phone_n):  # E.164 or a legacy local-format row
+            raise ValueError("số điện thoại đã được đăng ký")
 
-        conn.execute(
-            "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (user_id, name, device_key, email_n, phone_n, pw_hash, safe_role),
-        )
+        try:
+            conn.execute(
+                "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (user_id, name, device_key, email_n, phone_n, pw_hash, safe_role),
+            )
+        except Exception as e:  # concurrent register of the same email/phone
+            if not _is_unique_violation(e):
+                raise
+            conn.rollback()
+            raise ValueError("email hoặc số điện thoại đã được đăng ký")
         token = _issue_token(conn, user_id, "password")
+        expires_at = token_expiry(conn, token)
         conn.commit()
         return {
             "user_id": user_id,
             "token": token,
+            "expires_at": expires_at,
             "kind": "password",
             "created": True,
             "display_name": name,
@@ -732,10 +799,20 @@ def login_guest(
                 "SELECT * FROM users WHERE email=?", (email_n,)
             ).fetchone()
         if row is None and phone_n:
-            row = conn.execute(
-                "SELECT * FROM users WHERE phone=?", (phone_n,)
-            ).fetchone()
+            if phone_conflicted(conn, phone_n):
+                # CoS review #239: an ambiguous number (several accounts) never logs anyone in —
+                # no account is preferred. Only a caller who knows the password of one of the
+                # accounts learns why (otherwise the same generic 401 as an unknown number).
+                hashes = [r["password_hash"] for r in phone_candidate_rows(conn, phone_n, "password_hash")
+                          if str(r["password_hash"] or "").strip()]
+                if not hashes:
+                    _dummy_password_check(pw)
+                if any(_verify_password(pw, h) for h in hashes):
+                    raise PhoneConflictError(PHONE_CONFLICT_MSG)
+                raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
+            row = find_user_by_phone(conn, phone_n)
         if not row or not row["password_hash"]:
+            _dummy_password_check(pw)  # same cost as a real check — no timing oracle (item 10)
             raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
         role = (row["role"] or "guest").strip().lower()
         if role in ADMIN_ROLES:
@@ -747,11 +824,13 @@ def login_guest(
         if not _verify_password(pw, row["password_hash"]):
             raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
         token = _issue_token(conn, row["user_id"], "password")
+        expires_at = token_expiry(conn, token)
         conn.commit()
         pub = {**_user_row_public(row), "role": role}  # role after a possible de-list demotion
         return {
             **pub,
             "token": token,
+            "expires_at": expires_at,
             "kind": "password",
             "created": False,
         }
@@ -765,6 +844,10 @@ def logout_guest(token: str, *, url: str | None = None) -> dict[str, Any]:
 
 
 RESET_GENERIC_MSG = "Nếu tài khoản tồn tại, yêu cầu đặt lại mật khẩu đã được ghi nhận."
+PHONE_RESET_HINT = (
+    "Nếu số điện thoại này gắn với nhiều tài khoản (dữ liệu cũ), không thể đặt lại mật khẩu bằng số "
+    "điện thoại — vui lòng dùng email của tài khoản."
+)
 
 
 def reset_echo_enabled() -> bool:
@@ -802,6 +885,9 @@ def request_password_reset(
         "reset_echo": echo,
         "delivery": "none",
     }
+    # CoS review #239: identical in every response (email or phone, existing or not — no
+    # enumeration). An ambiguous phone number (several accounts) never gets a token.
+    base["phone_note"] = PHONE_RESET_HINT
     if not echo:
         return base  # no lookup, no token: nothing to deliver it with
 
@@ -813,9 +899,7 @@ def request_password_reset(
                 "SELECT user_id, role FROM users WHERE email=?", (email_n,)
             ).fetchone()
         if row is None and phone_n:
-            row = conn.execute(
-                "SELECT user_id, role FROM users WHERE phone=?", (phone_n,)
-            ).fetchone()
+            row = find_user_by_phone(conn, phone_n, "user_id, role, phone")
         if not row:
             return base
         role = (row["role"] or "guest").strip().lower()
@@ -920,9 +1004,11 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
             }
         user_id = PARTNER_USER_ID
         device_key = internal_device_key("demo:")
-        conn.execute(
+        # Race-safe (item 5): concurrent first logins on an empty DB may all get here. The insert
+        # ignores ANY unique conflict (user_id / email / phone); the loser re-reads the winner's row.
+        cur = conn.execute(
             "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
-            "VALUES (?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
             (
                 user_id,
                 DEMO_DISPLAY,
@@ -934,6 +1020,16 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
             ),
         )
         conn.commit()
+        if int(cur.rowcount or 0) != 1:
+            row = conn.execute("SELECT user_id, role FROM users WHERE email=?", (DEMO_EMAIL,)).fetchone()
+            return {
+                "seeded": False,
+                "already": True,
+                "user_id": row["user_id"] if row else user_id,
+                "email": DEMO_EMAIL,
+                "role": (row["role"] if row else None) or "demo",
+                "password_hint": DEMO_PASSWORD,
+            }
         return {
             "seeded": True,
             "user_id": user_id,
@@ -1015,7 +1111,10 @@ def login_rate_key(*, email: str | None = None, phone: str | None = None, url: s
         ensure_auth_schema(url)
         conn = get_connection(url)
         try:
-            row = conn.execute(f"SELECT user_id FROM users WHERE {col}=?", (norm,)).fetchone()
+            if col == "phone":
+                row = find_user_by_phone(conn, norm, "user_id, phone")
+            else:
+                row = conn.execute("SELECT user_id FROM users WHERE email=?", (norm,)).fetchone()
         finally:
             conn.close()
         if row and row["user_id"]:
@@ -1034,6 +1133,8 @@ def service_login(body: dict) -> tuple[int, dict]:
             password=body.get("password") or "",
         )
         return 200, out
+    except PhoneConflictError as e:
+        return 409, {"error_code": "PHONE_CONFLICT_USE_EMAIL", "message": str(e)}
     except ValueError as e:
         return 401, {"error": str(e)}
     except PermissionError as e:
@@ -1115,7 +1216,7 @@ def service_me(token: str) -> tuple[int, dict]:  # type: ignore[no-redef]
     user = get_user_for_token(token)
     if not user:
         return 401, _unauthorized_body(token)
-    return 200, user
+    return 200, {**user, "expires_at": token_expiry_of(token)}
 
 
 # ---------------------------------------------------------------------------

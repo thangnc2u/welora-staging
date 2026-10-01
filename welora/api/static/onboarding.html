@@ -72,6 +72,7 @@ button:disabled{opacity:.55}
     </select>
   </div>
   <button type="button" id="next1">Tiếp</button>
+  <p class="err" id="err1"></p>
 </div>
 
 <div class="card hidden" id="step2">
@@ -94,6 +95,7 @@ button:disabled{opacity:.55}
     <option value="debt">Trả nợ</option>
   </select>
   <button type="button" id="next2">Tiếp</button>
+  <p class="err" id="err2"></p>
 </div>
 
 <div class="card hidden" id="step3">
@@ -117,12 +119,14 @@ button:disabled{opacity:.55}
   </select>
   <p class="muted">3 trụ: Welorapedia · Welorademy · WeloraOS. Agent không phải trụ 4.</p>
   <button type="button" id="next3">Tiếp</button>
+  <p class="err" id="err3"></p>
 </div>
 
 <div class="card hidden" id="step4">
   <h2>Nguyên tắc của bạn</h2>
   <p class="muted">Quỹ đủ 3 tháng trước đầu tư. Không phá quỹ. Không cam kết lợi suất. Đây là Hiến pháp cá nhân — bạn chịu trách nhiệm quyết định.</p>
   <button type="button" id="next4">Tôi đồng ý</button>
+  <p class="err" id="err4"></p>
 </div>
 
 <div class="card hidden" id="step5">
@@ -138,6 +142,7 @@ button:disabled{opacity:.55}
 <script src="/static/family_context.js"></script>
 <script src="/static/form_locks.js"></script>
 <script src="/static/session.js"></script>
+<script src="/static/api-errors.js"></script>
 <script>
 let uid=null, sid=null;
 let ctaBusy=false;
@@ -147,6 +152,26 @@ function show(n){
     if(el) el.classList.toggle('hidden', i!==n);
   }
   document.querySelectorAll('#dots i').forEach((d,i)=>d.classList.toggle('on', i===n));
+}
+/* Follow-up 2 (item 2): API errors → Vietnamese text, never "[object Object]". */
+function errText(body, fallback, status){
+  if(window.WeloraErrors) return WeloraErrors.message(body, fallback, status);
+  const d=body&&(body.detail!==undefined?body.detail:(body.error||body.message));
+  return (typeof d==='string'&&d)?d:fallback;
+}
+async function stepOk(r, errId){
+  const el=document.getElementById(errId);
+  if(el) el.textContent='';
+  if(r && r.ok) return true;
+  let body=null;
+  try{ body=await r.json(); }catch(_e){}
+  if(el) el.textContent=errText(body,'Chưa lưu được bước này. Thử lại.', r?r.status:0);
+  return false;
+}
+/* Guest = no stored login token (the page runs on the in-memory /auth/device token). */
+function isGuest(){
+  try{ return !((window.WeloraSession&&WeloraSession.token)?WeloraSession.token():localStorage.getItem('welora_token')); }
+  catch(_e){ return true; }
 }
 function weloraDeviceId(){
   let id=localStorage.getItem('welora_device_id');
@@ -197,6 +222,7 @@ document.getElementById('auth').onclick=async()=>{
       uid=d.user_id;
     }
     const s=await fetch('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
+    if(!(await stepOk(s,'err0'))) return;
     const sd=await s.json();
     sid=sd.session_id;
     show(1);
@@ -217,12 +243,13 @@ document.getElementById('next1').onclick=async()=>{
   fcEl.disabled=false;
   const fc=fcEl.value;
   fcEl.disabled=wasDisabled;
-  await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  const r1=await fetch('/onboarding/session/'+sid+'/step/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     household:hh,
     life_stage:hh,
     income_stability:document.getElementById('income_stability').value,
     family_context:fc
   })});
+  if(!(await stepOk(r1,'err1'))) return;
   show(2);
 };
 document.getElementById('next2').onclick=async()=>{
@@ -237,24 +264,27 @@ document.getElementById('next2').onclick=async()=>{
   priEl.disabled=false;
   const priority=priEl.value;
   priEl.disabled=wasDis;
-  await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  const r2=await fetch('/onboarding/session/'+sid+'/step/2',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     essential_expense_monthly:essential,
     emergency_fund_months_self:0,
     has_dangerous_debt_self:debtEl.value==='true',
     near_term_priority:priority
   })});
+  if(!(await stepOk(r2,'err2'))) return;
   show(3);
 };
 document.getElementById('next3').onclick=async()=>{
-  await fetch('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  const r3=await fetch('/onboarding/session/'+sid+'/step/3',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     surplus_habit:document.getElementById('surplus_habit').value,
     risk_tolerance:+document.getElementById('risk_tolerance').value,
     agent_role_preference:document.getElementById('agent_role').value
   })});
+  if(!(await stepOk(r3,'err3'))) return;
   show(4);
 };
 document.getElementById('next4').onclick=async()=>{
-  await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  const r4=await fetch('/onboarding/session/'+sid+'/step/4',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+  if(!(await stepOk(r4,'err4'))) return;
   const essential=essVal();
   const ls=document.getElementById('household')||document.getElementById('life_stage');
   const lsText=(ls.selectedOptions&&ls.selectedOptions[0])?ls.selectedOptions[0].text:ls.value;
@@ -277,6 +307,13 @@ document.getElementById('ctaGoal').onclick=async()=>{
   btn.disabled=true;
   try{
     const done=await fetch('/onboarding/session/'+sid+'/complete',{method:'POST'});
+    if(!done.ok){
+      /* a retry after a completed session (400 "already completed") may still create the goal */
+      let cb=null;
+      try{ cb=await done.clone().json(); }catch(_e){}
+      const already=done.status===400 && cb && typeof cb.detail==='string' && /already completed/i.test(cb.detail);
+      if(!already){ await stepOk(done,'err5'); return; }
+    }
     let debtHref=null;
     try{
       const completed=await done.json();
@@ -294,6 +331,13 @@ document.getElementById('ctaGoal').onclick=async()=>{
       linked_from_onboarding:true
     })});
     if(r.ok || r.status===409){
+      if(isGuest()){
+        /* Follow-up 2 (item 1): guests see their result + "đăng ký để lưu" instead of being
+           bounced to /app/login by the safety/goals auth gate. */
+        try{ localStorage.setItem('welora_guest_claim','1'); }catch(_e){}
+        location.href='/app/onboarding/result'+(needsDebt?'?debt=1':'');
+        return;
+      }
       if(needsDebt){
         location.href=debtHref||('/app/goals?focus=debt&user_id='+encodeURIComponent(uid));
       }else{
@@ -301,12 +345,9 @@ document.getElementById('ctaGoal').onclick=async()=>{
       }
       return;
     }
-    let msg='Không tạo được quỹ khẩn cấp';
-    try{
-      const body=await r.json();
-      msg=body.detail||body.error||body.message||msg;
-    }catch(_e){}
-    err.textContent=msg;
+    let body=null;
+    try{ body=await r.json(); }catch(_e){}
+    err.textContent=errText(body,'Không tạo được quỹ khẩn cấp', r.status);
   }catch(e){ err.textContent='Không tạo được quỹ. Thử lại.'; }
   finally{
     ctaBusy=false;

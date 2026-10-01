@@ -46,7 +46,13 @@ h1{color:var(--text-primary)}
     <label for="companionInput">Mã người đồng hành</label>
     <input id="companionInput" type="text" placeholder="Nhập mã từ thiết bị thứ hai" autocomplete="off"/>
     <button id="btnAttach" type="button">Gắn người đồng hành</button>
+    <button id="btnRevoke" type="button" class="danger" hidden>Gỡ người đồng hành</button>
     <div id="msg"></div>
+  </div>
+
+  <div class="section-title">Lời mời đồng hành</div>
+  <div class="card" id="inviteList">
+    <div class="meta">Chưa có lời mời nào gửi cho bạn.</div>
   </div>
 
   <div class="section-title">Đề xuất đang chờ</div>
@@ -102,8 +108,16 @@ async function loadCompanion(){
   if(!uid) return;
   const r=await api("/os/companion?user_id="+encodeURIComponent(uid));
   const cid=r.body.companion_user_id;
+  const pendingCid=r.body.pending_companion_user_id;
   const meta=document.getElementById("companionMeta");
   const card=document.getElementById("companionCard");
+  document.getElementById("btnRevoke").hidden=!(cid||pendingCid);
+  if(!cid && pendingCid){
+    /* Follow-up 2: invite sent, companion has not accepted yet → dual-control still denied */
+    meta.textContent="Đã gửi lời mời — chờ người đồng hành chấp nhận trên thiết bị của họ. Trước đó thao tác đồng kiểm vẫn bị từ chối.";
+    card.className="card warn";
+    return;
+  }
   if(cid){
     meta.textContent="Đã gắn người đồng hành";
     card.className="card ok";
@@ -221,9 +235,68 @@ document.getElementById("btnAttach").onclick=async function(){
   await loadCompanion();
 };
 
+/* Follow-up 2 (item 6): invites addressed to me — accept / decline while logged in as myself. */
+async function loadInvites(){
+  if(!uid) return;
+  const box=document.getElementById("inviteList");
+  const r=await api("/os/companion/invites");
+  const items=(r.body&&r.body.items)||[];
+  box.innerHTML="";
+  if(!items.length){
+    const m=document.createElement("div");
+    m.className="meta";
+    m.textContent="Chưa có lời mời nào gửi cho bạn.";
+    box.appendChild(m);
+    return;
+  }
+  items.forEach(function(it){
+    const div=document.createElement("div");
+    div.className="item";
+    const meta=document.createElement("div");
+    meta.className="meta";
+    meta.textContent=it.status==="active"
+      ? "Bạn đang là người đồng hành của một người dùng"+(it.role?" (vai trò: "+it.role+")":"")+"."
+      : "Một người dùng mời bạn làm người đồng hành"+(it.role?" (vai trò: "+it.role+")":"")+".";
+    div.appendChild(meta);
+    const btns=document.createElement("div");
+    btns.className="row-btns";
+    if(it.status!=="active"){
+      const a=document.createElement("button");
+      a.type="button";
+      a.textContent="Chấp nhận";
+      a.onclick=async function(){
+        const res=await api("/os/companion/accept",{method:"POST",body:JSON.stringify({primary_user_id:it.primary_user_id})});
+        setMsg(res.body.reply||(res.ok?"Đã chấp nhận.":"Không chấp nhận được."), res.ok);
+        await loadInvites();
+      };
+      btns.appendChild(a);
+    }
+    const d=document.createElement("button");
+    d.type="button";
+    d.className="danger";
+    d.textContent=it.status==="active"?"Rời liên kết":"Từ chối";
+    d.onclick=async function(){
+      const res=await api("/os/companion/decline",{method:"POST",body:JSON.stringify({primary_user_id:it.primary_user_id})});
+      setMsg(res.body.reply||(res.ok?"Đã từ chối.":"Không thực hiện được."), res.ok);
+      await loadInvites();
+    };
+    btns.appendChild(d);
+    div.appendChild(btns);
+    box.appendChild(div);
+  });
+}
+document.getElementById("btnRevoke").onclick=async function(){
+  const res=await api("/os/companion/revoke",{method:"POST",body:JSON.stringify({user_id:uid})});
+  setMsg(res.body.reply||(res.ok?"Đã gỡ người đồng hành.":"Không gỡ được."), res.ok);
+  const inp=document.getElementById("companionInput");
+  if(inp.dataset.masked==="1"){ inp.value=""; inp.readOnly=false; delete inp.dataset.masked; }
+  await loadCompanion();
+};
+
 (async function(){
   await ensureUser();
   await loadCompanion();
+  await loadInvites();
   await loadPending();
 })();
 </script>

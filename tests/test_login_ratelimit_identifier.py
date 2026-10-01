@@ -105,7 +105,7 @@ class TestIdentifierBypass(_Base):
         self.assertEqual(auth_svc.login_rate_key(email="VICTIM@example.test "), "user:" + self.victim)
         self.assertEqual(auth_svc.login_rate_key(phone="0987 654 321"), "user:" + self.victim)
         self.assertEqual(auth_svc.login_rate_key(email="nobody@example.test"), "email:nobody@example.test")
-        self.assertEqual(auth_svc.login_rate_key(phone="0900 000 111"), "phone:0900000111")
+        self.assertEqual(auth_svc.login_rate_key(phone="0900 000 111"), "phone:+84900000111")  # E.164 since follow-up 2
         self.assertEqual(auth_svc.login_rate_key(), "")
 
     def test_unknown_accounts_count_per_identifier_and_ip_without_oracle(self):

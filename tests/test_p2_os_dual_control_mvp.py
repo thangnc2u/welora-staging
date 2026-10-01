@@ -11,7 +11,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from tests._authz import authed
+from tests._authz import authed, bearer
 
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
@@ -99,6 +99,14 @@ class TestP2OsDualControlMvp(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json().get("ok"))
         self.assertEqual(r.json()["link"]["companion_user_id"], self.companion)
+        # Follow-up 2 (item 6): the link is a pending invite until the companion accepts
+        self.assertEqual(r.json()["status"], "pending")
+        pend = self.client.get("/os/companion", params={"user_id": self.primary}).json()
+        self.assertIsNone(pend["companion_user_id"])
+        self.assertEqual(pend["pending_companion_user_id"], self.companion)
+        acc = self.client.post("/os/companion/accept", json={"primary_user_id": self.primary},
+                               headers=bearer(self.companion))
+        self.assertEqual(acc.status_code, 200, acc.text)
 
         listed = self.client.get("/os/companion", params={"user_id": self.primary})
         self.assertEqual(listed.status_code, 200)
@@ -388,6 +396,10 @@ class TestP2OsDualControlMvp(unittest.TestCase):
             json={"user_id": self.primary, "companion_user_id": self.companion},
         )
         self.assertEqual(link.status_code, 200)
+        # Follow-up 2 (item 6): companion accepts while logged in as themselves
+        acc = self.client.post("/os/companion/accept", json={"primary_user_id": self.primary},
+                               headers=bearer(self.companion))
+        self.assertEqual(acc.status_code, 200, acc.text)
 
         prop = self.client.post(
             "/agent/mode-c/propose",

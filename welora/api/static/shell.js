@@ -19,7 +19,8 @@
     "/app/forgot-password": 1,
     "/app/reset-password": 1,
     "/app/otp": 1,
-    "/app/onboarding": 1
+    "/app/onboarding": 1,
+    "/app/onboarding/result": 1
   };
   if (!_authAllow[path]) {
     var _tok = "";
@@ -140,7 +141,7 @@
     try {
       _guestTok = localStorage.getItem("welora_token") || "";
     } catch (_eGuest) {}
-    if (!_guestTok && path === "/app/onboarding") {
+    if (!_guestTok && (path === "/app/onboarding" || path === "/app/onboarding/result")) {
       btn.textContent = "Đăng nhập";
       btn.setAttribute("aria-label", "Đăng nhập");
       btn.addEventListener("click", function () {

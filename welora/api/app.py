@@ -59,6 +59,9 @@ class GuestRegisterBody(BaseModel):
     password: str = Field(..., min_length=8)
     display_name: Optional[str] = None
 
+class GuestClaimBody(BaseModel):
+    guest_token: str = Field(..., min_length=8, max_length=256)
+
 class GuestLoginBody(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -169,6 +172,13 @@ class CompanionLinkBody(BaseModel):
     companion_user_id: str
     role: Optional[str] = None  # P6: child/con
     relation: Optional[str] = None
+
+class CompanionDecisionBody(BaseModel):
+    primary_user_id: str = Field(..., min_length=1)
+    companion_user_id: Optional[str] = None  # optional echo; must equal the token user
+
+class CompanionRevokeBody(BaseModel):
+    user_id: Optional[str] = None
 
 class ModeCCompanionConfirmBody(BaseModel):
     companion_user_id: str
@@ -668,6 +678,11 @@ def create_app() -> FastAPI:
     def onboarding_ui() -> FileResponse:
         return _serve_app_html(static_dir, "onboarding.html")
 
+    @app.get("/app/onboarding/result", include_in_schema=False)
+    @app.get("/app/onboarding/result/", include_in_schema=False)
+    def onboarding_result_ui() -> FileResponse:
+        return _serve_app_html(static_dir, "onboarding-result.html")
+
     @app.get("/app/demo", include_in_schema=False)
     def demo_ui() -> FileResponse:
         return _serve_app_html(static_dir, "demo.html")
@@ -908,7 +923,12 @@ def create_app() -> FastAPI:
         return _respond(*service_get_metrics())
 
     @app.post("/auth/device", tags=["auth"])
-    def auth_device(body: DeviceLoginBody) -> dict:
+    def auth_device(body: DeviceLoginBody, request: Request) -> dict:
+        # Per-IP only (item 3): every call → "device"; a call that would mint a NEW guest user →
+        # "device_new" as well. A returning guest (known device_id) never touches device_new.
+        _auth_rate_limit(request, "device", None)
+        if not auth_svc.device_guest_exists(body.device_id):
+            _auth_rate_limit(request, "device_new", None)
         code, out = auth_svc.service_device_login(body.model_dump())
         if code >= 400 and out.get("error_code") in ("DEVICE_ID_RESERVED", "DEVICE_NOT_GUEST"):
             # P0 takeover guard — structured VI error, never a token
@@ -966,18 +986,30 @@ def create_app() -> FastAPI:
                 detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
                 headers={"Retry-After": str(e.retry_after)},
             )
+        code = 0
         try:
             code, out = auth_svc.service_login(body.model_dump())
-        except Exception:
-            rl.login_release(attempt)
-            raise
-        if code == 401:
-            rl.login_commit_failure(attempt)
-        else:
-            rl.login_release(attempt)
-            if code == 200:
-                rl.login_clear_pair(ip=ip, account=account)
+        finally:
+            # release / commit never raise (swallow-and-log); a leaked row expires with the window
+            if code == 401:
+                rl.login_commit_failure(attempt)
+            else:
+                rl.login_release(attempt)
+        if code == 200:
+            rl.login_clear_pair(ip=ip, account=account)
         return _respond(code, out)
+
+    @app.post("/auth/guest/claim", tags=["auth"])
+    def auth_guest_claim(body: GuestClaimBody, authorization: Optional[str] = Header(None)) -> dict:
+        """Move the caller's guest data (proved by its own device token) onto the logged-in
+        account. Idempotent; conflict policy in welora/guest_claim.py."""
+        from welora import guest_claim
+
+        uid = _require_user(authorization)
+        try:
+            return guest_claim.claim_guest_data(uid, body.guest_token)
+        except guest_claim.ClaimError as e:
+            raise HTTPException(status_code=e.status, detail={"error_code": e.code, "message": e.message})
 
     @app.post("/auth/logout", tags=["auth"])
     def auth_logout(authorization: Optional[str] = Header(None)) -> dict:
@@ -1289,13 +1321,32 @@ def create_app() -> FastAPI:
 
     @app.post("/os/companion", tags=["os", "dual-control"])
     def os_companion_create(body: CompanionLinkBody, authorization: Optional[str] = Header(None)) -> dict:
+        # Item 6: creates a PENDING invite; the companion must accept while logged in as themselves.
         uid = _owner(authorization, body.user_id)
-        return _respond(*mode_c_svc.set_companion(
+        return _respond(*mode_c_svc.invite_companion(
             user_id=uid,
             companion_user_id=body.companion_user_id,
             role=body.role,
             relation=body.relation,
         ))
+
+    @app.get("/os/companion/invites", tags=["os", "dual-control"])
+    def os_companion_invites(authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.list_companion_invites(_require_user(authorization)))
+
+    @app.post("/os/companion/accept", tags=["os", "dual-control"])
+    def os_companion_accept(body: CompanionDecisionBody, authorization: Optional[str] = Header(None)) -> dict:
+        cid = _owner(authorization, body.companion_user_id)
+        return _respond(*mode_c_svc.accept_companion_invite(companion_user_id=cid, primary_user_id=body.primary_user_id))
+
+    @app.post("/os/companion/decline", tags=["os", "dual-control"])
+    def os_companion_decline(body: CompanionDecisionBody, authorization: Optional[str] = Header(None)) -> dict:
+        cid = _owner(authorization, body.companion_user_id)
+        return _respond(*mode_c_svc.decline_companion_invite(companion_user_id=cid, primary_user_id=body.primary_user_id))
+
+    @app.post("/os/companion/revoke", tags=["os", "dual-control"])
+    def os_companion_revoke(body: CompanionRevokeBody, authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.revoke_companion(user_id=_owner(authorization, body.user_id)))
 
     @app.get("/os/companion", tags=["os", "dual-control"])
     def os_companion_list(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
@@ -1836,8 +1887,67 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
-    def entitlements_events(body: EntitlementEventBody) -> dict:
-        return entitlements_svc.emit_event(body.event, body.payload)
+    async def entitlements_events(request: Request, authorization: Optional[str] = Header(None)) -> dict:
+        """Client analytics events (item 7): a live user session is required and the event is
+        stamped with the token user. Client names must be namespaced (``pricing.view``) so they
+        can never imitate server events (subscription_granted, refund_completed, …).
+        CoS review #239: the body is capped (WELORA_EVENT_MAX_BYTES, 413) and must be a small flat
+        payload (≤ 20 keys, key ≤ 40 chars, scalar values, strings ≤ 256 chars → else 422), and each
+        user is rate-limited (WELORA_RL_EVENT_USER_MAX per WELORA_RL_WINDOW_S, DB-backed, 429)."""
+        import json as _json
+        import re as _re
+
+        from starlette.concurrency import run_in_threadpool
+
+        from welora import auth_ratelimit as rl
+
+        uid = await run_in_threadpool(_require_user, authorization)  # DB calls off the event loop
+        max_bytes = max(256, rl._env_int("WELORA_EVENT_MAX_BYTES", 2048))
+        too_large = HTTPException(status_code=413, detail={"error_code": "EVENT_TOO_LARGE",
+                                                           "message": "Dữ liệu sự kiện quá lớn."})
+        try:
+            declared = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            declared = 0
+        if declared > max_bytes:
+            raise too_large
+        raw = bytearray()
+        async for chunk in request.stream():  # bounded read: never buffers more than max_bytes + 1 chunk
+            raw.extend(chunk)
+            if len(raw) > max_bytes:
+                raise too_large
+        bad = HTTPException(status_code=422, detail={"error_code": "EVENT_PAYLOAD_INVALID",
+                                                     "message": "Dữ liệu sự kiện không hợp lệ."})
+        try:
+            data = _json.loads(bytes(raw) or b"null")
+            body = EntitlementEventBody(**data) if isinstance(data, dict) else None
+        except Exception:
+            body = None
+        if body is None:
+            raise bad
+        name = (body.event or "").strip()
+        if not _re.fullmatch(r"[a-z][a-z0-9_]*(\.[a-z0-9_]+)+", name) or len(name) > 64:
+            raise HTTPException(status_code=422, detail={"error_code": "EVENT_NAME_INVALID",
+                                                         "message": "Tên sự kiện không hợp lệ."})
+        payload = dict(body.payload or {})
+        if len(payload) > 20:
+            raise bad
+        for k, v in payload.items():
+            if not _re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", str(k)):
+                raise bad
+            if isinstance(v, str):
+                if len(v) > 256:
+                    raise bad
+            elif v is not None and not isinstance(v, (bool, int, float)):
+                raise bad  # no nested objects / lists
+        try:
+            await run_in_threadpool(rl.check_and_record, "event", ip=None, target="user:" + uid)
+        except rl.RateLimited as e:
+            raise HTTPException(status_code=429, detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+                                headers={"Retry-After": str(e.retry_after)})
+        payload["user_id"] = uid  # never trust a client-supplied user_id
+        payload["source"] = "client"
+        return entitlements_svc.emit_event(name, payload)
 
     @app.get("/api/core/v1/entitlements/experiments/aca_price_ab", tags=["entitlements"])
     def entitlements_experiment_aca() -> dict:

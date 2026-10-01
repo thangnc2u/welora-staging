@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -528,34 +529,35 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q107c", "prompt": "Giá trị thời gian của tiền nói lên điều gì?", "choices": ["Tiền hôm nay có thể sinh sôi theo thời gian", "Tiền không đổi giá trị theo năm"], "answer": 0, "hard": False},
     ],
     "N02-01": [
-        {"id": "q01a", "prompt": "Quỹ khẩn cấp dùng để làm gì?", "choices": ["Chi tiêu thường ngày", "Đệm khi mất thu nhập / sốc", "All-in cổ phiếu"], "answer": 1, "hard": False},
-        {"id": "q01b", "prompt": "Mục tiêu tối thiểu của Cổng An Toàn là bao nhiêu tháng chi thiết yếu?", "choices": ["1 tháng", "3 tháng", "12 tháng"], "answer": 1, "hard": True},
-        {"id": "q01c", "prompt": "Có nên dùng quỹ khẩn cấp để mua sắm sale?", "choices": ["Có", "Không"], "answer": 1, "hard": False},
-        # GP P0b — ngân hàng câu hỏi lớn hơn (mỗi lượt KUAT rút ngẫu nhiên một phần)
-        {"id": "q01d", "prompt": "Chi tiêu thiết yếu của bạn khoảng 15 triệu ₫ mỗi tháng. Quỹ khẩn cấp tối thiểu cần bao nhiêu?", "choices": ["15 triệu ₫", "45 triệu ₫", "150 triệu ₫"], "answer": 1, "hard": True},
-        {"id": "q01e", "prompt": "Khoản nào nên tính vào chi tiêu thiết yếu khi đặt mục tiêu quỹ?", "choices": ["Tiền nhà, ăn uống, điện nước, đi lại", "Du lịch và mua sắm mùa sale", "Tiền định đầu tư mỗi tháng"], "answer": 0, "hard": False},
-        {"id": "q01f", "prompt": "Bắt đầu xây quỹ từ con số 0, cách nào dễ duy trì nhất?", "choices": ["Chờ có khoản thưởng lớn rồi gửi một lần", "Tự động chuyển một phần nhỏ ngay sau ngày nhận lương", "Cuối tháng còn dư bao nhiêu thì gửi bấy nhiêu"], "answer": 1, "hard": False},
-        {"id": "q01g", "prompt": "Vì sao nên để quỹ khẩn cấp ở một tài khoản riêng?", "choices": ["Để không lẫn với tiền tiêu hằng ngày và lỡ tay tiêu mất", "Để được lãi cao hơn", "Vì ngân hàng bắt buộc như vậy"], "answer": 0, "hard": False},
-        {"id": "q01h", "prompt": "Mục đích chính của quỹ khẩn cấp là gì?", "choices": ["Sinh lời thật nhanh", "Bảo vệ gia đình khi có sự cố — không phải để sinh lời", "Để dành mua xe mới"], "answer": 1, "hard": True},
-        {"id": "q01i", "prompt": "Quỹ của bạn đã đủ 1 tháng chi tiêu thiết yếu. Bước tiếp theo hợp lý là gì?", "choices": ["Dừng lại vì đã có quỹ", "Tiếp tục góp đều lên 2 rồi 3 tháng", "Rút ra đầu tư để nhanh đủ hơn"], "answer": 1, "hard": True},
-        {"id": "q01j", "prompt": "Thu nhập không đều (làm tự do, buôn bán nhỏ) thì quỹ khẩn cấp nên thế nào?", "choices": ["Nên dày hơn mức tối thiểu 3 tháng", "Không cần quỹ vì thu nhập lúc cao lúc thấp", "Chỉ cần nửa tháng là đủ"], "answer": 0, "hard": False},
-        {"id": "q01k", "prompt": "Đang xây quỹ thì có người rủ góp vốn «lời chắc 20% mỗi tháng». Bạn nên làm gì?", "choices": ["Rút quỹ góp ngay kẻo lỡ", "Giữ nguyên quỹ — quỹ khẩn cấp không dùng để đầu tư", "Vay thêm để góp cho nhiều"], "answer": 1, "hard": True},
-        {"id": "q01l", "prompt": "Quỹ chưa đủ 3 tháng chi tiêu thiết yếu thì Cổng An Toàn của Welora thế nào?", "choices": ["Vẫn ĐẠT nếu điểm sức khỏe tài chính cao", "Chưa ĐẠT — cần đủ tối thiểu 3 tháng", "ĐẠT nếu bạn tự xác nhận là ổn"], "answer": 1, "hard": True},
+        # GP P0b r2 — mỗi câu 4 lựa chọn, độ dài cân bằng (đáp án đúng dài nhất / nhì / ba / ngắn nhất
+        # chia đều ~3 câu mỗi loại) — mọi câu trả lời được bằng nội dung bài WA-02-01.
+        {"id": "q01a", "prompt": "Quỹ khẩn cấp dùng để làm gì?", "choices": ["Trả các khoản chi tiêu thường ngày trong tháng", "Làm khoản đệm khi mất thu nhập hoặc có sự cố bất ngờ", "Chờ sẵn để mua cổ phiếu khi thị trường giảm", "Dành dụm cho chuyến du lịch cuối năm"], "answer": 1, "hard": False},
+        {"id": "q01b", "prompt": "Cổng An Toàn của Welora cần quỹ tối thiểu bao nhiêu tháng chi tiêu thiết yếu?", "choices": ["Một tháng", "Khoảng hai tháng", "Ba tháng", "Mười hai tháng"], "answer": 2, "hard": True},
+        {"id": "q01c", "prompt": "Có nên dùng quỹ khẩn cấp để mua đồ đang giảm giá?", "choices": ["Có, miễn là tháng sau bù lại vào quỹ", "Không, mua sắm không phải sự cố bất ngờ", "Không, trừ khi món đó giảm hơn một nửa", "Có, vì mua lúc rẻ cũng là một cách tiết kiệm tiền"], "answer": 1, "hard": False},
+        {"id": "q01d", "prompt": "Chi tiêu thiết yếu của bạn khoảng 15 triệu ₫ mỗi tháng. Quỹ tối thiểu để qua Cổng An Toàn là bao nhiêu?", "choices": ["15 triệu ₫ (đúng 1 tháng chi)", "30 triệu ₫", "45 triệu ₫ (15 × 3)", "150 triệu ₫"], "answer": 2, "hard": True},
+        {"id": "q01e", "prompt": "Khoản nào nên tính vào chi tiêu thiết yếu khi đặt mục tiêu quỹ?", "choices": ["Du lịch và mua sắm mùa sale", "Số tiền bạn định đầu tư mỗi tháng", "Quà biếu và tiệc tùng theo sở thích", "Tiền nhà, ăn uống, điện nước, đi lại và học phí cần thiết"], "answer": 3, "hard": False},
+        {"id": "q01f", "prompt": "Bắt đầu xây quỹ từ con số 0, cách nào dễ duy trì nhất?", "choices": ["Chờ có khoản thưởng lớn rồi gửi một lần cho đủ", "Tự động chuyển một khoản nhỏ ngay sau ngày nhận lương", "Cuối tháng còn dư bao nhiêu thì gửi bấy nhiêu, tháng nào hết thì thôi", "Vay người thân để có ngay đủ quỹ"], "answer": 1, "hard": False},
+        {"id": "q01g", "prompt": "Vì sao nên để quỹ khẩn cấp ở một tài khoản riêng?", "choices": ["Để được hưởng lãi suất cao nhất có thể", "Để không lẫn với tiền tiêu và lỡ tay tiêu mất", "Vì quy định bắt buộc phải mở tài khoản riêng cho quỹ", "Để khi cần đầu tư thì rút ra cho nhanh, khỏi phải chờ"], "answer": 1, "hard": False},
+        {"id": "q01h", "prompt": "Mục đích chính của quỹ khẩn cấp là gì?", "choices": ["Làm vốn đầu tư khi thị trường có cơ hội tốt, rồi nạp lại sau", "Sinh lời nhanh hơn gửi tiết kiệm ngân hàng thông thường", "Giúp bạn (và người phụ thuộc, nếu có) qua lúc có sự cố", "Để dành mua xe mới"], "answer": 2, "hard": True},
+        {"id": "q01i", "prompt": "Bạn làm tự do, thu nhập lúc nhiều lúc ít, và quỹ vừa đủ 3 tháng chi thiết yếu. Bước tiếp theo hợp lý là gì?", "choices": ["Dừng góp, vì đã đủ mức của Cổng là xong", "Tiếp tục góp đều, hướng tới khoảng 6 tháng", "Rút bớt quỹ ra đầu tư cho sinh lời", "Chuyển toàn bộ quỹ sang tiêu dùng"], "answer": 1, "hard": True},
+        {"id": "q01j", "prompt": "Nhà chỉ có một người tạo ra thu nhập chính. Mục tiêu quỹ khẩn cấp nên thế nào?", "choices": ["Chỉ cần nửa tháng là đủ", "Dày hơn 3 tháng", "Không cần quỹ, vì đã có người đi làm", "Đúng 3 tháng, không nên để dư thêm"], "answer": 1, "hard": False},
+        {"id": "q01k", "prompt": "Đang xây quỹ thì có người rủ góp vốn «lời chắc 20% mỗi tháng». Bạn nên làm gì?", "choices": ["Rút quỹ góp ngay kẻo lỡ cơ hội", "Vay thêm tiền để góp được nhiều hơn", "Giữ nguyên quỹ", "Góp một nửa quỹ, nửa còn lại giữ phòng thân"], "answer": 2, "hard": True},
+        {"id": "q01l", "prompt": "Quỹ chưa đủ 3 tháng chi tiêu thiết yếu thì Cổng An Toàn thế nào?", "choices": ["ĐẠT nếu điểm sức khỏe tài chính của bạn cao", "Chưa ĐẠT cho tới khi quỹ đủ 3 tháng", "Chưa ĐẠT, nhưng tự xác nhận là ổn thì mở", "ĐẠT khi quỹ được 2 tháng"], "answer": 1, "hard": True},
     ],
     "N02-02": [
-        {"id": "q02a", "prompt": "Được dùng quỹ khẩn cấp để all-in ETF khi thấy cơ hội?", "choices": ["Có", "Không"], "answer": 1, "hard": True},
-        {"id": "q02b", "prompt": "Quỹ khẩn cấp nên dùng khi nào?", "choices": ["Mất việc / y tế / sốc", "Cơ hội đầu tư", "Du lịch"], "answer": 0, "hard": False},
-        {"id": "q02c", "prompt": "Rút quỹ khẩn cấp để đầu tư cổ phiếu?", "choices": ["Được nếu lời", "Không — phá An Toàn"], "answer": 1, "hard": True},
-        # GP P0b — ngân hàng câu hỏi lớn hơn (mỗi lượt KUAT rút ngẫu nhiên một phần)
-        {"id": "q02d", "prompt": "Tình huống nào phù hợp để rút quỹ khẩn cấp?", "choices": ["Bị cắt giảm thu nhập đột ngột", "Đặt cọc chuyến du lịch Tết", "Mua điện thoại đời mới"], "answer": 0, "hard": True},
-        {"id": "q02e", "prompt": "Hai câu hỏi nên tự hỏi trước khi rút quỹ khẩn cấp là gì?", "choices": ["Việc này có bất ngờ không, và có ảnh hưởng tới sinh hoạt thiết yếu không?", "Bạn bè có làm vậy không, và có đang giảm giá không?", "Có lời không, và có nhanh không?"], "answer": 0, "hard": False},
-        {"id": "q02f", "prompt": "Đám cưới của bạn đã lên lịch từ năm ngoái. Có nên dùng quỹ khẩn cấp để chi?", "choices": ["Có, vì là việc lớn", "Không — khoản biết trước nên để dành bằng một quỹ mục tiêu riêng"], "answer": 1, "hard": True},
-        {"id": "q02g", "prompt": "Vừa rút quỹ để lo một ca nằm viện. Việc nên làm tiếp theo là gì?", "choices": ["Nạp lại quỹ cho đủ 3 tháng trước khi nghĩ tới đầu tư", "Đầu tư phần còn lại để gỡ nhanh", "Không cần nạp lại nữa"], "answer": 0, "hard": True},
-        {"id": "q02h", "prompt": "Xe máy hỏng nặng, không đi làm được. Dùng quỹ khẩn cấp để sửa là?", "choices": ["Hợp lý — sự cố bất ngờ ảnh hưởng tới việc đi làm", "Sai — quỹ chỉ dùng khi mất việc"], "answer": 0, "hard": False},
-        {"id": "q02i", "prompt": "Tiền trong quỹ «nằm im» khiến bạn thấy tiếc. Cách nghĩ nào đúng?", "choices": ["Rút ra mua vàng cho khỏi phí", "Quỹ nằm im là đang làm đúng việc: chờ sẵn cho lúc cần", "Chuyển hết sang chứng khoán"], "answer": 1, "hard": False},
-        {"id": "q02j", "prompt": "Thị trường giảm mạnh, ai cũng bảo «bắt đáy». Còn quỹ khẩn cấp thì sao?", "choices": ["Dùng quỹ bắt đáy, có lời rồi nạp lại sau", "Không đụng quỹ — chỉ đầu tư bằng tiền ngoài quỹ, khi Cổng đã ĐẠT"], "answer": 1, "hard": True},
-        {"id": "q02k", "prompt": "Việc gấp khác việc khẩn cấp ở điểm nào?", "choices": ["Việc gấp thường vẫn xoay được bằng cách chỉnh chi tiêu; việc khẩn cấp đe dọa sinh hoạt cơ bản", "Hai việc như nhau, cứ rút quỹ"], "answer": 0, "hard": False},
-        {"id": "q02l", "prompt": "Điểm sức khỏe tài chính cao có thay được Cổng An Toàn để rút quỹ đầu tư không?", "choices": ["Có", "Không — Cổng không bị điểm số vượt qua"], "answer": 1, "hard": True},
+        # GP P0b r2 — 4 lựa chọn, độ dài cân bằng; mọi câu trả lời được bằng nội dung bài WA-02-02.
+        {"id": "q02a", "prompt": "Thấy cơ hội đầu tư ETF hấp dẫn, có được dùng quỹ khẩn cấp không?", "choices": ["Có, nếu chỉ dùng một phần nhỏ", "Không, cơ hội đầu tư không phải sự cố", "Không, trừ khi ETF đang giảm giá sâu", "Có, vì ETF phân tán rủi ro tốt hơn cổ phiếu riêng lẻ"], "answer": 1, "hard": True},
+        {"id": "q02b", "prompt": "Quỹ khẩn cấp nên dùng khi nào?", "choices": ["Khi có cơ hội đầu tư tốt", "Khi mất việc, ốm đau hay sự cố bất ngờ", "Khi muốn đi du lịch", "Khi cửa hàng quen có đợt giảm giá lớn cuối năm"], "answer": 1, "hard": False},
+        {"id": "q02c", "prompt": "Rút quỹ khẩn cấp để mua cổ phiếu thì sao?", "choices": ["Được, nếu chắc chắn có lời", "Không, đó là phá An Toàn", "Không, trừ khi giá đang giảm rất sâu", "Được, nếu bán ra trong một tháng rồi nạp lại"], "answer": 1, "hard": True},
+        {"id": "q02d", "prompt": "Tình huống nào phù hợp để rút quỹ khẩn cấp?", "choices": ["Đặt cọc chuyến du lịch Tết", "Bị cắt giảm thu nhập đột ngột", "Mua điện thoại đời mới khi máy cũ vẫn dùng tốt", "Góp tiền mừng đám cưới đã biết lịch từ lâu"], "answer": 1, "hard": True},
+        {"id": "q02e", "prompt": "Theo bài học, trước khi rút quỹ nên tự hỏi hai câu nào?", "choices": ["Bạn bè có làm vậy không, và có đang giảm giá không?", "Có bất ngờ không, và có cần thiết cho sinh hoạt hay đi làm không?", "Có lời không, và có nhanh không?", "Có ai cho vay không, và lãi vay có cao không?"], "answer": 1, "hard": False},
+        {"id": "q02f", "prompt": "Đám cưới của bạn đã lên lịch từ năm ngoái. Nên chuẩn bị tiền thế nào?", "choices": ["Rút quỹ khẩn cấp vì cưới là việc hệ trọng", "Lập quỹ mục tiêu riêng và góp dần", "Vay nóng rồi trả dần", "Dùng quỹ khẩn cấp trước, sau cưới nạp lại sau"], "answer": 1, "hard": True},
+        {"id": "q02g", "prompt": "Vừa rút quỹ để lo một ca nằm viện. Việc nên làm tiếp theo là gì?", "choices": ["Đầu tư phần còn lại để gỡ lại nhanh", "Nạp lại cho đủ 3 tháng trước khi nghĩ đến đầu tư", "Không cần nạp lại nữa", "Giữ nguyên mức quỹ hiện tại và mở quyền đầu tư như cũ"], "answer": 1, "hard": True},
+        {"id": "q02h", "prompt": "Xe máy hỏng nặng, không đi làm được. Dùng quỹ khẩn cấp để sửa thì sao?", "choices": ["Không được, quỹ chỉ dùng khi mất việc", "Hợp lý, vì cần xe để đi làm", "Không nên, hãy vay nóng để giữ nguyên quỹ", "Chỉ được nếu sửa hết dưới một triệu đồng"], "answer": 1, "hard": False},
+        {"id": "q02i", "prompt": "Tiền trong quỹ «nằm im» khiến bạn thấy tiếc. Cách nghĩ nào đúng?", "choices": ["Rút ra mua vàng cho khỏi phí", "Quỹ nằm yên là đang làm đúng việc của nó", "Chuyển hết sang chứng khoán để tiền sinh lời mỗi ngày", "Cho bạn bè vay lấy lãi để tiền khỏi nằm im"], "answer": 1, "hard": False},
+        {"id": "q02j", "prompt": "Thị trường giảm mạnh, ai cũng bảo «bắt đáy». Quỹ khẩn cấp thì sao?", "choices": ["Dùng quỹ bắt đáy, có lời thì nạp lại", "Không đụng tới quỹ", "Không dùng hết, chỉ thử một ít", "Rút toàn bộ quỹ vì giá đang rẻ hiếm thấy"], "answer": 1, "hard": True},
+        {"id": "q02k", "prompt": "Bạn biết trước sang năm phải đóng một khoản học phí lớn. Nên chuẩn bị thế nào?", "choices": ["Đến lúc đóng thì rút quỹ khẩn cấp", "Lập quỹ mục tiêu riêng, góp dần từ bây giờ", "Không cần chuẩn bị, đến đâu tính đến đó", "Vay thẻ tín dụng"], "answer": 1, "hard": False},
+        {"id": "q02l", "prompt": "Điểm sức khỏe tài chính cao có thay được việc quỹ phải đủ 3 tháng không?", "choices": ["Có, điểm cao là đủ", "Không, Cổng không bị điểm số vượt qua", "Có, nếu điểm trên 80", "Không, trừ khi quỹ đã được 2 tháng"], "answer": 1, "hard": True},
     ],
     "N02-03": [
         {"id": "q03a", "prompt": "Nơi giữ quỹ khẩn cấp nên ưu tiên gì?", "choices": ["Lợi suất cao", "An toàn và rút được nhanh", "Tất tay crypto"], "answer": 1, "hard": True},
@@ -698,7 +700,8 @@ ATTEMPT_LOG_MAX = 20
 # (at least KUAT_MIN_HARD "hard" ones when the bank has them), in random order, each with its
 # options in random order. Pass rule unchanged: score ≥ KUAT_PASS_THRESHOLD (70 %) AND every hard
 # question shown answered correctly → with 5 questions: ≥ 4/5 and all hard right; 3-question
-# banks: 3/3 (as before).
+# banks: 3/3 (as before). Round 2: the result is pass / fail ONLY — no score, no correct count, no
+# percent, no per-question data, and no "hard" marker — in every response and stored record.
 KUAT_DRAW = 5
 KUAT_MIN_HARD = 2
 PASS_RULE_VI = "Đạt khi đúng từ 70% số câu trở lên và đúng mọi câu trọng tâm."
@@ -714,10 +717,10 @@ def _now() -> str:
 
 
 def _public_attempt(a: Any) -> Any:
-    """Attempt summary safe to store / return: outcome + total score only (never per-question)."""
+    """Attempt summary safe to store / return: pass / fail only (no score, no count, never per-question)."""
     if not isinstance(a, dict):
         return a
-    return {k: a[k] for k in ("node_id", "score", "passed", "ts", "principle_keys", "question_count") if k in a}
+    return {k: a[k] for k in ("node_id", "passed", "ts", "principle_keys") if k in a}
 
 
 def _normalise(p: dict[str, Any]) -> dict[str, Any]:
@@ -834,13 +837,13 @@ def _refresh_badges(p: dict[str, Any]) -> None:
 
 
 def _served_public(node_id: str, served: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What the learner sees for one attempt: slot ids k1…kN, options in the served order."""
+    """What the learner sees for one attempt: slot ids k1…kN, options in the served order. No "hard"
+    marker (round 2: it would tell which questions decide the verdict)."""
     by_id = {q["id"]: q for q in QUESTIONS.get(node_id, [])}
     out = []
     for i, slot in enumerate(served):
         q = by_id[slot["q"]]
-        out.append({"id": f"k{i + 1}", "prompt": q["prompt"], "choices": [q["choices"][j] for j in slot["perm"]],
-                    "hard": bool(q["hard"])})
+        out.append({"id": f"k{i + 1}", "prompt": q["prompt"], "choices": [q["choices"][j] for j in slot["perm"]]})
     return out
 
 
@@ -938,8 +941,9 @@ def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
 
 
 def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None) -> dict[str, Any] | None:
-    """Lesson + (when the node is open and the learner is not cooling down) a fresh server-held KUAT
-    attempt: ``kuat.attempt_id`` and the drawn, shuffled ``questions`` (no answers, no verdicts)."""
+    """Lesson + (when the node is open and the learner is not cooling down) the learner's server-held
+    KUAT attempt — the OPEN one if still valid (same questions / option order in every tab), a new one
+    only when none is open: ``kuat.attempt_id`` and the shuffled ``questions`` (no answers, no verdicts)."""
     from welora import academy_store as store
 
     if node_id not in _NODE_BY_ID:
@@ -1040,16 +1044,14 @@ def _wire_mastery(user_id: str) -> None:
     grant_from_academy(user_id)
 
 
-def _apply_result(user_id: str, node_id: str, score: float, passed: bool, question_count: int) -> dict[str, Any]:
+def _apply_result(user_id: str, node_id: str, passed: bool) -> dict[str, Any]:
     p = _profile(user_id)
     st = p["nodes"][node_id]
     attempt = {
         "node_id": node_id,
-        "score": score,
         "passed": passed,
         "ts": _now(),
         "principle_keys": [_NODE_BY_ID[node_id]["principle_key"]],
-        "question_count": int(question_count),
     }
     p["attempts"].append(attempt)
     p["attempts"] = p["attempts"][-ATTEMPT_LOG_MAX:]
@@ -1073,10 +1075,8 @@ def _apply_result(user_id: str, node_id: str, score: float, passed: bool, questi
         _refresh_locks(p)
     _save(user_id)
     return {
-        "kuat_result": {
+        "kuat_result": {  # pass / fail only (round 2): no score / count / percent
             "passed": passed,
-            "score": score,
-            "question_count": int(question_count),
             "node_id": node_id,
             "principle_keys": [_NODE_BY_ID[node_id]["principle_key"]],
             "ts": attempt["ts"],
@@ -1099,22 +1099,30 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
     _refresh_locks(p)
     if p["nodes"][node_id]["status"] == STATUS_LOCKED:
         return {"error": "locked", "passed": False, "xp": p["xp"]}
-    score, passed = _grade(node_id, answers)
-    return _apply_result(user_id, node_id, score, passed, len(QUESTIONS.get(node_id, [])))
+    _score, passed = _grade(node_id, answers)
+    return _apply_result(user_id, node_id, passed)
 
 
 def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None) -> dict[str, Any]:
-    """Issue a KUAT attempt (raises academy_store.KuatCooldown while cooling down / too many starts)."""
+    """The learner's KUAT attempt for this node: the open one if still valid, else a new draw
+    (raises academy_store.KuatCooldown while cooling down / too many new attempts)."""
     from welora import academy_store as store
 
     store.check_kuat_allowed(user_id, node_id, ip)
-    served = _draw(node_id)
-    att = store.create_attempt(user_id, node_id, served)
-    return {**kuat_info(node_id), **att, "node_id": node_id, "questions": _served_public(node_id, served)}
+    att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id))
+    return {**kuat_info(node_id), "attempt_id": att["attempt_id"], "expires_at": att["expires_at"],
+            "node_id": node_id, "questions": _served_public(node_id, att["served"])}
+
+
+_SLOT_RE = re.compile(r"^k([1-9][0-9]?)$")
 
 
 def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], answers: list[dict[str, Any]],
                         *, ip: Optional[str] = None) -> dict[str, Any]:
+    """Grade one server-held attempt. Order (round 2): validate (old tab → "reload", nothing
+    counted) → consume the attempt atomically (only one concurrent submit continues) → RESERVE a
+    failed-KUAT slot in every limit bucket BEFORE grading (429 if any is full; the attempt is
+    re-opened, nothing graded) → grade → keep the reserved fail, or release it on pass."""
     from welora import academy_store as store
 
     if node_id not in _NODE_BY_ID:
@@ -1123,18 +1131,37 @@ def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], a
     _refresh_locks(p)
     if p["nodes"][node_id]["status"] == STATUS_LOCKED:
         return {"error": "locked", "passed": False, "xp": p["xp"]}
-    store.check_kuat_allowed(user_id, node_id, ip)
-    # Old clients (page loaded before this deploy) post without attempt_id: the open attempt the
-    # server issued with the lesson is used — still server-held, still single-use.
+    store.check_kuat_allowed(user_id, node_id, ip)  # cooling down → 429 before anything else
+    ids = [str((a or {}).get("question_id") or (a or {}).get("id") or "") for a in answers or [] if isinstance(a, dict)]
+    if not ids or len(ids) != len(answers or []):
+        return {"error": "no_answers"}
+    if not all(_SLOT_RE.match(i) for i in ids):
+        return {"error": "reload"}  # a tab from before the attempt format (canonical question ids)
+    # Clients that post without attempt_id get the open attempt the server issued with the lesson —
+    # still server-held, still single-use.
     aid = (attempt_id or "").strip() or store.latest_open_attempt_id(user_id, node_id)
-    served = store.consume_attempt(aid, user_id, node_id) if aid else None
+    served = store.peek_attempt(aid, user_id, node_id) if aid else None
     if not served:
         return {"error": "attempt_invalid"}
-    score, passed = _grade_served(node_id, served, answers)
-    store.finish_attempt(aid, passed=passed, score=score)
-    if not passed:
-        store.record_kuat_fail(user_id, node_id, ip)
-    return _apply_result(user_id, node_id, score, passed, len(served))
+    if any(int(_SLOT_RE.match(i).group(1)) > len(served) for i in ids):
+        return {"error": "reload"}  # answers for questions this attempt never showed
+    served = store.consume_attempt(aid, user_id, node_id)  # atomic: one concurrent submit wins
+    if not served:
+        return {"error": "attempt_invalid"}
+    try:
+        reservation = store.reserve_kuat_fail(user_id, node_id, ip)
+    except store.KuatCooldown:
+        store.reopen_attempt(aid, user_id, node_id)  # not graded → the learner keeps the attempt
+        raise
+    try:
+        _score, passed = _grade_served(node_id, served, answers)
+        store.finish_attempt(aid, passed=passed)
+    except Exception:
+        reservation.release()
+        raise
+    if passed:
+        reservation.release()
+    return _apply_result(user_id, node_id, passed)
 
 
 def _wait_vi(seconds: int) -> str:
@@ -1149,9 +1176,13 @@ COOLDOWN_MSG_VI = {
     "fails": "Bạn đã làm bài KUAT này chưa đạt vài lần liền. Hãy ôn lại bài học rồi thử lại sau khoảng {wait}.",
     "daily": "Hôm nay bạn đã làm bài KUAT này chưa đạt nhiều lần. Hãy nghỉ ngơi, ôn lại bài và quay lại sau khoảng {wait}.",
     "ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Vui lòng thử lại sau khoảng {wait}.",
+    "guest_ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Hãy đăng nhập tài khoản của bạn hoặc thử lại sau khoảng {wait}.",
+    "device": "Thiết bị này đã làm bài KUAT chưa đạt nhiều lần. Hãy ôn lại bài, đăng nhập tài khoản của bạn hoặc thử lại sau khoảng {wait}.",
     "starts": "Bạn đã mở bài KUAT này quá nhiều lần. Vui lòng thử lại sau khoảng {wait}.",
 }
 ATTEMPT_INVALID_MSG_VI = "Lượt KUAT này đã hết hạn hoặc đã được nộp. Hãy tải lại bài để làm lượt mới."
+RELOAD_MSG_VI = "Bài KUAT trên trang này đã cũ. Vui lòng tải lại trang để làm lượt mới."
+NO_ANSWERS_MSG_VI = "Bạn chưa chọn câu trả lời nào."
 
 
 def cooldown_payload(e: Any) -> dict[str, Any]:
@@ -1226,6 +1257,10 @@ def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, d
         return 403, out
     if out.get("error") == "attempt_invalid":
         return 409, {"error_code": "KUAT_ATTEMPT_INVALID", "message": ATTEMPT_INVALID_MSG_VI}
+    if out.get("error") == "reload":
+        return 409, {"error_code": "KUAT_RELOAD", "message": RELOAD_MSG_VI}
+    if out.get("error") == "no_answers":
+        return 400, {"error_code": "KUAT_NO_ANSWERS", "message": NO_ANSWERS_MSG_VI}
     if out.get("error"):
         return 400, out
     return 200, out

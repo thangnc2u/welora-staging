@@ -34,9 +34,9 @@
 
   /* P0 authz: every user-scoped API now requires Bearer token (owner = token user).
      Same-origin fetch() calls without an Authorization header get one attached:
-       1) the token returned by the most recent POST /auth/device on this page
-          (guest/device identity — kept in memory only, never written to localStorage,
-          so logout / auth-gate behaviour is unchanged);
+       1) the token returned by POST /auth/device on this page, only when there is no
+          usable welora_token (guest/device identity — kept in memory only, never written
+          to localStorage, so logout / auth-gate behaviour is unchanged);
        2) otherwise localStorage.welora_token (password / OTP / demo / admin login),
           unless /auth/me already rejected it on this page. */
   var pageToken = "";
@@ -93,7 +93,8 @@
         return p.then(function (r) {
           if (!r.ok) return r;
           return r.clone().json().then(function (d) {
-            if (d && d.token) pageToken = d.token;
+            /* adopt the guest token only when there is no usable logged-in token */
+            if (d && d.token && (!token() || storedRejected)) pageToken = d.token;
             return r;
           }, function () {
             return r;

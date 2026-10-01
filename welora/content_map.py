@@ -708,27 +708,45 @@ _INTERNAL_META_RE = re.compile(
 
 
 def strip_internal_headers(markdown: str) -> str:
+    """Remove internal WP/WA header blocks everywhere in the body (not just the top).
+
+    A block = internal title (``# WP-02-02: …``) and/or metadata lines (``**Module:**``,
+    ``**Mức rủi ro:**``, ``**Version:**``, ``**Status:**``, ``**principle_key:**`` …) plus the
+    blank lines and the single ``---`` that close it. At the top the title is dropped (the page
+    shows ``title``); in concatenated articles a mid-body title is kept as a plain ``##`` heading
+    without the internal code. User-facing warnings such as ``- **Mức rủi ro: Cao.**`` (bullets,
+    bold text with the colon inside) never match and are kept.
+    """
     if not markdown:
         return markdown
     lines = markdown.splitlines()
-    i = 0
-    stripped = False
-    while i < len(lines):
+    out: list[str] = []
+    i, n, changed = 0, len(lines), False
+    while i < n:
         raw = lines[i].strip()
-        if not raw:
+        title = _INTERNAL_TITLE_RE.match(raw)
+        if not (title or _INTERNAL_META_RE.match(raw)):
+            out.append(lines[i])
             i += 1
             continue
-        if _INTERNAL_TITLE_RE.match(raw) or _INTERNAL_META_RE.match(raw):
-            stripped = True
+        changed = True
+        if title and any(x.strip() for x in out):
+            human = raw[title.end():].strip()
+            if human:
+                out.append("## " + human)
+                out.append("")
+        i += 1
+        while i < n and (not lines[i].strip() or _INTERNAL_META_RE.match(lines[i].strip())):
             i += 1
-            continue
-        if stripped and re.fullmatch(r"-{3,}", raw):
+        if i < n and re.fullmatch(r"-{3,}", lines[i].strip()):
             i += 1
-            continue
-        break
-    if not stripped:
+            while i < n and not lines[i].strip():
+                i += 1
+    if not changed:
         return markdown
-    return "\n".join(lines[i:]).lstrip("\n")
+    text = "\n".join(out)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip("\n")
 
 
 def strip_internal_headers_payload(art: dict) -> dict:

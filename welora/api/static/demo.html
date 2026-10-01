@@ -71,8 +71,15 @@ document.getElementById('run').onclick=async()=>{
   const personaKey=(document.getElementById('persona')||{}).value||'P2';
   const P=PERSONAS[personaKey]||PERSONAS.P2;
   const device=weloraDeviceId();
-  let r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
-  const uid=r.d.user_id;
+  /* P0: logged-in welora_token first; device (guest) token only when there is none */
+  let r;
+  let uid='';
+  if(window.WeloraSession&&WeloraSession.resolveUserId){
+    uid=await WeloraSession.resolveUserId();
+  }else{
+    r=await j('/auth/device',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:device})});
+    uid=r.d.user_id;
+  }
   setStep(1,'tài khoản sẵn sàng','ok');
 
   r=await j('/onboarding/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});

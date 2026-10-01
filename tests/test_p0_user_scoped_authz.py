@@ -228,17 +228,42 @@ class TestMetricsContentAndDemo(_Base):
         self.assertEqual(r.status_code, 403, r.text)
 
     def test_content_body_strips_internal_header_keeps_keys(self):
-        lst = self.call("GET", "/content").json()
-        items = lst.get("items") or lst.get("articles") or []
-        self.assertTrue(items)
+        """No internal WP/WA header block anywhere in any body (incl. the 6 multi-WP keys);
+        user-facing warnings like '- **Mức rủi ro: Cao.**' survive; keys/metadata intact."""
+        import re
+
+        from welora import content_map as cm
+
+        internal = re.compile(
+            r"^\s*(#{1,3}\s*W[PA]-[0-9A-Za-z-]+\s*[:：]|\*\*\s*(Module|Mức rủi ro|Version|Status|principle_key|secondary_keys)\s*:\s*\*\*)",
+            re.IGNORECASE,
+        )
+        items = self.call("GET", "/content").json()["items"]
+        self.assertGreaterEqual(len(items), 38)
+        multi = {"SAFE-01", "BUDG-01", "ADJUST-01", "DEBT-02", "FREE-01", "INSURE-01"}
+        self.assertTrue(multi <= {it["principle_key"] for it in items})
+        kept_warnings = 0
         for it in items:
-            key = it.get("key") or it.get("content_key")
-            art = self.call("GET", f"/content/{key}").json()
-            body = art.get("body") or art.get("body_md") or art.get("markdown") or ""
-            head = "\n".join(body.splitlines()[:6])
-            self.assertNotRegex(head, r"(?m)^# W[PA]-", key)
-            self.assertNotIn("**Mức rủi ro:**", head, key)
-            self.assertEqual(art.get("key") or art.get("content_key"), key)
+            key = it["principle_key"]
+            r = self.call("GET", f"/content/{key}")
+            self.assertEqual(r.status_code, 200, key)
+            art = r.json()
+            body = art["body_markdown"]
+            self.assertTrue(body.strip(), key)
+            bad = [ln for ln in body.splitlines() if internal.match(ln)]
+            self.assertEqual(bad, [], key)
+            self.assertEqual(art["principle_key"], key)
+            self.assertTrue(art.get("risk_level") is not None or art.get("risk_label") is not None, key)
+            # user-facing "Mức rủi ro:" warning lines from the raw source are all preserved
+            _, raw = cm.service_get_content(key)
+            raw_warn = [ln for ln in raw["body_markdown"].splitlines() if "Mức rủi ro:" in ln and not internal.match(ln)]
+            got_warn = [ln for ln in body.splitlines() if "Mức rủi ro:" in ln]
+            self.assertEqual(raw_warn, got_warn, key)
+            kept_warnings += len(got_warn)
+            if key in multi:
+                self.assertTrue(re.search(r"(?m)^# WP-", raw["body_markdown"].split("\n", 3)[-1]), f"{key}: fixture no longer multi-WP")
+        self.assertGreater(kept_warnings, 0)
+        self.assertTrue(any(ln.lstrip().startswith("- **Mức rủi ro:") for it in items for ln in self.call("GET", f"/content/{it['principle_key']}").json()["body_markdown"].splitlines()))
 
     def test_demo_personas_login_and_read_own_data(self):
         from welora.auth import DEMO_PASSWORD
@@ -272,6 +297,11 @@ class TestMetricsContentAndDemo(_Base):
             s = html.find('src="/static/session.js"')
             i = html.find("<script>")
             self.assertTrue(0 <= s < i, f"{page}: session.js must load before inline scripts")
+        # logged-in token first; a device token is minted only when there is none
+        self.assertIn("(!token() || storedRejected)", js)
+        for page in ("parser", "prerule", "demo", "constitution", "onboarding"):
+            html = (STATIC / f"{page}.html").read_text(encoding="utf-8")
+            self.assertIn("WeloraSession.resolveUserId", html, page)
 
     def test_invariants_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)

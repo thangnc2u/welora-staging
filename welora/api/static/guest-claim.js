@@ -3,8 +3,9 @@
    auth page calls WeloraGuestClaim.run(accountToken): it re-opens the guest session for this
    browser's welora_device_id (POST /auth/device → guest token, the proof of ownership) and posts
    it to /auth/guest/claim with the account bearer. The server is idempotent and applies the
-   conflict policy (account data wins). The marker is cleared on any final answer; a network error
-   or 429 keeps it for the next login. Never blocks navigation for long (≤ ~4 s). */
+   conflict policy (account data wins). The marker is cleared ONLY when the claim answers
+   200 (claimed or already); every error (4xx/5xx/429/network/timeout) keeps it so the next login
+   retries. Never blocks navigation for long (≤ ~4 s). */
 (function (w) {
   var MARK = "welora_guest_claim";
   var DEVICE_KEY = "welora_device_id";
@@ -28,20 +29,16 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device_id: get(DEVICE_KEY) })
     });
-    if (!g.ok) {
-      if (g.status === 403 || g.status === 400) clear(); /* not a guest device any more */
-      return { ok: false, status: g.status };
-    }
+    if (!g.ok) return { ok: false, status: g.status };
     var gd = await g.json().catch(function () { return {}; });
     if (!gd.token) return { ok: false, status: 0 };
-    if (gd.created) { clear(); return { ok: true, status: 200, body: { nothing: true } }; } /* fresh, empty guest */
     var r = await fetch("/auth/guest/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + accountToken },
       body: JSON.stringify({ guest_token: gd.token })
     });
     var body = await r.json().catch(function () { return {}; });
-    if (r.status !== 429 && r.status < 500) clear();
+    if (r.status === 200 && body && body.ok === true) clear(); /* claimed or already — never on errors */
     return { ok: r.ok, status: r.status, body: body };
   }
 

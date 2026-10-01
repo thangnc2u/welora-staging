@@ -9,7 +9,9 @@ the browser that holds that guest session has the token, so one user cannot clai
 data by knowing a user_id or device_id. The guest must be a *pure device guest* (no credentials,
 role guest, never logged in by another method) and must differ from the account.
 
-TARGET — only self-registered accounts (role ``guest`` with email/phone credentials). Shared demo
+TARGET — only real user accounts (role ``guest``) with a verified login: password + email/phone,
+a verified e-mail (e-mail OTP), or a consumed phone-OTP challenge (phone-OTP-only accounts have no
+password — they are valid targets so OTP login auto-claims too). Shared demo
 persona accounts (role ``demo``) and admin roles are refused (403 CLAIM_TARGET_NOT_ALLOWED), so a
 partner walkthrough never pollutes P1–P6.
 
@@ -99,6 +101,26 @@ def _user_row(conn, uid: str) -> Optional[Any]:
     ).fetchone()
 
 
+def _has_verified_login(conn, acc) -> bool:
+    """A claim target must be a real, verified account (CoS review #239):
+    - password + email/phone (register / password login), or
+    - a verified e-mail (``email_verified_at`` — e-mail OTP), or
+    - a consumed phone-OTP challenge owned by the account (phone-OTP accounts have no password and
+      keep the phone only in their challenges).
+    A pure device guest has none of these."""
+    pw = bool(str(acc["password_hash"] or "").strip())
+    email = bool(str(acc["email"] or "").strip())
+    phone = bool(str(acc["phone"] or "").strip())
+    if pw and (email or phone):
+        return True
+    if email and str(acc["email_verified_at"] or "").strip():
+        return True
+    row = conn.execute(
+        "SELECT 1 FROM otp_challenges WHERE user_id=? AND consumed=1 LIMIT 1", (acc["user_id"],)
+    ).fetchone()
+    return bool(row)
+
+
 def claim_guest_data(account_uid: str, guest_token: str) -> dict[str, Any]:
     account_uid = str(account_uid or "").strip()
     guest_token = str(guest_token or "").strip()
@@ -130,10 +152,7 @@ def claim_guest_data(account_uid: str, guest_token: str) -> dict[str, Any]:
         if state != "ok" or not auth_svc._is_pure_device_guest(conn, g):
             raise ClaimError(403, "INVALID_GUEST_TOKEN", CLAIM_MSG_INVALID)
         role = str(acc["role"] or "guest").strip().lower()
-        has_creds = bool(str(acc["password_hash"] or "").strip()) and bool(
-            str(acc["email"] or "").strip() or str(acc["phone"] or "").strip()
-        )
-        if role != "guest" or not has_creds:
+        if role != "guest" or not _has_verified_login(conn, acc):
             if auth_svc._is_pure_device_guest(conn, acc):
                 raise ClaimError(400, "CLAIM_SELF", CLAIM_MSG_SELF)
             raise ClaimError(403, "CLAIM_TARGET_NOT_ALLOWED", CLAIM_MSG_TARGET)

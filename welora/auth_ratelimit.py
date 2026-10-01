@@ -19,6 +19,12 @@ returning guest (same device_id, a call on every page load) is never locked out 
 Normal use (re-using an existing device_id) only touches the generous ``device`` bucket; minting
 many guest users from one IP hits ``device_new``.
 
+Client-IP buckets (CoS review #239): IPv4 per address; IPv6 per /64 (``ip_bucket``), IPv4-mapped
+IPv6 counts as the IPv4 address — for every action including login and /auth/device.
+
+``event`` (client analytics POST /api/core/v1/entitlements/events): per signed-in user
+(``user:<id>``), WELORA_RL_EVENT_USER_MAX (60 / window).
+
 ``/auth/login`` counts FAILED attempts only (action ``login_fail``) — partner staff share the P1–P6
 demo accounts, so correct logins must never consume quota. Buckets per window:
   * ``pair``    account + client IP     WELORA_RL_LOGIN_PAIR_MAX     (10)
@@ -67,7 +73,7 @@ from welora.db.connection import get_connection
 
 log = logging.getLogger("welora.auth_ratelimit")
 RATE_LIMIT_MSG = "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút."
-ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register", "device", "device_new")
+ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register", "device", "device_new", "event")
 LOGIN_FAIL_ACTION = "login_fail"
 _PRUNE_AFTER_S = 24 * 3600
 
@@ -97,6 +103,8 @@ def limits(action: str) -> tuple[int, int]:
         return 0, _env_int("WELORA_RL_DEVICE_IP_MAX", 300)
     if action == "device_new":  # POST /auth/device that would CREATE a new guest user — IP only
         return 0, _env_int("WELORA_RL_DEVICE_NEW_IP_MAX", 30)
+    if action == "event":  # POST /api/core/v1/entitlements/events — per signed-in user only
+        return _env_int("WELORA_RL_EVENT_USER_MAX", 60), 0
     return _env_int("WELORA_RL_TARGET_MAX", 5), _env_int("WELORA_RL_IP_MAX", 20)
 
 
@@ -105,7 +113,10 @@ def _iso(ts: float) -> str:
 
 
 def normalise_target(value: Optional[str]) -> str:
-    v = (value or "").strip().lower()
+    raw = (value or "").strip()
+    if raw.startswith("user:"):
+        return raw  # resolved account / signed-in user id — opaque, case kept, never parsed as phone
+    v = raw.lower()
     if not v:
         return ""
     if "@" in v:
@@ -117,6 +128,25 @@ def normalise_target(value: Optional[str]) -> str:
         return "phone:" + e164  # same bucket for 0900…, +84900…, 84900… (item 9)
     digits = re.sub(r"\D", "", v)
     return "phone:" + (digits or v)
+
+
+def ip_bucket(ip: Optional[str]) -> str:
+    """Rate-limit key for a client IP (CoS review #239). IPv4 → the address. IPv6 → its /64
+    network (one subscriber / LAN typically owns a whole /64, so rotating the interface id must not
+    yield fresh buckets). IPv4-mapped IPv6 (``::ffff:a.b.c.d``) → the IPv4 address. Anything
+    unparseable is used verbatim (lower-cased)."""
+    v = (ip or "").strip()
+    if not v:
+        return ""
+    try:
+        addr = ipaddress.ip_address(v)
+    except ValueError:
+        return v.lower()
+    if addr.version == 6:
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return str(addr)
 
 
 def _key_hash(scope: str, key: str) -> str:
@@ -244,7 +274,7 @@ def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], u
     if tgt and tmax > 0:
         scopes.append(("target", _key_hash("target", tgt), tmax))
     if ip and imax > 0:
-        scopes.append(("ip", _key_hash("ip", ip.strip().lower()), imax))
+        scopes.append(("ip", _key_hash("ip", ip_bucket(ip)), imax))
     if not scopes:
         return
     conn = get_connection(url)
@@ -284,7 +314,7 @@ def login_limits() -> dict[str, int]:
 def _login_scopes(ip: Optional[str], account: Optional[str]) -> list[tuple[str, str, int]]:
     lim = login_limits()
     acc = (account or "").strip()
-    ipk = (ip or "").strip().lower()
+    ipk = ip_bucket(ip)
     out: list[tuple[str, str, int]] = []
     if acc and ipk and lim["pair"] > 0:
         out.append(("pair", _key_hash("pair", acc + "|" + ipk), lim["pair"]))
@@ -402,7 +432,7 @@ def login_release(attempt: LoginAttempt) -> None:
 def login_clear_pair(*, ip: Optional[str], account: Optional[str], url: Optional[str] = None) -> None:
     """A successful login forgets that (account, IP) pair's failures; account/IP totals stay."""
     acc = (account or "").strip()
-    ipk = (ip or "").strip().lower()
+    ipk = ip_bucket(ip)
     if not (acc and ipk):
         return
 

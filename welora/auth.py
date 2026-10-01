@@ -17,7 +17,8 @@ from uuid import uuid4
 
 from welora.db.connection import get_connection
 from welora.db.migrate import migrate
-from welora.phone import find_user_by_phone, normalize_phone_e164, phone_taken
+from welora.phone import PHONE_CONFLICT_MSG, PhoneConflictError, candidate_rows as phone_candidate_rows
+from welora.phone import find_user_by_phone, normalize_phone_e164, phone_conflicted, phone_taken
 from welora.phone import lookup_candidates as phone_lookup_candidates
 from welora.phone import try_normalize as try_normalize_phone
 
@@ -403,6 +404,12 @@ def verify_otp(
             conn.commit()
             raise ValueError("invalid code")
 
+        # CoS review #239: an ambiguous number (migration collision) never signs anyone in by OTP —
+        # the caller proved possession of the phone (right code), so telling them is no leak.
+        _otp_e164 = try_normalize_phone(row["phone"])
+        if _otp_e164 and phone_conflicted(conn, _otp_e164):
+            raise PhoneConflictError(PHONE_CONFLICT_MSG)
+
         # P0 follow-up: consume atomically BEFORE issuing anything — of two concurrent verifies
         # with the right code only the one whose conditional UPDATE hits the row (rowcount 1) wins.
         cur = conn.execute(
@@ -566,6 +573,8 @@ def service_otp_verify(body: dict) -> tuple[int, dict]:
     try:
         out = verify_otp(body.get("challenge_id") or "", body.get("code") or "")
         return 200, out
+    except PhoneConflictError as e:
+        return 409, {"error_code": "PHONE_CONFLICT_USE_EMAIL", "message": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except KeyError:
@@ -790,6 +799,17 @@ def login_guest(
                 "SELECT * FROM users WHERE email=?", (email_n,)
             ).fetchone()
         if row is None and phone_n:
+            if phone_conflicted(conn, phone_n):
+                # CoS review #239: an ambiguous number (several accounts) never logs anyone in —
+                # no account is preferred. Only a caller who knows the password of one of the
+                # accounts learns why (otherwise the same generic 401 as an unknown number).
+                hashes = [r["password_hash"] for r in phone_candidate_rows(conn, phone_n, "password_hash")
+                          if str(r["password_hash"] or "").strip()]
+                if not hashes:
+                    _dummy_password_check(pw)
+                if any(_verify_password(pw, h) for h in hashes):
+                    raise PhoneConflictError(PHONE_CONFLICT_MSG)
+                raise ValueError("email/số điện thoại hoặc mật khẩu không đúng")
             row = find_user_by_phone(conn, phone_n)
         if not row or not row["password_hash"]:
             _dummy_password_check(pw)  # same cost as a real check — no timing oracle (item 10)
@@ -824,6 +844,10 @@ def logout_guest(token: str, *, url: str | None = None) -> dict[str, Any]:
 
 
 RESET_GENERIC_MSG = "Nếu tài khoản tồn tại, yêu cầu đặt lại mật khẩu đã được ghi nhận."
+PHONE_RESET_HINT = (
+    "Nếu số điện thoại này gắn với nhiều tài khoản (dữ liệu cũ), không thể đặt lại mật khẩu bằng số "
+    "điện thoại — vui lòng dùng email của tài khoản."
+)
 
 
 def reset_echo_enabled() -> bool:
@@ -861,6 +885,9 @@ def request_password_reset(
         "reset_echo": echo,
         "delivery": "none",
     }
+    # CoS review #239: identical in every response (email or phone, existing or not — no
+    # enumeration). An ambiguous phone number (several accounts) never gets a token.
+    base["phone_note"] = PHONE_RESET_HINT
     if not echo:
         return base  # no lookup, no token: nothing to deliver it with
 
@@ -1106,6 +1133,8 @@ def service_login(body: dict) -> tuple[int, dict]:
             password=body.get("password") or "",
         )
         return 200, out
+    except PhoneConflictError as e:
+        return 409, {"error_code": "PHONE_CONFLICT_USE_EMAIL", "message": str(e)}
     except ValueError as e:
         return 401, {"error": str(e)}
     except PermissionError as e:

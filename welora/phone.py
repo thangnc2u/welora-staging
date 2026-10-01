@@ -65,22 +65,55 @@ def lookup_candidates(e164: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+PHONE_CONFLICT_MSG = (
+    "Số điện thoại này đang gắn với nhiều tài khoản (dữ liệu cũ) nên tạm thời không dùng được để "
+    "đăng nhập hoặc đặt lại mật khẩu. Vui lòng đăng nhập bằng email; nếu tài khoản chưa có email, "
+    "hãy liên hệ hỗ trợ Welora."
+)
+
+
+class PhoneConflictError(Exception):
+    """The number is ambiguous (several accounts) — phone login / OTP / reset are refused."""
+
+    def __init__(self, message: str = PHONE_CONFLICT_MSG) -> None:
+        super().__init__(message)
+
+
 def pick_phone_row(rows: Iterable[Any], e164: str) -> Optional[Any]:
-    """Exact E.164 row wins; one legacy-format row is accepted; several legacy rows for the same
-    number (an unresolved migration collision) are ambiguous → None (caller refuses)."""
+    """Exactly one row for the number → that row. Several rows (e.g. legacy '0900…' AND '+84900…'
+    = two accounts, an unresolved migration collision) are AMBIGUOUS → None — no account is
+    preferred (CoS review #239: the +84 row no longer wins; callers refuse the phone path)."""
     rows = list(rows)
-    exact = [r for r in rows if r["phone"] == e164]
-    if exact:
-        return exact[0]
     return rows[0] if len(rows) == 1 else None
 
 
-def find_user_by_phone(conn, e164: str, cols: str = "*") -> Optional[Any]:
+def candidate_rows(conn, e164: str, cols: str = "*") -> list[Any]:
     cands = lookup_candidates(e164)
-    rows = conn.execute(
+    return list(conn.execute(
         f"SELECT {cols} FROM users WHERE phone IN (" + ",".join("?" * len(cands)) + ")", tuple(cands)
-    ).fetchall()
-    return pick_phone_row(rows, e164)
+    ).fetchall())
+
+
+def phone_conflicted(conn, e164: str) -> bool:
+    """True when this number cannot identify ONE account: it is recorded in
+    ``phone_e164_conflicts`` (migration 014 collision report, any table) or more than one user row
+    currently matches its stored forms. Resolution is manual (fix the rows, delete the report row)."""
+    if not e164:
+        return False
+    if len(candidate_rows(conn, e164, "user_id")) > 1:
+        return True
+    row = conn.execute("SELECT 1 FROM phone_e164_conflicts WHERE normalized=? LIMIT 1", (e164,)).fetchone()
+    return row is not None
+
+
+def find_user_by_phone(conn, e164: str, cols: str = "*") -> Optional[Any]:
+    """The single account for this number, or None (unknown OR conflicted — callers that need to
+    tell the owner apart check ``phone_conflicted`` themselves without leaking existence)."""
+    if phone_conflicted(conn, e164):
+        return None
+    if "phone" not in cols and cols.strip() != "*":
+        cols = cols + ", phone"
+    return pick_phone_row(candidate_rows(conn, e164, cols), e164)
 
 
 def phone_taken(conn, e164: str) -> bool:

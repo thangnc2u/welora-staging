@@ -78,7 +78,7 @@ document.getElementById('btnVerify').addEventListener('click', async()=>{
   if(!challenge||!code){showErr('Cần mã OTP sau khi xin mã');return;}
   try{
     const r=await fetch('/auth/otp/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({challenge_id:challenge,code})});
-    if(!r.ok){showErr('Mã không đúng hoặc đã hết hạn');return;}
+    if(!r.ok){const e=await r.json().catch(()=>({}));showErr((r.status===409&&e.detail&&e.detail.message)||'Mã không đúng hoặc đã hết hạn');return;}
     const d=await r.json();
     const tok=d.token||'';
     if(tok) localStorage.setItem('welora_token',tok);

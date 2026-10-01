@@ -1887,18 +1887,64 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/api/core/v1/entitlements/events", tags=["entitlements"])
-    def entitlements_events(body: EntitlementEventBody, authorization: Optional[str] = Header(None)) -> dict:
+    async def entitlements_events(request: Request, authorization: Optional[str] = Header(None)) -> dict:
         """Client analytics events (item 7): a live user session is required and the event is
         stamped with the token user. Client names must be namespaced (``pricing.view``) so they
-        can never imitate server events (subscription_granted, refund_completed, …)."""
+        can never imitate server events (subscription_granted, refund_completed, …).
+        CoS review #239: the body is capped (WELORA_EVENT_MAX_BYTES, 413) and must be a small flat
+        payload (≤ 20 keys, key ≤ 40 chars, scalar values, strings ≤ 256 chars → else 422), and each
+        user is rate-limited (WELORA_RL_EVENT_USER_MAX per WELORA_RL_WINDOW_S, DB-backed, 429)."""
+        import json as _json
         import re as _re
 
-        uid = _require_user(authorization)
+        from starlette.concurrency import run_in_threadpool
+
+        from welora import auth_ratelimit as rl
+
+        uid = await run_in_threadpool(_require_user, authorization)  # DB calls off the event loop
+        max_bytes = max(256, rl._env_int("WELORA_EVENT_MAX_BYTES", 2048))
+        too_large = HTTPException(status_code=413, detail={"error_code": "EVENT_TOO_LARGE",
+                                                           "message": "Dữ liệu sự kiện quá lớn."})
+        try:
+            declared = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            declared = 0
+        if declared > max_bytes:
+            raise too_large
+        raw = bytearray()
+        async for chunk in request.stream():  # bounded read: never buffers more than max_bytes + 1 chunk
+            raw.extend(chunk)
+            if len(raw) > max_bytes:
+                raise too_large
+        bad = HTTPException(status_code=422, detail={"error_code": "EVENT_PAYLOAD_INVALID",
+                                                     "message": "Dữ liệu sự kiện không hợp lệ."})
+        try:
+            data = _json.loads(bytes(raw) or b"null")
+            body = EntitlementEventBody(**data) if isinstance(data, dict) else None
+        except Exception:
+            body = None
+        if body is None:
+            raise bad
         name = (body.event or "").strip()
         if not _re.fullmatch(r"[a-z][a-z0-9_]*(\.[a-z0-9_]+)+", name) or len(name) > 64:
             raise HTTPException(status_code=422, detail={"error_code": "EVENT_NAME_INVALID",
                                                          "message": "Tên sự kiện không hợp lệ."})
         payload = dict(body.payload or {})
+        if len(payload) > 20:
+            raise bad
+        for k, v in payload.items():
+            if not _re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", str(k)):
+                raise bad
+            if isinstance(v, str):
+                if len(v) > 256:
+                    raise bad
+            elif v is not None and not isinstance(v, (bool, int, float)):
+                raise bad  # no nested objects / lists
+        try:
+            await run_in_threadpool(rl.check_and_record, "event", ip=None, target="user:" + uid)
+        except rl.RateLimited as e:
+            raise HTTPException(status_code=429, detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+                                headers={"Retry-After": str(e.retry_after)})
         payload["user_id"] = uid  # never trust a client-supplied user_id
         payload["source"] = "client"
         return entitlements_svc.emit_event(name, payload)

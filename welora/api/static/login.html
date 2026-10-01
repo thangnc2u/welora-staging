@@ -87,7 +87,7 @@ document.getElementById('btnLogin').addEventListener('click', async()=>{
   try{
     const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){showErr((d.detail&&d.detail.error)||d.error||'Đăng nhập thất bại');return;}
+    if(!r.ok){const dt=d.detail;showErr((typeof dt==='string'&&dt)||(dt&&(dt.message||dt.error))||d.error||'Đăng nhập thất bại');return;}
     const tok=d.token||'';
     if(tok) localStorage.setItem(TOKEN_KEY,tok);
     /* Follow-up 2: move this browser's guest onboarding result into the account (if any). */

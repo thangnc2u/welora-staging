@@ -876,13 +876,11 @@ def _grade(node_id: str, answers: list[dict[str, Any]]) -> tuple[float, bool, li
 
 
 def _wire_mastery(user_id: str) -> None:
-    from welora.mastery import STATES, get_node as mget, service_patch_mastery
+    """The ONLY user-driven way to gate mastery: a KUAT for the gate node graded here on the
+    server (``_grade`` against QUESTIONS, never a client verdict) → mastery "apply" (source academy)."""
+    from welora.mastery import grant_from_academy
 
-    rank = {s: i for i, s in enumerate(STATES)}
-    cur = mget(user_id, MASTERY_NODE)
-    if rank.get(cur.state, 0) >= rank["apply"]:
-        return
-    service_patch_mastery(user_id, {"state": "apply", "node_id": MASTERY_NODE})
+    grant_from_academy(user_id)
 
 
 def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> dict[str, Any]:

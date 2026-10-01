@@ -42,8 +42,10 @@ def set_user_flags(
     *,
     has_dangerous_debt: bool = False,
     debt_on_track: bool = True,
-    mastery_no_efund_invest: str = "apply",
+    mastery_no_efund_invest: str = "not_started",
 ) -> None:
+    """In-process flags (server code only — fixtures, demo seed, debt sync). Default mastery is
+    fail-closed "not_started" (it used to default to "apply")."""
     USER_FLAGS[user_id] = {
         "has_dangerous_debt": has_dangerous_debt,
         "debt_on_track": debt_on_track,
@@ -72,15 +74,37 @@ def get_user_flags(user_id: str) -> dict[str, Any]:
     }
 
 
+def effective_mastery_state(user_id: str) -> str:
+    """Mastery the gate uses: in-process copy written by server code (USER_FLAGS, then the mastery
+    store), else — DB store — the user_flags row, trusted only with a server source (repos)."""
+    if user_id in USER_FLAGS:
+        return str(USER_FLAGS[user_id].get("mastery_no_efund_invest") or "not_started")
+    try:
+        from welora.mastery import get_node
+
+        store_state = get_node(user_id).state
+    except Exception:
+        store_state = "not_started"
+    if store_state != "not_started" or not _use_db_store():
+        return store_state
+    try:
+        from welora.db.repos import get_user_flags_db
+
+        return str(get_user_flags_db(user_id).get("mastery_no_efund_invest") or "not_started")
+    except Exception:
+        return "not_started"
+
+
 def _sync_debt_flags(user_id: str, debt) -> None:
+    """Debt goal progress → debt flags only. Mastery is carried over unchanged (never derived from
+    goal progress): the DB write leaves mastery + its source untouched."""
     from welora.goal_debt_payoff import debt_on_track_from_goal, has_dangerous_debt_from_goal
 
-    flags = get_user_flags(user_id)
     set_user_flags(
         user_id,
         has_dangerous_debt=has_dangerous_debt_from_goal(debt),
         debt_on_track=debt_on_track_from_goal(debt),
-        mastery_no_efund_invest=str(flags.get("mastery_no_efund_invest") or "not_started"),
+        mastery_no_efund_invest=effective_mastery_state(user_id),
     )
     if _use_db_store():
         try:
@@ -89,7 +113,7 @@ def _sync_debt_flags(user_id: str, debt) -> None:
                 user_id,
                 has_dangerous_debt=has_dangerous_debt_from_goal(debt),
                 debt_on_track=debt_on_track_from_goal(debt),
-                mastery_no_efund_invest=str(flags.get("mastery_no_efund_invest") or "not_started"),
+                mastery_no_efund_invest=None,
             )
         except Exception:
             pass
@@ -277,17 +301,11 @@ def service_safety_gate(user_id: str) -> tuple[int, dict]:
     if _use_db_store():
         try:
             from welora.db.repos import get_user_flags_db
-            from welora.mastery import get_node
             db = get_user_flags_db(user_id)
             flags["has_dangerous_debt"] = bool(db.get("has_dangerous_debt"))
             flags["debt_on_track"] = bool(db.get("debt_on_track", True))
-            store_state = get_node(user_id).state
-            if user_id in USER_FLAGS:
-                flags["mastery_no_efund_invest"] = USER_FLAGS[user_id]["mastery_no_efund_invest"]
-            elif store_state != "not_started":
-                flags["mastery_no_efund_invest"] = store_state
-            else:
-                flags["mastery_no_efund_invest"] = db.get("mastery_no_efund_invest") or "not_started"
+            # server-written mastery only (unproven DB rows read as not_started — repos)
+            flags["mastery_no_efund_invest"] = effective_mastery_state(user_id)
         except Exception:
             pass
     flags = _apply_debt_goal_flags(user_id, flags)

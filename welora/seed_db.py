@@ -79,7 +79,8 @@ def seed_fixture(
     completed = ob.complete_session(s.session_id)
 
     goal = goals.create_for_user(uid, essential, current_amount=current_amount, linked_from_onboarding=True)
-    set_user_flags_db(uid, has_dangerous_debt=has_debt, debt_on_track=debt_on_track, mastery_no_efund_invest=mastery, url=url)
+    set_user_flags_db(uid, has_dangerous_debt=has_debt, debt_on_track=debt_on_track, mastery_no_efund_invest=mastery,
+                      mastery_source="seed", url=url)
 
     gate = compute_safety_gate_from_amounts(
         current_efund_amount=goal.current_amount,
@@ -191,6 +192,7 @@ def seed_persona(
         has_dangerous_debt=has_debt,
         debt_on_track=debt_on_track,
         mastery_no_efund_invest=mastery,
+        mastery_source="seed",
         url=url,
     )
     set_persona(user_id=uid, persona=persona_id)

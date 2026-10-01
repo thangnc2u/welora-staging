@@ -55,10 +55,12 @@ h1{color:var(--text-primary,#F4F1E8)}
   <div class="badge-card fail" id="masteryBadge">
     <div class="status" id="masteryStatus">Hiểu nguyên tắc · —</div>
     <div class="meta" id="masteryMeta">Cổng kiến thức: chưa</div>
-    <select id="masteryState" hidden>
+    <!-- read-only (P0 "mastery chỉ từ server"): mastery is set by the server from Academy KUAT results -->
+    <select id="masteryState" hidden disabled aria-hidden="true" tabindex="-1">
       <option value="not_started">Chưa bắt đầu</option><option value="learning">Đang học</option>
       <option value="familiar">Quen thuộc</option><option value="apply">Áp dụng</option><option value="mastered">Thành thạo</option>
     </select>
+    <p class="meta" id="masteryReadOnly">Mức hiểu nguyên tắc được cập nhật tự động khi bạn làm đạt bài kiểm tra trên Welorademy — không thể tự chọn.</p>
     <p><a id="ctaMasteryLearn" href="/app/academy">Học trên Welorademy</a> · <a href="/app/content?key=SAFE-02">An Toàn · Khi nào được dùng quỹ</a></p>
   </div>
   <div class="section-title">Điểm sức khỏe</div>
@@ -264,10 +266,6 @@ function render(){
     }
   }
 }
-document.getElementById("masteryState").onchange=async e=>{
-  state.mastery=await api("/users/"+state.userId+"/mastery",{method:"PATCH",body:JSON.stringify({node_id:"no_efund_invest",state:e.target.value})});
-  state.gate=await api("/users/"+state.userId+"/safety-gate"); render();
-};
 document.getElementById("btnCreate").onclick=async()=>{
   const ess=WeloraMoney.parseVnd(document.getElementById("essential").value);
   await api("/goals",{method:"POST",body:JSON.stringify({user_id:state.userId,type:"emergency_fund",essential_expense_monthly:ess,current_amount:0})});

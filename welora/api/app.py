@@ -104,10 +104,6 @@ class PreRuleBody(BaseModel):
     message: str
     context: Optional[dict[str, Any]] = None
 
-class MasteryPatchBody(BaseModel):
-    state: str
-    node_id: Optional[str] = "no_efund_invest"
-
 class CsvParseBody(BaseModel):
     text: str
     filename: Optional[str] = None
@@ -1165,10 +1161,16 @@ def create_app() -> FastAPI:
         return _respond(*service_get_mastery(uid, node_id))
 
     @app.patch("/users/{user_id}/mastery", tags=["mastery"])
-    def mastery_patch(user_id: str, body: MasteryPatchBody, authorization: Optional[str] = Header(None)) -> dict:
+    def mastery_patch(user_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        """P0 "mastery chỉ từ server": refused for EVERY caller (403, Vietnamese). Mastery is written
+        only by the server from Academy KUAT results graded server-side (academy.submit_kuat) and by
+        the demo seed. Kept as an explicit 403 (not removed → 405) so old clients get a clear VI
+        message instead of a generic error. No body is parsed (any payload → same 403)."""
         from welora.mastery import service_patch_mastery
-        uid = _owner(authorization, user_id)
-        return _respond(*service_patch_mastery(uid, body.model_dump()))
+
+        _require_user(authorization)  # 401 without a session, like every user route
+        code, body = service_patch_mastery(user_id, {})
+        raise HTTPException(status_code=code, detail=body)
 
     @app.post("/agent/pre-rule", tags=["agent"])
     def agent_pre_rule(body: PreRuleBody, authorization: Optional[str] = Header(None)) -> dict:

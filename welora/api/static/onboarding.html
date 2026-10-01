@@ -311,7 +311,7 @@ document.getElementById('ctaGoal').onclick=async()=>{
       /* a retry after a completed session (400 "already completed") may still create the goal */
       let cb=null;
       try{ cb=await done.clone().json(); }catch(_e){}
-      const already=done.status===400 && cb && typeof cb.detail==='string' && /already completed/i.test(cb.detail);
+      const already=done.status===400 && cb && typeof cb.detail==='string' && /already completed|đã hoàn tất/i.test(cb.detail);
       if(!already){ await stepOk(done,'err5'); return; }
     }
     let debtHref=null;

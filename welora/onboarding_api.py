@@ -22,7 +22,7 @@ import welora.onboarding as ob
 def service_create_session(body: dict) -> tuple[int, dict]:
     user_id = body.get("user_id")
     if not user_id:
-        return 400, {"error": "user_id is required"}
+        return 400, {"error": ob.MSG_USER_ID_REQUIRED}
     s = ob.create_session(str(user_id))
     return 201, s.to_dict()
 
@@ -30,7 +30,7 @@ def service_create_session(body: dict) -> tuple[int, dict]:
 def service_get_session(session_id: str) -> tuple[int, dict]:
     s = ob.get_session(session_id)
     if not s:
-        return 404, {"error": "session not found"}
+        return 404, {"error": ob.MSG_SESSION_NOT_FOUND}
     return 200, s.to_dict()
 
 
@@ -42,7 +42,7 @@ def service_patch_step(session_id: str, step: int, body: dict) -> tuple[int, dic
             out["proposed_articles"] = ob.propose_constitution(s)
         return 200, out
     except KeyError:
-        return 404, {"error": "session not found"}
+        return 404, {"error": ob.MSG_SESSION_NOT_FOUND}
     except ob.OnboardingEnumError as e:
         return 422, {"error": str(e)}
     except ValueError as e:
@@ -54,7 +54,7 @@ def service_complete(session_id: str) -> tuple[int, dict]:
         result = ob.complete_session(session_id)
         return 200, result
     except KeyError:
-        return 404, {"error": "session not found"}
+        return 404, {"error": ob.MSG_SESSION_NOT_FOUND}
     except ValueError as e:
         return 400, {"error": str(e)}
 
@@ -62,14 +62,14 @@ def service_complete(session_id: str) -> tuple[int, dict]:
 def service_get_dna(user_id: str) -> tuple[int, dict]:
     dna = ob.get_dna(user_id)
     if not dna:
-        return 404, {"error": "dna not found"}
+        return 404, {"error": "Chưa có DNA tài chính — hãy hoàn tất phần Bắt đầu (onboarding)."}
     return 200, dna
 
 
 def service_get_constitution(user_id: str) -> tuple[int, dict]:
     c = ob.get_constitution(user_id)
     if not c:
-        return 404, {"error": "personal constitution not found"}
+        return 404, {"error": "Chưa có Hiến pháp cá nhân — hãy hoàn tất phần Bắt đầu (onboarding)."}
     return 200, c
 
 
@@ -112,7 +112,7 @@ class OnboardingHandler(BaseHTTPRequestHandler):
             code, body = service_complete(m.group(1))
             self._json(code, body)
             return
-        self._json(404, {"error": "not found"})
+        self._json(404, {"error": "Không tìm thấy đường dẫn."})
 
     def do_PATCH(self) -> None:
         path = urlparse(self.path).path
@@ -121,7 +121,7 @@ class OnboardingHandler(BaseHTTPRequestHandler):
             code, body = service_patch_step(m.group(1), int(m.group(2)), self._read_json())
             self._json(code, body)
             return
-        self._json(404, {"error": "not found"})
+        self._json(404, {"error": "Không tìm thấy đường dẫn."})
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -139,7 +139,7 @@ class OnboardingHandler(BaseHTTPRequestHandler):
         if path in ("/health", "/"):
             self._json(200, {"ok": True, "service": "welora-onboarding"})
             return
-        self._json(404, {"error": "not found"})
+        self._json(404, {"error": "Không tìm thấy đường dẫn."})
 
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[onboarding_api] {args[0]}")

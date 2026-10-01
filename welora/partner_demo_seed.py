@@ -271,6 +271,7 @@ def _set_flags(
             has_dangerous_debt=has_dangerous_debt,
             debt_on_track=debt_on_track,
             mastery_no_efund_invest=mastery_no_efund_invest,
+            mastery_source="seed",  # trusted server path (demo personas)
         )
 
 

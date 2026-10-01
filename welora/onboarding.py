@@ -73,11 +73,38 @@ class OnboardingEnumError(ValueError):
     """Enum outside UI allowlist — HTTP layer maps to 422."""
 
 
+# GP UAT: every onboarding validation message is Vietnamese (the FE shows ``detail`` verbatim).
+FIELD_LABELS_VI = {
+    "household": "Hộ gia đình",
+    "life_stage": "Hộ gia đình",
+    "income_stability": "Mức ổn định thu nhập",
+    "family_context": "Hoàn cảnh gia đình",
+    "essential_expense_monthly": "Chi tiêu thiết yếu mỗi tháng",
+    "emergency_fund_months_self": "Số tháng quỹ dự phòng hiện có",
+    "has_dangerous_debt_self": "Nợ nguy hiểm",
+    "near_term_priority": "Ưu tiên gần",
+    "surplus_habit": "Thói quen với tiền dư",
+    "risk_tolerance": "Mức chấp nhận rủi ro",
+    "agent_role_preference": "Vai trò của Agent",
+}
+MSG_USER_ID_REQUIRED = "Thiếu mã người dùng — vui lòng đăng nhập hoặc bắt đầu lại."
+MSG_SESSION_NOT_FOUND = "Không tìm thấy phiên onboarding — vui lòng bắt đầu lại."
+MSG_SESSION_COMPLETED = "Phiên onboarding này đã hoàn tất."
+MSG_STEP_RANGE = "Bước không hợp lệ (chỉ từ 0 đến 5)."
+MSG_STEPS_REQUIRED = "Cần hoàn tất bước 1 và 2 trước khi tạo kết quả."
+
+
+def _enum_msg(field: str) -> str:
+    return f"{FIELD_LABELS_VI.get(field, field)}: lựa chọn chưa hợp lệ — vui lòng chọn một mục có sẵn."
+
+
+def _missing_msg(step: int, field: str) -> str:
+    return f"Bước {step}: vui lòng chọn hoặc nhập «{FIELD_LABELS_VI.get(field, field)}»."
+
+
 def _require_enum(field: str, value: Any, allowed: frozenset) -> Any:
     if value not in allowed:
-        raise OnboardingEnumError(
-            f"{field} must be one of: {', '.join(sorted(str(x) for x in allowed))}"
-        )
+        raise OnboardingEnumError(_enum_msg(field))
     return value
 
 
@@ -235,7 +262,7 @@ def _db_latest_completed(user_id: str, column: str) -> Optional[dict[str, Any]]:
 
 def create_session(user_id: str) -> OnboardingSession:
     if not user_id:
-        raise ValueError("user_id is required")
+        raise ValueError(MSG_USER_ID_REQUIRED)
     s = OnboardingSession(
         session_id=str(uuid4()),
         user_id=str(user_id),
@@ -261,21 +288,21 @@ def get_session(session_id: str) -> Optional[OnboardingSession]:
 def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> OnboardingSession:
     s = get_session(session_id)
     if not s:
-        raise KeyError("session not found")
+        raise KeyError(MSG_SESSION_NOT_FOUND)
     if s.status == "completed":
-        raise ValueError("session already completed")
+        raise ValueError(MSG_SESSION_COMPLETED)
     if step < 0 or step > 5:
-        raise ValueError("step must be 0..5")
+        raise ValueError(MSG_STEP_RANGE)
 
     data = dict(payload or {})
     if step == 1:
         # household (PRD v2) or legacy life_stage — normalize to household + persona_id
         if "income_stability" not in data:
-            raise ValueError("step 1 requires income_stability")
+            raise ValueError(_missing_msg(1, "income_stability"))
         if "family_context" not in data:
-            raise ValueError("step 1 requires family_context")
+            raise ValueError(_missing_msg(1, "family_context"))
         if "household" not in data and "life_stage" not in data:
-            raise ValueError("step 1 requires household (or legacy life_stage)")
+            raise ValueError(_missing_msg(1, "household"))
         try:
             ident = resolve_step1_identity(data)
         except ValueError as e:
@@ -297,13 +324,13 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
             raise ValueError(str(e)) from e
     if step == 2:
         if "essential_expense_monthly" not in data:
-            raise ValueError("step 2 requires essential_expense_monthly")
+            raise ValueError(_missing_msg(2, "essential_expense_monthly"))
         try:
             ess = float(data["essential_expense_monthly"])
         except (TypeError, ValueError) as e:
-            raise ValueError("essential_expense_monthly must be a number") from e
-        if ess <= 0:
-            raise ValueError("essential_expense_monthly must be > 0")
+            raise ValueError("Chi tiêu thiết yếu mỗi tháng phải là một số (đơn vị ₫).") from e
+        if not (ess > 0) or ess == float("inf"):
+            raise ValueError("Chi tiêu thiết yếu mỗi tháng phải lớn hơn 0 ₫.")
         data["essential_expense_monthly"] = ess
         # P2 form locks: emergency_fund_months_self ∈ [0, 3]; debt × priority
         if "emergency_fund_months_self" in data:
@@ -340,7 +367,7 @@ def patch_step(session_id: str, step: int, payload: dict[str, Any]) -> Onboardin
                 rt = int(data["risk_tolerance"])
             except (TypeError, ValueError) as e:
                 raise OnboardingEnumError(
-                    "risk_tolerance must be one of: 1, 2, 3, 4, 5"
+                    "Mức chấp nhận rủi ro phải là một số từ 1 đến 5."
                 ) from e
             data["risk_tolerance"] = _require_enum(
                 "risk_tolerance", rt, RISK_TOLERANCE_VALUES
@@ -411,11 +438,11 @@ def _build_constitution(session: OnboardingSession) -> dict[str, Any]:
 def complete_session(session_id: str) -> dict[str, Any]:
     s = get_session(session_id)
     if not s:
-        raise KeyError("session not found")
+        raise KeyError(MSG_SESSION_NOT_FOUND)
     if s.status == "completed":
-        raise ValueError("session already completed")
+        raise ValueError(MSG_SESSION_COMPLETED)
     if 1 not in s.steps or 2 not in s.steps:
-        raise ValueError("steps 1 and 2 required before complete")
+        raise ValueError(MSG_STEPS_REQUIRED)
 
     dna = _build_dna(s)
     constitution = _build_constitution(s)

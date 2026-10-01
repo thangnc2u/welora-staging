@@ -42,6 +42,55 @@
   var pageToken = "";
   var storedRejected = false;
 
+  /* P0 follow-up — expired / revoked login token (API 401 TOKEN_EXPIRED | AUTH_REQUIRED, or
+     /auth/me 401 for the stored token): clear welora_token and send the user to /app/login.
+     Pages open to guests (onboarding + auth pages) are NOT redirected: the stale token is dropped
+     and the page continues on the in-memory /auth/device guest token. */
+  var GUEST_OK = {
+    "/app/onboarding": 1,
+    "/app/login": 1,
+    "/app/register": 1,
+    "/app/forgot-password": 1,
+    "/app/reset-password": 1,
+    "/app/otp": 1,
+    "/app/admin/login": 1
+  };
+  var REJECT_CODES = { TOKEN_EXPIRED: 1, AUTH_REQUIRED: 1 };
+
+  function currentPath() {
+    return ((w.location && w.location.pathname) || "").replace(/\/+$/, "") || "/app";
+  }
+
+  function onStoredTokenRejected(code) {
+    storedRejected = true;
+    cachedUid = "";
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch (_eRm) {}
+    if (GUEST_OK[currentPath()]) return;
+    try {
+      sessionStorage.setItem("welora_auth_notice", code === "TOKEN_EXPIRED" ? "expired" : "relogin");
+    } catch (_eSs) {}
+    try {
+      w.location.replace("/app/login");
+    } catch (_eNav) {}
+  }
+
+  function errorCode(r) {
+    return r
+      .clone()
+      .json()
+      .then(
+        function (b) {
+          var d = b && (b.detail !== undefined ? b.detail : b);
+          return (d && typeof d === "object" && d.error_code) || "";
+        },
+        function () {
+          return "";
+        }
+      );
+  }
+
   function activeToken() {
     if (pageToken) return pageToken;
     if (storedRejected) return "";
@@ -81,11 +130,39 @@
         }
         init.headers = h;
       }
+      if (path === "/auth/me") {
+        try {
+          var hm = new Headers((init && init.headers) || undefined);
+          var tk = token();
+          sentStored = !!tk && hm.get("Authorization") === "Bearer " + tk;
+        } catch (_eHm) {}
+      }
+      var sentPage = !!pageToken && !sentStored && !!path && path.indexOf("/auth/") !== 0;
       var p = nativeFetch(input, init);
       if (path === "/auth/me") {
         return p.then(function (r) {
-          if (r.status === 401 && sentStored) storedRejected = true;
+          if (r.status === 401 && sentStored) {
+            return errorCode(r).then(function (c) {
+              onStoredTokenRejected(c || "AUTH_REQUIRED");
+              return r;
+            });
+          }
           return r;
+        });
+      }
+      if (path && path.indexOf("/auth/") !== 0 && path.indexOf("/static/") !== 0) {
+        return p.then(function (r) {
+          if (r.status !== 401 || (!sentStored && !sentPage)) return r;
+          return errorCode(r).then(function (c) {
+            if (!REJECT_CODES[c]) return r; /* e.g. ADMIN_2FA_REQUIRED, LOGIN_REQUIRED: page handles */
+            if (sentStored) onStoredTokenRejected(c);
+            else {
+              /* expired in-memory guest token: forget it; next resolveUserId() mints a new one */
+              pageToken = "";
+              cachedUid = "";
+            }
+            return r;
+          });
         });
       }
       if (path === "/auth/device") {

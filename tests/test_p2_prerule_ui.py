@@ -1,4 +1,4 @@
-"""P2 Native UI /app/pre-rule — debug Hard Deny; gated off by default."""
+"""P2 Native UI /app/pre-rule — Hard Deny check page (P0 follow-up: always served, login-gated)."""
 
 from __future__ import annotations
 
@@ -26,11 +26,14 @@ class TestP2PreRuleUi(unittest.TestCase):
         else:
             os.environ["WELORA_DEBUG_PRERULE"] = self._prev
 
-    def test_get_app_prerule_404_by_default(self):
+    def test_get_app_prerule_200_by_default(self):
+        # P0 follow-up: no longer debug-gated (the /app link 404'd); login-gated like /app pages
         r = self.client.get("/app/pre-rule")
-        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.status_code, 200)
         r2 = self.client.get("/app/pre-rule/")
-        self.assertEqual(r2.status_code, 404)
+        self.assertEqual(r2.status_code, 200)
+        self.assertIn("/static/auth-gate.js", r.text)
+        self.assertIn("/static/shell.js", r.text)
 
     def test_get_app_prerule_200_when_debug_on(self):
         os.environ["WELORA_DEBUG_PRERULE"] = "1"

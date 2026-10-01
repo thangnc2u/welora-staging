@@ -1,13 +1,23 @@
 """P0 · rate limits for unauthenticated auth endpoints, counted in the shared DB.
 
-Actions: ``otp_request``, ``otp_verify``, ``forgot_password``. Each allowed attempt records one
+Actions: ``otp_request``, ``otp_verify``, ``forgot_password``, ``login``, ``register``. Each allowed attempt records one
 row per scope (``target`` = normalised phone/email, ``ip`` = client IP) in ``auth_rate_events``
 (migration 013). An attempt is refused (HTTP 429, Vietnamese message) when either scope already
 has ``max`` rows inside the sliding window. Shared DB → limits hold across instances and restarts;
 count-then-insert is not transactional, so concurrent bursts may overshoot by a request or two.
 
 Env (all optional): WELORA_RL_WINDOW_S (900), WELORA_RL_TARGET_MAX (5), WELORA_RL_IP_MAX (20),
-WELORA_RL_VERIFY_TARGET_MAX (10), WELORA_RL_VERIFY_IP_MAX (40). A value ≤ 0 disables that limit.
+WELORA_RL_VERIFY_TARGET_MAX (10), WELORA_RL_VERIFY_IP_MAX (40), WELORA_RL_LOGIN_TARGET_MAX (10),
+WELORA_RL_LOGIN_IP_MAX (30). ``register`` uses the TARGET/IP pair. A value ≤ 0 disables that limit.
+
+Client IP (``client_ip``): CF-Connecting-IP → True-Client-IP → first X-Forwarded-For hop → TCP peer,
+and the headers are honoured ONLY when the peer is a private/loopback address (the proxy). On Render
+every request arrives through Cloudflare + Render's internal proxy, so the peer is always private
+and the headers are always read; Cloudflare overwrites CF-Connecting-IP with the address that
+connected to it, so a client cannot forge its bucket that way. X-Forwarded-For is only a fallback
+(Render appends to a client-supplied XFF, so its first hop is spoofable) and True-Client-IP is
+only set by Cloudflare when that zone option is on — both are consulted only when
+CF-Connecting-IP is absent. Header values that are not valid IP addresses are skipped.
 """
 
 from __future__ import annotations
@@ -24,7 +34,7 @@ from typing import Optional
 from welora.db.connection import get_connection
 
 RATE_LIMIT_MSG = "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút."
-ACTIONS = ("otp_request", "otp_verify", "forgot_password")
+ACTIONS = ("otp_request", "otp_verify", "forgot_password", "login", "register")
 _PRUNE_AFTER_S = 24 * 3600
 
 
@@ -49,6 +59,8 @@ def limits(action: str) -> tuple[int, int]:
     """(per-target max, per-IP max) for an action."""
     if action == "otp_verify":
         return _env_int("WELORA_RL_VERIFY_TARGET_MAX", 10), _env_int("WELORA_RL_VERIFY_IP_MAX", 40)
+    if action == "login":
+        return _env_int("WELORA_RL_LOGIN_TARGET_MAX", 10), _env_int("WELORA_RL_LOGIN_IP_MAX", 30)
     return _env_int("WELORA_RL_TARGET_MAX", 5), _env_int("WELORA_RL_IP_MAX", 20)
 
 
@@ -72,19 +84,51 @@ def _key_hash(scope: str, key: str) -> str:
     return hashlib.sha256(f"welora-rl:{scope}:{key}".encode("utf-8")).hexdigest()
 
 
-def client_ip(peer: Optional[str], forwarded_for: Optional[str]) -> str:
-    """Peer address, or — only when the peer is a private/loopback proxy (Render's edge) — the
-    first X-Forwarded-For hop. A public client therefore cannot spoof its IP bucket; behind the
-    proxy a forged XFF only weakens the per-IP limit (per-target limits still apply)."""
-    peer = (peer or "").strip()
+CLIENT_IP_HEADERS = ("cf-connecting-ip", "true-client-ip")
+
+
+def _valid_ip(value: Optional[str]) -> str:
+    v = (value or "").strip()
+    if not v:
+        return ""
     try:
-        behind_proxy = not peer or ipaddress.ip_address(peer).is_private or ipaddress.ip_address(peer).is_loopback
+        return str(ipaddress.ip_address(v))
     except ValueError:
-        behind_proxy = True  # e.g. "testclient"
-    if behind_proxy and forwarded_for:
-        first = forwarded_for.split(",")[0].strip()
-        if first:
-            return first
+        return ""
+
+
+def _peer_is_proxy(peer: str) -> bool:
+    if not peer:
+        return True
+    try:
+        ip = ipaddress.ip_address(peer)
+    except ValueError:
+        return True  # e.g. "testclient" / unix socket
+    return ip.is_private or ip.is_loopback
+
+
+def client_ip(peer: Optional[str], forwarded_for: Optional[str] = None, *, headers=None) -> str:
+    """Real client IP for rate-limit buckets (see module docstring for the trust rules).
+
+    ``headers``: any mapping with case-insensitive ``.get`` (Starlette ``request.headers``) or a
+    plain dict; ``forwarded_for`` is kept for callers that only have X-Forwarded-For."""
+    peer = (peer or "").strip()
+    if _peer_is_proxy(peer):
+        get = None
+        if headers is not None:
+            low = {str(k).lower(): v for k, v in headers.items()} if isinstance(headers, dict) else None
+            get = (lambda k: low.get(k)) if low is not None else (lambda k: headers.get(k))
+        if get is not None:
+            for name in CLIENT_IP_HEADERS:
+                ip = _valid_ip(get(name))
+                if ip:
+                    return ip
+            if forwarded_for is None:
+                forwarded_for = get("x-forwarded-for")
+        if forwarded_for:
+            first = _valid_ip(forwarded_for.split(",")[0])
+            if first:
+                return first
     return peer or "unknown"
 
 

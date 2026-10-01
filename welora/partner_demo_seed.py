@@ -242,6 +242,38 @@ def _now() -> str:
     )
 
 
+def _db_store_mode() -> bool:
+    store_hint = (os.environ.get("WELORA_STORE") or "memory").strip().lower()
+    has_db = bool((os.environ.get("WELORA_DB_URL") or "").strip())
+    return store_hint in ("sqlite", "postgres", "db") or (has_db and store_hint != "memory")
+
+
+def _set_flags(
+    user_id: str,
+    *,
+    has_dangerous_debt: bool,
+    debt_on_track: bool,
+    mastery_no_efund_invest: str,
+) -> None:
+    """In-process flags + (DB store) the user_flags row, so the gate is the same on every
+    instance and after a restart (P0 follow-up: P2 used to read mastery_missing after deploy)."""
+    set_user_flags(
+        user_id,
+        has_dangerous_debt=has_dangerous_debt,
+        debt_on_track=debt_on_track,
+        mastery_no_efund_invest=mastery_no_efund_invest,
+    )
+    if _db_store_mode():
+        from welora.db.repos import set_user_flags_db
+
+        set_user_flags_db(
+            user_id,
+            has_dangerous_debt=has_dangerous_debt,
+            debt_on_track=debt_on_track,
+            mastery_no_efund_invest=mastery_no_efund_invest,
+        )
+
+
 def _clear_user_demo_data(user_id: str, *, url: Optional[str] = None) -> None:
     for sid, s in list(ob.SESSIONS.items()):
         if getattr(s, "user_id", None) == user_id:
@@ -545,7 +577,7 @@ def seed_p2_on_user(user_id: str) -> dict[str, Any]:
     debt.goal_id = P2_GOAL_DEBT
     _save_goal(debt)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=False,
         debt_on_track=True,
@@ -672,7 +704,7 @@ def seed_p4_on_user(user_id: str) -> dict[str, Any]:
     ef.goal_id = P4_GOAL_EF
     _save_goal(ef)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=True,
         debt_on_track=False,
@@ -790,7 +822,7 @@ def seed_p1_on_user(user_id: str) -> dict[str, Any]:
     debt.goal_id = P1_GOAL_DEBT
     _save_goal(debt)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=True,
         debt_on_track=False,
@@ -896,7 +928,7 @@ def seed_p3_on_user(user_id: str) -> dict[str, Any]:
     ef.goal_id = P3_GOAL_EF
     _save_goal(ef)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=False,
         debt_on_track=True,
@@ -1011,7 +1043,7 @@ def seed_p5_on_user(user_id: str) -> dict[str, Any]:
     debt.goal_id = P5_GOAL_DEBT
     _save_goal(debt)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=True,
         debt_on_track=True,
@@ -1116,7 +1148,7 @@ def seed_p6_on_user(user_id: str) -> dict[str, Any]:
     ef.goal_id = P6_GOAL_EF
     _save_goal(ef)
 
-    set_user_flags(
+    _set_flags(
         user_id,
         has_dangerous_debt=False,
         debt_on_track=True,

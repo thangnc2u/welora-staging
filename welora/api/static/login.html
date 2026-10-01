@@ -39,6 +39,7 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
   <a id="tabLogin" class="on" href="/app/login">Đăng nhập</a>
   <a id="tabRegister" href="/app/register">Đăng ký</a>
 </nav>
+<p class="muted" id="authNotice" hidden></p>
 <div class="card">
   <label for="identifier">Email hoặc Số điện thoại</label>
   <input id="identifier" type="text" autocomplete="username" inputmode="email" placeholder="ban@email.com hoặc +84…"/>
@@ -54,6 +55,15 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 </div>
 <script>
 const TOKEN_KEY='welora_token';
+/* P0 follow-up: session.js sets this when an API rejected the stored token (expired/invalid). */
+(function(){
+  let n='';
+  try{ n=sessionStorage.getItem('welora_auth_notice')||''; sessionStorage.removeItem('welora_auth_notice'); }catch(_e){}
+  if(!n) return;
+  const el=document.getElementById('authNotice');
+  el.textContent=n==='expired'?'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.':'Vui lòng đăng nhập lại để tiếp tục.';
+  el.hidden=false;
+})();
 function showErr(m){document.getElementById('err').textContent=m||'';document.getElementById('ok').textContent='';}
 function showOk(m){document.getElementById('ok').textContent=m||'';document.getElementById('err').textContent='';}
 function splitIdentifier(raw){

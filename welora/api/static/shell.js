@@ -10,13 +10,16 @@
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";
 
   /* Auth gate: /app/* requires welora_token; device_id alone is not a login session.
-     Skip auth pages (and OTP). No logout query deeplink. */
+     Skip auth pages (and OTP). No logout query deeplink.
+     P0 follow-up: /app/onboarding is open to guests (Founder) — they use the in-memory
+     /auth/device token from session.js; keep in sync with auth-gate.js. */
   var _authAllow = {
     "/app/login": 1,
     "/app/register": 1,
     "/app/forgot-password": 1,
     "/app/reset-password": 1,
-    "/app/otp": 1
+    "/app/otp": 1,
+    "/app/onboarding": 1
   };
   if (!_authAllow[path]) {
     var _tok = "";
@@ -131,6 +134,23 @@
     btn.className = "welora-logout-btn";
     btn.setAttribute("aria-label", "Đăng xuất");
     btn.textContent = "Đăng xuất";
+
+    /* Guest on /app/onboarding (no welora_token): offer "Đăng nhập" instead of logout. */
+    var _guestTok = "";
+    try {
+      _guestTok = localStorage.getItem("welora_token") || "";
+    } catch (_eGuest) {}
+    if (!_guestTok && path === "/app/onboarding") {
+      btn.textContent = "Đăng nhập";
+      btn.setAttribute("aria-label", "Đăng nhập");
+      btn.addEventListener("click", function () {
+        location.href = "/app/login";
+      });
+      chrome.appendChild(btn);
+      document.body.insertBefore(chrome, document.body.firstChild);
+      document.body.classList.add("welora-has-logout");
+      return;
+    }
 
     btn.addEventListener("click", function () {
       /* Capture Bearer BEFORE any storage clear; logout POST is fire-and-forget. */

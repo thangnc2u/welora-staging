@@ -39,6 +39,103 @@ def _new_user_id() -> str:
     return str(uuid4())
 
 
+# --- P0 follow-up: login token expiry -------------------------------------------------------
+# Every token row gets expires_at at issue time. WELORA_TOKEN_TTL_DAYS (default 30) covers
+# password / phone-OTP / email-OTP (admin) / demo tokens; WELORA_DEVICE_TOKEN_TTL_DAYS (default:
+# same as WELORA_TOKEN_TTL_DAYS) covers /auth/device guest tokens (the web FE keeps those in
+# memory only and re-mints one per page load, so the TTL mostly bounds a leaked token).
+# Legacy rows (expires_at NULL, issued before this change) are NOT logged out abruptly: they get
+# expires_at = max(created_at + TTL, first-seen + LEGACY_TOKEN_GRACE_DAYS), written once
+# (conditional UPDATE … WHERE expires_at IS NULL) on first use or by the startup backfill.
+TOKEN_TTL_DAYS_DEFAULT = 30
+LEGACY_TOKEN_GRACE_DAYS = 7
+TOKEN_EXPIRED_MSG = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+
+
+def _env_days(key: str, default: float) -> float:
+    import os as _os
+
+    raw = (_os.environ.get(key) or "").strip()
+    try:
+        v = float(raw) if raw else float(default)
+    except ValueError:
+        v = float(default)
+    return v if v > 0 else float(default)
+
+
+def token_ttl_days(kind: str | None = None) -> float:
+    base = _env_days("WELORA_TOKEN_TTL_DAYS", TOKEN_TTL_DAYS_DEFAULT)
+    if (kind or "") == "device":
+        return _env_days("WELORA_DEVICE_TOKEN_TTL_DAYS", base)
+    return base
+
+
+def token_expires_at(kind: str | None = None, *, now: datetime | None = None) -> str:
+    return _iso((now or _now()) + timedelta(days=token_ttl_days(kind)))
+
+
+def _parse_ts(raw: Any) -> Optional[datetime]:
+    """created_at/expires_at as written by SQLite (datetime('now')), Postgres (now()::text) or _iso()."""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw
+    else:
+        txt = str(raw).strip()
+        if not txt:
+            return None
+        txt = txt.replace("Z", "+00:00")
+        import re as _re
+
+        # Postgres now()::text ends in a bare '+00' offset (time part required, so a date's '-01' is safe)
+        txt = _re.sub(r"(\d\d:\d\d(?::\d\d(?:\.\d+)?)?)([+-]\d\d)$", r"\1\2:00", txt)
+        try:
+            dt = datetime.fromisoformat(txt)
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _legacy_expiry(created_at: Any, kind: str | None, *, now: datetime) -> str:
+    created = _parse_ts(created_at) or now
+    natural = created + timedelta(days=token_ttl_days(kind))
+    floor = now + timedelta(days=LEGACY_TOKEN_GRACE_DAYS)
+    return _iso(max(natural, floor))
+
+
+def backfill_legacy_token_expiry(*, url: str | None = None) -> int:
+    """Idempotent: give every expires_at-NULL token its legacy expiry. Returns rows updated."""
+    ensure_auth_schema(url)
+    conn = get_connection(url)
+    try:
+        rows = conn.execute(
+            "SELECT token, kind, created_at FROM auth_tokens WHERE expires_at IS NULL"
+        ).fetchall()
+        now = _now()
+        n = 0
+        for r in rows:
+            cur = conn.execute(
+                "UPDATE auth_tokens SET expires_at=? WHERE token=? AND expires_at IS NULL",
+                (_legacy_expiry(r["created_at"], r["kind"], now=now), r["token"]),
+            )
+            n += int(cur.rowcount or 0)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
+def _insert_token(conn, user_id: str, *, kind: str, device_id: str | None = None) -> str:
+    token = _token()
+    conn.execute(
+        "INSERT INTO auth_tokens(token, user_id, device_id, kind, expires_at) VALUES (?,?,?,?,?)",
+        (token, user_id, device_id, kind, token_expires_at(kind)),
+    )
+    return token
+
+
 # --- P0: /auth/device account-takeover guard -------------------------------------------
 # Non-device login paths stamp users.device_id with an internal namespace. Those values used
 # to be derived from public data (sha256(email|phone)[:16]) so POST /auth/device could replay
@@ -135,11 +232,7 @@ def login_or_register_device(
             )
             created = True
 
-        token = _token()
-        conn.execute(
-            "INSERT INTO auth_tokens(token, user_id, device_id, kind) VALUES (?,?,?,?)",
-            (token, user_id, device_id, "device"),
-        )
+        token = _insert_token(conn, user_id, kind="device", device_id=device_id)
         conn.commit()
         return {
             "user_id": user_id,
@@ -272,6 +365,16 @@ def verify_otp(
             conn.commit()
             raise ValueError("invalid code")
 
+        # P0 follow-up: consume atomically BEFORE issuing anything — of two concurrent verifies
+        # with the right code only the one whose conditional UPDATE hits the row (rowcount 1) wins.
+        cur = conn.execute(
+            "UPDATE otp_challenges SET consumed=1 WHERE challenge_id=? AND consumed=0",
+            (challenge_id,),
+        )
+        if int(cur.rowcount or 0) != 1:
+            conn.rollback()
+            raise ValueError("challenge already used")
+
         phone = row["phone"]
         user_id = row["user_id"]
         if not user_id:
@@ -294,15 +397,11 @@ def verify_otp(
                     (user_id, phone, device_key),
                 )
 
-        token = _token()
         conn.execute(
-            "UPDATE otp_challenges SET consumed=1, user_id=? WHERE challenge_id=?",
+            "UPDATE otp_challenges SET user_id=? WHERE challenge_id=?",
             (user_id, challenge_id),
         )
-        conn.execute(
-            "INSERT INTO auth_tokens(token, user_id, device_id, kind) VALUES (?,?,?,?)",
-            (token, user_id, None, "otp"),
-        )
+        token = _insert_token(conn, user_id, kind="otp")
         conn.commit()
         return {"user_id": user_id, "token": token, "kind": "otp", "created": False}
     finally:
@@ -330,27 +429,51 @@ def _admin_login_gate(conn, user_id: str, *, via: str) -> str:
     return role
 
 
-def resolve_token(token: str, *, url: str | None = None) -> Optional[str]:
+def token_state(token: str, *, url: str | None = None) -> tuple[str, Optional[str]]:
+    """("ok", user_id) | ("expired", user_id) | ("revoked", user_id) | ("unknown", None)."""
     if not token:
-        return None
+        return "unknown", None
     ensure_auth_schema(url)
     conn = get_connection(url)
     try:
         row = conn.execute(
-            "SELECT user_id, expires_at, revoked FROM auth_tokens WHERE token=?",
+            "SELECT user_id, kind, created_at, expires_at, revoked FROM auth_tokens WHERE token=?",
             (token,),
         ).fetchone()
-        if not row or row["revoked"]:
-            return None
-        if row["expires_at"]:
-            exp = datetime.fromisoformat(row["expires_at"])
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if _now() > exp:
-                return None
-        return row["user_id"]
+        if not row:
+            return "unknown", None
+        if row["revoked"]:
+            return "revoked", row["user_id"]
+        now = _now()
+        exp_raw = row["expires_at"]
+        if not exp_raw:
+            # legacy token (pre-expiry): fix its expiry once, never shorter than the grace period
+            exp_raw = _legacy_expiry(row["created_at"], row["kind"], now=now)
+            conn.execute(
+                "UPDATE auth_tokens SET expires_at=? WHERE token=? AND expires_at IS NULL",
+                (exp_raw, token),
+            )
+            conn.commit()
+            again = conn.execute("SELECT expires_at FROM auth_tokens WHERE token=?", (token,)).fetchone()
+            exp_raw = (again["expires_at"] if again else None) or exp_raw
+        exp = _parse_ts(exp_raw)
+        if exp is None or now > exp:
+            return "expired", row["user_id"]
+        return "ok", row["user_id"]
     finally:
         conn.close()
+
+
+def resolve_token(token: str, *, url: str | None = None) -> Optional[str]:
+    state, uid = token_state(token, url=url)
+    return uid if state == "ok" else None
+
+
+def _unauthorized_body(token: str) -> dict[str, Any]:
+    state, _uid = token_state(token) if token else ("unknown", None)
+    if state == "expired":
+        return {"error": {"error_code": "TOKEN_EXPIRED", "message": TOKEN_EXPIRED_MSG}}
+    return {"error": "invalid or expired token"}
 
 
 def revoke_token(token: str, *, url: str | None = None) -> bool:
@@ -410,7 +533,7 @@ def service_otp_verify(body: dict) -> tuple[int, dict]:
 def service_me(token: str) -> tuple[int, dict]:
     uid = resolve_token(token)
     if not uid:
-        return 401, {"error": "invalid or expired token"}
+        return 401, _unauthorized_body(token)
     return 200, {"user_id": uid}
 
 
@@ -495,12 +618,8 @@ def _require_password(password: str) -> str:
 
 
 def _issue_token(conn, user_id: str, kind: str = "password") -> str:
-    token = _token()
-    conn.execute(
-        "INSERT INTO auth_tokens(token, user_id, device_id, kind) VALUES (?,?,?,?)",
-        (token, user_id, None, kind),
-    )
-    return token
+    """password / demo / email_otp tokens — expires_at = now + token_ttl_days(kind)."""
+    return _insert_token(conn, user_id, kind=kind)
 
 
 def _user_row_public(row) -> dict[str, Any]:
@@ -947,7 +1066,7 @@ _orig_service_me = service_me
 def service_me(token: str) -> tuple[int, dict]:  # type: ignore[no-redef]
     user = get_user_for_token(token)
     if not user:
-        return 401, {"error": "invalid or expired token"}
+        return 401, _unauthorized_body(token)
     return 200, user
 
 

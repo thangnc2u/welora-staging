@@ -666,8 +666,15 @@ class TestDailyCap(_Env):
 class TestIpCap(_Env):
     ENV = {"WELORA_KUAT_IP_MAX_FAILS": "4"}
 
+    @staticmethod
+    def _fresh_ip() -> str:
+        # a never-used /64 per run: the in-process tests share the default DB, and IP buckets
+        # (guest IP: 24 h) would otherwise carry over between runs
+        h = uuid.uuid4().hex
+        return f"2001:db8:{h[:4]}:{h[4:8]}::1"
+
     def test_many_guests_one_ip(self):
-        ip = "203.0.113.%d" % (uuid.uuid4().int % 250 + 1)
+        ip = self._fresh_ip()
         for _ in range(2):
             uid = _uid()
             for _ in range(2):
@@ -676,8 +683,7 @@ class TestIpCap(_Env):
         r = self.start(_uid(), ip=ip)
         self.assertEqual(r.status_code, 429)
         self.assertEqual(r.json()["detail"]["reason"], "ip")
-        self.assertEqual(self.start(_uid(), ip="203.0.113.251" if not ip.endswith(".251") else "203.0.113.252")
-                         .status_code, 200)
+        self.assertEqual(self.start(_uid(), ip=self._fresh_ip()).status_code, 200)
 
 
 class TestStartLimit(_Env):

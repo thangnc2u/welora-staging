@@ -114,11 +114,19 @@ function isGuest(){
     if(!g){ box.textContent='Chưa có quỹ khẩn cấp — quay lại bước «Tạo quỹ 3 tháng».'; return; }
     box.textContent=''; box.className='';
     const dl=document.createElement('dl');
-    row(dl,'Mục tiêu',vnd(g.target_amount));
-    row(dl,'Đã có',vnd(g.current_amount));
-    row(dl,'Số tháng',String(g.months_of_expense||3)+' tháng chi tiêu thiết yếu');
+    /* GP UAT: /goals returns nested {target:{amount,months_of_expense}, current:{amount,percent}};
+       flat fields are accepted too (defensive). */
+    const pick=(nested,flat)=>{const v=(nested!==undefined&&nested!==null)?nested:flat;const n=Number(v);return Number.isFinite(n)?n:0;};
+    const tgt=g.target||{}, cur=g.current||{};
+    const targetAmt=pick(tgt.amount,g.target_amount), currentAmt=pick(cur.amount,g.current_amount);
+    const months=pick(tgt.months_of_expense,g.months_of_expense)||3;
+    let pctRaw=pick(cur.percent,g.percent);
+    if(!pctRaw&&targetAmt>0) pctRaw=currentAmt/targetAmt*100;
+    row(dl,'Mục tiêu',vnd(targetAmt));
+    row(dl,'Đã có',vnd(currentAmt));
+    row(dl,'Số tháng',String(months)+' tháng chi tiêu thiết yếu');
     box.appendChild(dl);
-    const pct=Math.max(0,Math.min(100,Number(g.percent)||0));
+    const pct=Math.max(0,Math.min(100,pctRaw||0));
     const bar=document.createElement('div'); bar.className='bar';
     const fill=document.createElement('i'); fill.style.width=pct+'%';
     bar.appendChild(fill); box.appendChild(bar);

@@ -13,7 +13,10 @@ service against the same base URL `https://api-merchant.payos.vn`. CI never call
 | `WELORA_DB_URL` | **Postgres URL** (Neon / Render Postgres, see 0.1) — durable users, orders, 2FA state. Without it the Free service uses SQLite in `/tmp` and loses everything on each deploy/restart/spin-down |
 | `WELORA_ADMIN_EMAILS` | comma-separated admin emails, e.g. `founder@example.com` (case-insensitive). Empty/unset = **nobody is admin** |
 | `WELORA_ADMIN_TOTP_SECRETS` | `<admin_email>:<BASE32>` from `python -m welora.admin_2fa gen <admin_email>` (the older `<user_id>:<BASE32>` form still works) |
-| `WELORA_SMTP_HOST` / `WELORA_SMTP_PORT` / `WELORA_SMTP_USER` / `WELORA_SMTP_PASSWORD` / `WELORA_MAIL_FROM` | real SMTP — **required** for the admin login code (and receipts/reminders) |
+| `WELORA_MAIL_PROVIDER` | `resend` (Render Free **blocks outbound SMTP**, so SMTP mail never arrives there). `smtp` / `log` force those providers |
+| `RESEND_API_KEY` | Resend API key `re_…` (Render secret, `sync: false`) — **required** for the admin login code (and receipts/reminders) on Render Free |
+| `WELORA_MAIL_FROM` | sender: `Welora <onboarding@resend.dev>` for staging (see 0.3), later an address on your verified domain |
+| `WELORA_SMTP_HOST` / `WELORA_SMTP_PORT` / `WELORA_SMTP_USER` / `WELORA_SMTP_PASSWORD` | optional fallback only (works locally / on paid hosts; blocked on Render Free) |
 | `WELORA_CHECKOUT_ENABLED` | `1` (non-prod only; production stays unset) |
 | `PAYMENT_PROVIDER` | `payos` |
 | `PAYOS_CLIENT_ID` / `PAYOS_API_KEY` / `PAYOS_CHECKSUM_KEY` | test-channel keys (Render secret) |
@@ -43,7 +46,8 @@ second run prints `OK up-to-date`.
 
 ### 0.2 First admin (no Render Shell needed)
 
-1. Set `WELORA_ADMIN_EMAILS=<your email>` and SMTP env (above).
+1. Set `WELORA_ADMIN_EMAILS=<your email>` and the mail env (`WELORA_MAIL_PROVIDER=resend`, `RESEND_API_KEY`,
+   `WELORA_MAIL_FROM`, see 0.3). Check `GET /health` → `"mail_provider": "resend"`.
 2. Locally: `PYTHONPATH=. python -m welora.admin_2fa gen <your email>` → put the printed
    `email:BASE32` line into `WELORA_ADMIN_TOTP_SECRETS`; scan the printed `otpauth://` URI in an
    authenticator app. Never commit or paste the secret anywhere else.
@@ -58,6 +62,35 @@ same address is never promoted and its sessions are revoked on promotion). Passw
 phone-OTP logins into an admin account are refused. Removing an email from `WELORA_ADMIN_EMAILS`
 demotes that user at the next restart (env change → redeploy) or next login, audited
 (`admin_role_revoked`). With Postgres, the admin keeps the same `user_id` across deploys.
+
+### 0.3 Mail via Resend HTTP API (Founder, one-time)
+
+Render Free blocks outbound SMTP ports (25/465/587), so Gmail SMTP never delivers from there. The
+app sends through Resend's HTTPS API instead (`POST https://api.resend.com/emails`, port 443, 10 s
+timeout, plain-text body).
+
+1. Sign up at resend.com with **the admin's own email address** (the one in `WELORA_ADMIN_EMAILS`).
+2. Dashboard → *API Keys* → *Create API Key* (permission **Sending access** is enough) → copy `re_…`
+   once. Do not paste it in chat, tickets or the repo.
+3. Render → `welora-staging` → *Environment*: `WELORA_MAIL_PROVIDER=resend`, `RESEND_API_KEY=re_…`,
+   `WELORA_MAIL_FROM=Welora <onboarding@resend.dev>` → *Save* (redeploys). The SMTP vars may stay;
+   Resend wins.
+4. `GET /health` → `"mail_provider": "resend"`. Then `/app/admin/login` → the code arrives.
+
+**Test-sender restriction:** `onboarding@resend.dev` can only deliver to the email address that owns
+the Resend account; any other recipient gets HTTP 403 (`validation_error`, "You can only send testing
+emails to your own email address"). That is enough for the admin login if the admin email = Resend
+account email. Receipts/reminders to buyers need a **verified domain**: Resend → *Domains* → *Add
+Domain* (prefer a subdomain, e.g. `mail.example.com`) → add the DKIM/SPF DNS records → verified
+(often ~15 min, up to 72 h) → set `WELORA_MAIL_FROM=Welora <no-reply@mail.example.com>`.
+
+Free plan: 3,000 emails/month, **100/day** (UTC day), 10 requests/s per team.
+
+Failures never block the request and never change the OTP response; the service logs one WARNING,
+e.g. `mail send failed provider=resend status=403 error=validation_error to=f***@example.com`
+(no API key, no code, no body). Check Render → *Logs* for `mail send failed` if a code does not
+arrive. `WELORA_MAIL_PROVIDER=resend` without a key logs
+`mail provider=resend selected but RESEND_API_KEY is not set` and falls back to smtp/log.
 
 ## 1. Checklist → how to run
 

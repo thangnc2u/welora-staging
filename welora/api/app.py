@@ -758,6 +758,13 @@ def create_app() -> FastAPI:
     def my_plan_ui() -> HTMLResponse:
         return _serve_app_html(static_dir, "my-plan.html")
 
+    def _mail_provider_name() -> str:
+        try:
+            from welora.mailer import mail_provider
+            return mail_provider()
+        except Exception:
+            return "log"
+
     @app.get("/health", tags=["system"])
     def health() -> dict:
         import os
@@ -775,6 +782,7 @@ def create_app() -> FastAPI:
             "store": os.environ.get("WELORA_STORE", "memory"),
             "dialect": dialect,
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
+            "mail_provider": _mail_provider_name(),
             "gate_months": 3,
             "hard_deny": True,
             "git_sha": _short_git_sha(),

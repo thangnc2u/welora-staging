@@ -39,6 +39,60 @@ def _new_user_id() -> str:
     return str(uuid4())
 
 
+# --- P0: /auth/device account-takeover guard -------------------------------------------
+# Non-device login paths stamp users.device_id with an internal namespace. Those values used
+# to be derived from public data (sha256(email|phone)[:16]) so POST /auth/device could replay
+# them and receive the victim's token. Now: (1) client device_ids in these namespaces are
+# rejected, (2) /auth/device only ever reuses a *pure device-guest* row, (3) new internal
+# keys are random and no login path looks a user up by them.
+INTERNAL_DEVICE_PREFIXES = ("guest:", "phone:", "email:", "demo:")
+DEVICE_RESERVED_MSG = "Mã thiết bị không hợp lệ (tiền tố dành riêng cho hệ thống)."
+DEVICE_NOT_GUEST_MSG = (
+    "Mã thiết bị này không dùng được cho đăng nhập khách. "
+    "Vui lòng đăng nhập bằng email hoặc số điện thoại."
+)
+
+
+class DeviceIdReserved(ValueError):
+    pass
+
+
+class DeviceNotGuest(PermissionError):
+    pass
+
+
+def is_reserved_device_id(device_id: str | None) -> bool:
+    return (device_id or "").strip().lower().startswith(INTERNAL_DEVICE_PREFIXES)
+
+
+def internal_device_key(prefix: str) -> str:
+    """Random internal device marker (never derived from email/phone, never looked up)."""
+    assert prefix in INTERNAL_DEVICE_PREFIXES
+    return prefix + secrets.token_hex(16)
+
+
+def _is_pure_device_guest(conn, row) -> bool:
+    """Only rows created by POST /auth/device: no credentials, no email/phone, guest role,
+    no internal namespace (legacy phone-OTP rows keep the phone only in device_id), and no
+    history of any other login kind (password / otp / email_otp tokens or OTP challenges) —
+    so a row stays protected even if its device_id were ever rewritten."""
+    for col in ("password_hash", "email", "phone", "email_verified_at"):
+        if str(row[col] or "").strip():
+            return False
+    if str(row["role"] or "guest").strip().lower() != "guest":
+        return False
+    if is_reserved_device_id(row["device_id"]):
+        return False
+    uid = row["user_id"]
+    if conn.execute(
+        "SELECT 1 FROM auth_tokens WHERE user_id=? AND COALESCE(kind,'device')<>'device' LIMIT 1", (uid,)
+    ).fetchone():
+        return False
+    if conn.execute("SELECT 1 FROM otp_challenges WHERE user_id=? LIMIT 1", (uid,)).fetchone():
+        return False
+    return True
+
+
 def ensure_auth_schema(url: str | None = None) -> None:
     migrate(url)
 
@@ -54,16 +108,21 @@ def login_or_register_device(
         raise ValueError("device_id is required")
     if len(device_id) < 4:
         raise ValueError("device_id too short")
+    if is_reserved_device_id(device_id):
+        raise DeviceIdReserved(DEVICE_RESERVED_MSG)
 
     ensure_auth_schema(url)
     conn = get_connection(url)
     try:
         row = conn.execute(
-            "SELECT user_id, display_name FROM users WHERE device_id=?",
+            "SELECT user_id, display_name, device_id, email, phone, password_hash, role, email_verified_at "
+            "FROM users WHERE device_id=?",
             (device_id,),
         ).fetchone()
         created = False
         if row:
+            if not _is_pure_device_guest(conn, row):
+                raise DeviceNotGuest(DEVICE_NOT_GUEST_MSG)
             _admin_login_gate(conn, row["user_id"], via="device_login")
             user_id = row["user_id"]
             name = row["display_name"]
@@ -171,10 +230,15 @@ def verify_otp(
         user_id = row["user_id"]
         if not user_id:
             user_id = str(uuid4())
-            device_key = "phone:" + hashlib.sha256(phone.encode()).hexdigest()[:16]
+            # Returning phone-OTP user = owner of an earlier consumed challenge for this phone
+            # (challenge.user_id is only ever set here). No lookup by a derived device_id.
             existing = conn.execute(
-                "SELECT user_id FROM users WHERE device_id=?", (device_key,)
+                "SELECT c.user_id FROM otp_challenges c JOIN users u ON u.user_id = c.user_id "
+                "WHERE c.phone=? AND c.consumed=1 AND c.user_id IS NOT NULL "
+                "ORDER BY c.created_at, c.challenge_id LIMIT 1",
+                (phone,),
             ).fetchone()
+            device_key = internal_device_key("phone:")
             if existing:
                 _admin_login_gate(conn, existing["user_id"], via="phone_otp")
                 user_id = existing["user_id"]
@@ -267,6 +331,10 @@ def service_device_login(body: dict) -> tuple[int, dict]:
             display_name=body.get("display_name"),
         )
         return 200 if not out["created"] else 201, out
+    except DeviceIdReserved as e:
+        return 403, {"error": str(e), "error_code": "DEVICE_ID_RESERVED", "message": str(e)}
+    except DeviceNotGuest as e:
+        return 403, {"error": str(e), "error_code": "DEVICE_NOT_GUEST", "message": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except ValueError as e:
@@ -433,10 +501,8 @@ def register_guest(
     pw_hash = _hash_password(pw)
     user_id = _new_user_id()
     name = (display_name or "").strip() or email_n or phone_n
-    # device_id placeholder keeps unique-ish identity for legacy device flows
-    device_key = "guest:" + hashlib.sha256(
-        (email_n or phone_n or user_id).encode()
-    ).hexdigest()[:16]
+    # internal marker only (random; login is by email/phone + password, never by device_id)
+    device_key = internal_device_key("guest:")
 
     conn = get_connection(url)
     try:
@@ -662,7 +728,7 @@ def seed_partner_demo(*, url: str | None = None) -> dict[str, Any]:
                 "password_hint": DEMO_PASSWORD,
             }
         user_id = PARTNER_USER_ID
-        device_key = "demo:" + hashlib.sha256(DEMO_EMAIL.encode()).hexdigest()[:16]
+        device_key = internal_device_key("demo:")
         conn.execute(
             "INSERT INTO users(user_id, display_name, device_id, email, phone, password_hash, role) "
             "VALUES (?,?,?,?,?,?,?)",

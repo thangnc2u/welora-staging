@@ -858,7 +858,11 @@ def create_app() -> FastAPI:
 
     @app.post("/auth/device", tags=["auth"])
     def auth_device(body: DeviceLoginBody) -> dict:
-        return _respond(*auth_svc.service_device_login(body.model_dump()))
+        code, out = auth_svc.service_device_login(body.model_dump())
+        if code >= 400 and out.get("error_code") in ("DEVICE_ID_RESERVED", "DEVICE_NOT_GUEST"):
+            # P0 takeover guard — structured VI error, never a token
+            raise HTTPException(status_code=code, detail={"error_code": out["error_code"], "message": out["message"]})
+        return _respond(code, out)
 
     @app.post("/auth/otp/request", tags=["auth"])
     def auth_otp_request(body: OtpRequestBody) -> dict:

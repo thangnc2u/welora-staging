@@ -25,6 +25,7 @@ from typing import Any, Optional
 from welora import goals_api
 from welora import onboarding as ob
 from welora.auth import (
+    internal_device_key,
     DEMO_DISPLAY,
     DEMO_EMAIL,
     DEMO_PASSWORD,
@@ -323,7 +324,7 @@ def _upsert_demo_user(
             "SELECT user_id, role FROM users WHERE email=?", (email,)
         ).fetchone()
         pw = _hash_password(password)
-        device_key = "demo:" + hashlib.sha256(email.encode()).hexdigest()[:16]
+        device_key = internal_device_key("demo:")  # random internal marker (P0: not derived from email)
         if by_email:
             existing_id = by_email["user_id"]
             conn.execute(

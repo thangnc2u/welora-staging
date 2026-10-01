@@ -320,10 +320,23 @@ function kuatErr(d, status){
 }
 function cooldownText(c){
   let t=(c&&c.message)||'Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút.';
-  if(c&&c.retry_at){
-    try{ t+=' (từ '+new Date(c.retry_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})+')'; }catch(_e){}
+  /* round 4: the server message already names the retry time in Vietnam time (retry_at_vn) */
+  if(c&&c.retry_at&&!(c.retry_at_vn&&t.indexOf(c.retry_at_vn)>=0)){
+    try{ t+=' (từ '+new Date(c.retry_at).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'})+', giờ Việt Nam)'; }catch(_e){}
   }
   return t;
+}
+function showCooldown(out, c){
+  out.className='err';
+  out.textContent=cooldownText(c);
+  const href=String((c&&c.lesson_href)||'');
+  if(href.indexOf('/app/')===0){  /* same-origin app link only */
+    const a=document.createElement('a');
+    a.href=href;
+    a.textContent='Ôn lại bài'+((c&&c.lesson_title)?(': '+c.lesson_title):'');
+    out.appendChild(document.createTextNode(' '));
+    out.appendChild(a);
+  }
 }
 function renderKuat(questions, kuat){
   const box=document.getElementById('kuatBox');
@@ -352,8 +365,7 @@ function renderKuat(questions, kuat){
     box.appendChild(wrap);
   });
   if(kuat&&kuat.cooldown){
-    out.className='err';
-    out.textContent=cooldownText(kuat.cooldown);
+    showCooldown(out, kuat.cooldown);
   }
   btn.hidden=!(questions&&questions.length);
 }
@@ -430,7 +442,7 @@ document.getElementById('btnKuat').onclick=async()=>{
       out.className=passed?'pass':'fail';
       out.textContent=passed?'ĐẠT':'CHƯA ĐẠT — ôn lại bài rồi làm lượt mới (câu hỏi đã được đổi).';
     }else if(!passed){
-      out.textContent='CHƯA ĐẠT — '+out.textContent;
+      out.insertBefore(document.createTextNode('CHƯA ĐẠT — '), out.firstChild);
     }
     out.scrollIntoView({behavior:'smooth',block:'nearest'});
     const nudge=document.getElementById('osNudge');

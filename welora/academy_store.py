@@ -12,28 +12,42 @@
 * KUAT limits reuse ``auth_rate_events`` (migration 013, same hashing / pruning as the auth limits).
   A failed-KUAT slot is RESERVED before grading (insert → commit → count, like the login limit of
   #238) and released only when the attempt passes, so parallel submits can never exceed a cap.
-  Buckets: per (user, node) short window + daily cap; per client IP (all accounts — shared NAT)
-  over WELORA_KUAT_COOLDOWN_S AND over 24 h (round 3: throwaway accounts); for guests additionally
-  per IP across ALL guests and per device id, over 24 h. "Guest" for these budgets (round 3) =
-  every account WITHOUT a verified contact — device-only visitors AND registered accounts that
-  never completed an OTP (see ``_identity`` / ``auth.has_verified_contact``).
+  Buckets (round 4: the network-wide ones apply to the GATE KUATs only — ``GATE_KUAT_NODES``,
+  N02-01 + N02-02, the only KUATs on the way to the Safety Gate mastery; every other node keeps
+  only the per-user limits):
+    - every node: per (user, node) short window + daily cap (+ the per (user, node) start limit);
+    - gate nodes, every account: per client IP over WELORA_KUAT_COOLDOWN_S and over 24 h, counted
+      across both gate nodes together;
+    - gate nodes, accounts that are not "verified" (device guests, register-only accounts, demo
+      personas): per client IP and per gate node over 24 h (shared by all of them), plus per guest
+      device id and gate node.
+  "Guest" for these budgets (round 3) = every account WITHOUT a verified contact — device-only
+  visitors AND registered accounts that never completed an OTP (see ``_identity`` /
+  ``auth.has_verified_contact``). Demo personas P1–P6 (round 4: public password) are identified by
+  the server seed (role ``demo`` / the seeded persona ids, never by password): their per-user
+  budgets are kept per (persona, client network) so outsiders on one network cannot use up the
+  persona for everybody, and they share the guest network bucket.
   The client IP is ``auth_ratelimit.client_ip`` (#239 trust rules, never a raw X-Forwarded-For),
-  bucketed with ``ip_bucket`` (IPv6 → /64).
+  bucketed with ``ip_bucket`` (IPv6 → /64) for the short windows and per user; the 24 h network
+  buckets group IPv6 by WELORA_KUAT_IP6_DAY_PREFIX (/56 by default — one subscriber's allocation).
 
 Env (all optional; a value ≤ 0 disables that limit):
   WELORA_KUAT_MAX_FAILS (3) failed KUATs per user+node per WELORA_KUAT_COOLDOWN_S (1800 s)
   WELORA_KUAT_DAILY_MAX_FAILS (10) failed KUATs per user+node per 24 h
-  WELORA_KUAT_IP_MAX_FAILS (30) failed KUATs per client IP (any account) per WELORA_KUAT_COOLDOWN_S
-  WELORA_KUAT_IP_DAY_MAX_FAILS (60) failed KUATs per client IP (any account, verified or not) per 24 h
-  WELORA_KUAT_GUEST_IP_MAX_FAILS (6) failed KUATs of ALL guests on one client IP per WELORA_KUAT_GUEST_WINDOW_S
-  WELORA_KUAT_GUEST_DEVICE_MAX_FAILS (6) failed KUATs per guest device id per WELORA_KUAT_GUEST_WINDOW_S
+  WELORA_KUAT_IP_MAX_FAILS (30) failed gate KUATs per client IP (any account) per WELORA_KUAT_COOLDOWN_S
+  WELORA_KUAT_IP_DAY_MAX_FAILS (60) failed gate KUATs per client network (any account) per 24 h
+  WELORA_KUAT_GUEST_IP_MAX_FAILS (6) failed KUATs per gate node of ALL non-verified accounts (guests,
+      register-only accounts, demo personas) on one client network per WELORA_KUAT_GUEST_WINDOW_S
+  WELORA_KUAT_GUEST_DEVICE_MAX_FAILS (6) failed KUATs per guest device id and gate node per WELORA_KUAT_GUEST_WINDOW_S
   WELORA_KUAT_GUEST_WINDOW_S (86400) window of the two guest limits
+  WELORA_KUAT_IP6_DAY_PREFIX (56) IPv6 prefix length of the 24 h network buckets (48–64; 64 = as the short windows)
   WELORA_KUAT_MAX_STARTS (30) NEW attempts issued per user+node per WELORA_KUAT_COOLDOWN_S
   WELORA_KUAT_ATTEMPT_TTL_S (1800) lifetime of an issued attempt
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import time
@@ -46,6 +60,9 @@ from welora.db.connection import get_connection
 from welora.db.migrate import migrate
 
 DAY_S = 24 * 3600
+# The KUATs on the way to the Safety Gate: N02-02 grants the gate mastery (academy.GATE_NODE) and
+# needs N02-01 mastered first. Only these carry the network-wide (security) budgets (round 4).
+GATE_KUAT_NODES = ("N02-01", "N02-02")
 FAIL_ACTION = "kuat_fail"
 START_ACTION = "kuat_start"
 
@@ -89,6 +106,27 @@ def guest_window_s() -> int:
     return max(60, _env_int("WELORA_KUAT_GUEST_WINDOW_S", DAY_S))
 
 
+def ip6_day_prefix() -> int:
+    return min(64, max(48, _env_int("WELORA_KUAT_IP6_DAY_PREFIX", 56)))
+
+
+def is_gate_node(node_id: str) -> bool:
+    return node_id in GATE_KUAT_NODES
+
+
+def ip_bucket_day(ip: Optional[str]) -> str:
+    """Network key of the 24 h buckets: IPv6 → its /WELORA_KUAT_IP6_DAY_PREFIX (default /56 — a
+    subscriber usually gets a /56, so hopping between its /64s yields no fresh day budget); IPv4 and
+    IPv4-mapped IPv6 → the address (same as ``ip_bucket``)."""
+    b = ip_bucket(ip)
+    if "/" not in b:
+        return b
+    try:
+        return str(ipaddress.ip_network(b, strict=False).supernet(new_prefix=ip6_day_prefix()))
+    except ValueError:
+        return b
+
+
 def max_starts() -> int:
     return _env_int("WELORA_KUAT_MAX_STARTS", 30)
 
@@ -107,7 +145,7 @@ class KuatCooldown(Exception):
     def __init__(self, retry_after: float, reason: str):
         super().__init__(reason)
         self.retry_after = max(1, int(retry_after + 0.999))
-        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | device | unverified_device | starts
+        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | demo_ip | device | unverified_device | starts
 
 
 def _ts(iso: str) -> float:
@@ -159,28 +197,39 @@ def save_profile(user_id: str, profile: dict) -> int:
 
 
 # --------------------------------------------------------------------------- limits
-GUEST, UNVERIFIED, VERIFIED = "guest", "unverified", "verified"
+GUEST, UNVERIFIED, DEMO, VERIFIED = "guest", "unverified", "demo", "verified"
+
+
+def demo_persona_ids() -> frozenset:
+    """The user ids the server seeds for the partner demo personas P1–P6 (partner_demo_seed)."""
+    from welora import partner_demo_seed as seed
+
+    return frozenset({seed.PARTNER_USER_ID, *(a["user_id"] for a in seed.DEMO_PERSONA_ALIASES.values())})
 
 
 def _identity(conn, user_id: str) -> tuple[str, Optional[str]]:
-    """(kind, device_id) for the KUAT budgets (round 3):
+    """(kind, device_id) for the KUAT budgets:
 
     * ``guest`` — a device-only account (auth._is_pure_device_guest) or an unknown user id;
     * ``unverified`` — a registered ``guest``-role account WITHOUT a verified contact: no e-mail
       proven by e-mail OTP and no consumed phone-OTP challenge (``auth.has_verified_contact``).
       Register (password + e-mail/phone) alone proves nothing, so throwaway accounts land here;
-    * ``verified`` — a verified contact, or a non-``guest`` role (``demo`` personas P1–P6 seeded by
-      the server, admin roles).
-    guest + unverified share the guest IP / device buckets."""
+    * ``demo`` (round 4) — a partner demo persona P1–P6: role ``demo`` (only the server seed sets it;
+      /auth/register always creates ``guest``) or one of the seeded persona ids. Its password is
+      public, so it is NOT treated as verified;
+    * ``verified`` — a verified contact, or another non-``guest`` role (admin roles).
+    guest + unverified + demo share the guest network bucket of the gate KUATs."""
     from welora.auth import _is_pure_device_guest, has_verified_contact, is_reserved_device_id
 
     row = conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
     if not row:
-        return GUEST, None
+        return (DEMO, None) if user_id in demo_persona_ids() else (GUEST, None)
     dev = str(row["device_id"] or "").strip() or None
+    role = str(row["role"] or "guest").strip().lower()
+    if role == "demo" or user_id in demo_persona_ids():
+        return DEMO, None  # its device_id is an internal seed marker
     if _is_pure_device_guest(conn, row):
         return GUEST, dev
-    role = str(row["role"] or "guest").strip().lower()
     if role != "guest" or has_verified_contact(conn, row):
         return VERIFIED, dev
     # registered but unverified: its device_id is a random internal marker (one per account), so
@@ -189,38 +238,53 @@ def _identity(conn, user_id: str) -> tuple[str, Optional[str]]:
     return UNVERIFIED, (None if is_reserved_device_id(dev) else dev)
 
 
+def _user_scope(user_id: str, node_id: str, kind: str, ipb: str) -> str:
+    """Key of the per-user buckets. Demo personas (shared, public password): per (persona, node,
+    client network) — fails / starts from one network never use up the persona elsewhere."""
+    un = f"user:{user_id}|node:{node_id}"
+    return un + f"|ip:{ipb}" if kind == DEMO and ipb else un
+
+
+def _ips(ip: Optional[str]) -> tuple[str, str]:
+    real_ip = _valid_ip(ip)  # a real client address only (not e.g. a test client's placeholder)
+    return (ip_bucket(real_ip), ip_bucket_day(real_ip)) if real_ip else ("", "")
+
+
 def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> tuple[list[tuple[str, str, int, int]], str]:
     """((scope, key_hash, max, window) buckets a failed KUAT counts against, identity kind)."""
-    un = f"user:{user_id}|node:{node_id}"
+    kind, device = _identity(conn, user_id)
+    ipb, ipd = _ips(ip)
+    un = _user_scope(user_id, node_id, kind, ipb)
     out = []
     if max_fails() > 0:
         out.append(("kuat_user_node", _key_hash("kuat_user_node", un), max_fails(), cooldown_s()))
     if daily_max_fails() > 0:
         out.append(("kuat_user_node_day", _key_hash("kuat_user_node_day", un), daily_max_fails(), DAY_S))
-    real_ip = _valid_ip(ip)  # a real client address only (not e.g. a test client's placeholder)
-    ipb = ip_bucket(real_ip) if real_ip else ""
+    if not is_gate_node(node_id):
+        return out, kind  # round 4: non-gate KUATs keep only the per-user limits
     if ipb and ip_max_fails() > 0:
         out.append(("kuat_ip", _key_hash("kuat_ip", ipb), ip_max_fails(), cooldown_s()))
-    if ipb and ip_day_max_fails() > 0:
-        out.append(("kuat_ip_day", _key_hash("kuat_ip_day", ipb), ip_day_max_fails(), DAY_S))
-    kind, device = _identity(conn, user_id)
+    if ipd and ip_day_max_fails() > 0:
+        out.append(("kuat_ip_day", _key_hash("kuat_ip_day", ipd), ip_day_max_fails(), DAY_S))
     if kind != VERIFIED:
-        if ipb and guest_ip_max_fails() > 0:
-            out.append(("kuat_guest_ip", _key_hash("kuat_guest_ip", ipb), guest_ip_max_fails(), guest_window_s()))
-        if device and guest_device_max_fails() > 0:
-            out.append(("kuat_guest_device", _key_hash("kuat_guest_device", device), guest_device_max_fails(),
+        if ipd and guest_ip_max_fails() > 0:
+            out.append(("kuat_guest_ip", _key_hash("kuat_guest_ip", f"{ipd}|node:{node_id}"), guest_ip_max_fails(),
                         guest_window_s()))
+        if device and guest_device_max_fails() > 0:
+            out.append(("kuat_guest_device", _key_hash("kuat_guest_device", f"{device}|node:{node_id}"),
+                        guest_device_max_fails(), guest_window_s()))
     return out, kind
 
 
 _REASON = {"kuat_user_node": "fails", "kuat_user_node_day": "daily", "kuat_ip": "ip", "kuat_ip_day": "ip_day",
            "kuat_guest_ip": "guest_ip", "kuat_guest_device": "device", "kuat_start": "starts"}
-_UNVERIFIED_REASON = {"guest_ip": "unverified_ip", "device": "unverified_device"}
+_KIND_REASON = {UNVERIFIED: {"guest_ip": "unverified_ip", "device": "unverified_device"},
+                DEMO: {"guest_ip": "demo_ip"}}
 
 
 def _reason(scope: str, kind: str) -> str:
     r = _REASON[scope]
-    return _UNVERIFIED_REASON.get(r, r) if kind == UNVERIFIED else r
+    return _KIND_REASON.get(kind, {}).get(r, r)
 
 
 def _check(conn, action: str, buckets, now: float, kind: str = VERIFIED) -> None:
@@ -349,7 +413,8 @@ def _rollback(conn) -> None:
         conn.rollback()
 
 
-def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[float] = None) -> dict:
+def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[float] = None,
+                           ip: Optional[str] = None) -> dict:
     """The learner's open attempt for this node if one is still valid (same questions, same option
     order — every tab / reload / parallel request gets the same one); otherwise a NEW attempt from
     ``draw()`` (counts against the start limit). The unique partial index makes a concurrent second
@@ -374,7 +439,8 @@ def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[fl
                     return {"attempt_id": r["attempt_id"], "expires_at": r["expires_at"],
                             "served": json.loads(r["served_json"]), "created": False}
                 if max_starts() > 0:
-                    kh = _key_hash("kuat_start", f"user:{user_id}|node:{node_id}")
+                    kind, _dev = _identity(conn, user_id)
+                    kh = _key_hash("kuat_start", _user_scope(user_id, node_id, kind, _ips(ip)[0]))
                     _check(conn, START_ACTION, [("kuat_start", kh, max_starts(), cooldown_s())], t)
                     conn.execute(
                         "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",

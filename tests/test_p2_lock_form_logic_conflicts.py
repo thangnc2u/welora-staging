@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.goal_emergency_fund import InMemoryEmergencyFundStore
 from welora.goals_api import (
@@ -73,7 +75,7 @@ class TestP2LockFormLogicConflicts(unittest.TestCase):
         reset_debt_flag_audit()
         _PERSONAS.clear()
         use_store(InMemoryEmergencyFundStore())
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     # --- A -----------------------------------------------------------------
     def test_a_helpers_matrix(self):

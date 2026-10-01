@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
     HARD,
@@ -54,7 +56,7 @@ class TestP2AgentModeCActOs(unittest.TestCase):
     def setUp(self) -> None:
         reset_mode_c_store()
         reset_logs()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.passed = self.pair["passed"]["agent_context_seed"]
         self.not_passed = self.pair["not_passed"]["agent_context_seed"]
 

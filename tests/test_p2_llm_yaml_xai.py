@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -24,7 +26,7 @@ class TestP2LlmYamlXai(unittest.TestCase):
         self.assertNotRegex(yml, r"(?i)api[_-]?key\s*[:=]")
 
     def test_deny_still_no_llm(self):
-        client = TestClient(create_app())
+        client = authed(TestClient(create_app()))
         auth = client.post("/auth/device", json={"device_id": "dev-ticket-aa-deny"})
         uid = auth.json().get("user_id")
         r = client.post("/agent/chat", json={"user_id": uid, "message": "Tôi muốn all-in ETF ngay"})
@@ -34,7 +36,7 @@ class TestP2LlmYamlXai(unittest.TestCase):
 
     def test_health_untouched(self):
         self.assertEqual(TARGET_MONTHS, 3)
-        r = TestClient(create_app()).get("/health")
+        r = authed(TestClient(create_app())).get("/health")
         b = r.json()
         self.assertEqual(b["status"], "ok")
         self.assertIn("dialect", b)

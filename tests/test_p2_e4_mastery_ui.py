@@ -9,6 +9,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.fixtures import reset_all_stores
 from welora.goal_emergency_fund import InMemoryEmergencyFundStore
@@ -22,7 +24,7 @@ class TestP2E4MasteryGate(unittest.TestCase):
         use_store(InMemoryEmergencyFundStore())
         reset_all_stores()
         reset_mastery_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def tearDown(self) -> None:
         use_store(InMemoryEmergencyFundStore())
@@ -102,7 +104,7 @@ class TestP2E4MasterySqlite(unittest.TestCase):
         use_store(SqliteEmergencyFundStore(self._tmp.name))
         reset_all_stores()
         reset_mastery_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def tearDown(self) -> None:
         use_store(InMemoryEmergencyFundStore())

@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.content_map import CONTENT_BY_KEY
 from welora.safety_gate import TARGET_MONTHS
@@ -17,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestP2UxAcademyLessonBody(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.html = HTML.read_text(encoding="utf-8")
         auth = self.client.post("/auth/device", json={"device_id": "uat-lesson-body-01"})
         self.assertEqual(auth.status_code, 200)

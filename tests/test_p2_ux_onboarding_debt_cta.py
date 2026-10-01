@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 import welora.onboarding as ob
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
@@ -60,7 +62,7 @@ def _complete(
 class TestP2UxOnboardingDebtCta(unittest.TestCase):
     def setUp(self) -> None:
         ob.reset_onboarding_stores()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_debt_priority_complete_has_debt_cta(self):
         out = _complete("u-debt", near_term_priority="debt", has_dangerous_debt_self=True)

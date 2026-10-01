@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -15,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestP2LlmXai(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_xai_default_model_is_grok_43(self):
         src = (ROOT / "welora" / "llm_adapter.py").read_text(encoding="utf-8")

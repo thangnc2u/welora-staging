@@ -14,6 +14,8 @@ os.environ.setdefault("WELORA_STORE", "memory")
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
     HARD,
@@ -61,7 +63,7 @@ class TestP2OsCategoriesCrud(unittest.TestCase):
         reset_account_store()
         use_tx_store(InMemoryTransactionStore())
         reset_transaction_store()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.uid = "user_categories_p0_01"
 
     def test_constraints_untouched(self):

@@ -10,6 +10,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs, service_chat
 from welora.llm_adapter import safe_call_llm
@@ -23,7 +25,7 @@ _FIXED_VI = "Không gọi được mô hình tư vấn lúc này. Bạn thử l�
 class TestP2UatAgentLearnerHygiene(unittest.TestCase):
     def setUp(self) -> None:
         self.html = CHAT.read_text(encoding="utf-8")
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     # --- (1) chat bubble MD strip ---
     def test_chat_bubble_strips_md_markers(self):

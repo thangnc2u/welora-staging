@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs
 from welora.fixtures import load_pair, reset_all_stores
@@ -25,7 +27,7 @@ class TestP2NativeChatUi(unittest.TestCase):
         reset_logs()
         reset_metrics()
         self.pair = load_pair()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_chat_html_has_deny_cta_no_gate_badge(self):
         html = CHAT_HTML.read_text(encoding="utf-8")

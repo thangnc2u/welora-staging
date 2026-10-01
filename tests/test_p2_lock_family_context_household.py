@@ -8,6 +8,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.onboarding import create_session, patch_step, reset_onboarding_stores
 from welora.onboarding_api import service_create_session, service_patch_step
@@ -37,7 +39,7 @@ for hh in sorted(HOUSEHOLD_VALUES):
 class TestP2LockFamilyContextHousehold(unittest.TestCase):
     def setUp(self) -> None:
         reset_onboarding_stores()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_allowed_helper_matrix(self):
         self.assertEqual(

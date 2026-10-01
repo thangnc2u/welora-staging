@@ -11,6 +11,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
     HARD,
@@ -58,7 +60,7 @@ class TestP2OsCoolingOff(unittest.TestCase):
         # Keep fixtures' EF goals — only reset Mode C store + re-load pair EF
         reset_all_stores()
         self.pair = load_pair()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.uid = self.pair["passed"]["user_id"]
         self.companion = "user_companion_cool_01"
         set_persona(user_id=self.uid, persona="P1")

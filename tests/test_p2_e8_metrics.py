@@ -6,6 +6,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs, sanitize_query
 from welora.fixtures import load_pair, reset_all_stores
@@ -22,7 +24,7 @@ class TestP2E8Metrics(unittest.TestCase):
         reset_logs()
         reset_metrics()
         self.pair = load_pair()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_health_untouched(self):
         r = self.client.get("/health")

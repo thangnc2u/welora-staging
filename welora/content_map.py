@@ -5,6 +5,8 @@ P1 Pedia ship An Toàn WP-02 + P2 Pedia ship Rễ Cục M01 + Tự Do M03 + Bề
 
 from __future__ import annotations
 
+import re
+
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -688,3 +690,49 @@ def service_list_content_keys() -> tuple[int, dict]:
     if "05" in modules and not modules["05"].get("title"):
         modules["05"]["title"] = "Kết Nối & Thực Hành"
     return 200, {"items": items, "modules": modules}
+
+
+# --- Display-only cleanup of internal doc headers (GP UAT FYI) --------------
+# Source WP/WA markdown starts with an editorial header block, e.g.
+#   # WP-02-01: …            **Module:** 02 – …     **Mức rủi ro:** Cao
+#   **Version:** v1.0         **Status:** Draft      **principle_key:** SAFE-01
+#   **secondary_keys:** …     ---
+# Only that leading block is removed from ``body_markdown`` as served by
+# GET /content/{key}. Keys/metadata (principle_key, wp, wa, source_file, …) and
+# the source files are untouched.
+_INTERNAL_TITLE_RE = re.compile(r"^#{1,3}\s*W[PA]-[0-9A-Za-z-]+\s*[:：]")
+_INTERNAL_META_RE = re.compile(
+    r"^\*\*\s*(module|mức rủi ro|muc rui ro|risk|version|status|trạng thái|principle_key|secondary_keys|owner|tác giả)\s*:?\s*\*\*",
+    re.IGNORECASE,
+)
+
+
+def strip_internal_headers(markdown: str) -> str:
+    if not markdown:
+        return markdown
+    lines = markdown.splitlines()
+    i = 0
+    stripped = False
+    while i < len(lines):
+        raw = lines[i].strip()
+        if not raw:
+            i += 1
+            continue
+        if _INTERNAL_TITLE_RE.match(raw) or _INTERNAL_META_RE.match(raw):
+            stripped = True
+            i += 1
+            continue
+        if stripped and re.fullmatch(r"-{3,}", raw):
+            i += 1
+            continue
+        break
+    if not stripped:
+        return markdown
+    return "\n".join(lines[i:]).lstrip("\n")
+
+
+def strip_internal_headers_payload(art: dict) -> dict:
+    out = dict(art)
+    if isinstance(out.get("body_markdown"), str):
+        out["body_markdown"] = strip_internal_headers(out["body_markdown"])
+    return out

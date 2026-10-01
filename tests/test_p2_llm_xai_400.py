@@ -8,6 +8,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs
 from welora.llm_adapter import build_openai_compatible_payload, safe_call_llm
@@ -16,7 +18,7 @@ from welora.safety_gate import TARGET_MONTHS
 
 class TestP2LlmXai400(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_payload_has_no_reasoning_or_temperature(self):
         p = build_openai_compatible_payload("grok-4.3", "sys", "hi")

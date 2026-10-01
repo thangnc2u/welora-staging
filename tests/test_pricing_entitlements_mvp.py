@@ -9,6 +9,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora import entitlements as ent
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
@@ -32,7 +34,7 @@ class TestPricingEntitlementsMvp(unittest.TestCase):
         os.environ["WELORA_LLM_PROVIDER"] = "stub"
         os.environ["WELORA_TRIAL_OTP_STUB"] = "1"
         ent.reset_state_for_tests()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def tearDown(self) -> None:
         ent.reset_state_for_tests()

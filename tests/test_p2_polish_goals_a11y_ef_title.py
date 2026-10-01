@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -17,7 +19,7 @@ HTML = STATIC / "goals.html"
 
 class TestP2PolishGoalsA11yEfTitle(unittest.TestCase):
     def setUp(self) -> None:
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
         self.html = HTML.read_text(encoding="utf-8")
 
     def test_health_gate_untouched(self):

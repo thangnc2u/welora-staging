@@ -7,6 +7,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.chat_service import reset_logs, sanitize_query
 from welora.safety_gate import TARGET_MONTHS
@@ -17,7 +19,7 @@ HTML = Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "logs
 class TestP2LogsRedact(unittest.TestCase):
     def setUp(self) -> None:
         reset_logs()
-        self.client = TestClient(create_app())
+        self.client = authed(TestClient(create_app()))
 
     def test_sanitize_phone_bearer_prefixes(self):
         raw = "Gọi +84912345678 hoặc 0912345678 Bearer abcdefghijk xai-ABCDEFG123 sk-SUPERSECRET99"

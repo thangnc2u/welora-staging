@@ -88,7 +88,7 @@ class ProgressBody(BaseModel):
     add_amount: Optional[float] = None
 
 class SessionCreateBody(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None  # P0 authz: defaults to the bearer token's user
 
 class ChatBody(BaseModel):
     user_id: str
@@ -458,6 +458,59 @@ def _require_login(authorization: Optional[str]) -> str:
     return uid
 
 
+# --- P0 authz: user-scoped data — effective user = bearer token owner (IDOR fix) ---
+AUTH_REQUIRED_MSG = "Bạn cần đăng nhập để xem hoặc thay đổi dữ liệu này."
+FORBIDDEN_OTHER_USER_MSG = "Bạn không có quyền truy cập dữ liệu của người dùng khác."
+
+
+def _require_user(authorization: Optional[str]) -> str:
+    """401 (VI) unless the bearer token resolves to a live session (password/OTP/device/demo)."""
+    uid = _bearer_uid(authorization)
+    if not uid:
+        raise HTTPException(
+            status_code=401,
+            detail={"error_code": "AUTH_REQUIRED", "message": AUTH_REQUIRED_MSG},
+        )
+    return uid
+
+
+def _forbid() -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={"error_code": "FORBIDDEN_OTHER_USER", "message": FORBIDDEN_OTHER_USER_MSG},
+    )
+
+
+def _owner(authorization: Optional[str], claimed: Optional[str] = None) -> str:
+    """Token user; a client-supplied user_id that differs → 403. No admin bypass here
+    (admins use the /api/admin/v1 routes behind _require_admin_2fa)."""
+    uid = _require_user(authorization)
+    c = str(claimed or "").strip()
+    if c and c != uid:
+        raise _forbid()
+    return uid
+
+
+def _optional_owner(authorization: Optional[str], claimed: Optional[str] = None) -> Optional[str]:
+    """Routes that also serve anonymous visitors (pricing/entitlement views): no user_id and
+    no token → anonymous (None). A client user_id requires the matching token (401/403)."""
+    if str(claimed or "").strip():
+        return _owner(authorization, claimed)
+    return _bearer_uid(authorization)
+
+
+def _owned(authorization: Optional[str], found: tuple[int, dict], key: str = "user_id") -> tuple[str, dict]:
+    """Owner check for a resource looked up by id (goal/account/tx/category/session)."""
+    uid = _require_user(authorization)
+    code, out = found
+    if code >= 400:
+        _respond(code, out)
+    owner = (out or {}).get(key)
+    if not owner or str(owner) != uid:
+        raise _forbid()
+    return uid, out
+
+
 def _require_admin(authorization: Optional[str]) -> str:
     """CK-10 guard — bearer token whose users.role ∈ auth.ADMIN_ROLES (fail-closed)."""
     uid = _bearer_uid(authorization)
@@ -797,9 +850,10 @@ def create_app() -> FastAPI:
     def healthz() -> dict:
         return health()
 
-    @app.get("/metrics", tags=["system"], summary="Agent counters (no PII)")
-    def metrics() -> dict:
+    @app.get("/metrics", tags=["system"], summary="Agent counters (no PII) — admin + 2FA only")
+    def metrics(authorization: Optional[str] = Header(None)) -> dict:
         from welora.metrics import service_get_metrics
+        _require_admin_2fa(authorization)
         return _respond(*service_get_metrics())
 
     @app.post("/auth/device", tags=["auth"])
@@ -878,123 +932,169 @@ def create_app() -> FastAPI:
             out["personas_error"] = str(exc)
         return _respond(code, out)
 
+    # ------------------------------------------------------------------
+    # P0 authz — every user-scoped route below requires a bearer token and
+    # the effective user is the token owner. A client user_id (query/path/
+    # body) that differs → 403; resources looked up by id must belong to the
+    # token user → 403. No token → 401. (Admins: /api/admin/v1 + 2FA only.)
+    # ------------------------------------------------------------------
     @app.post("/onboarding/session", tags=["onboarding"], status_code=201)
-    def onboarding_create(body: SessionCreateBody) -> dict:
-        code, out = ob_svc.service_create_session(body.model_dump())
+    def onboarding_create(body: SessionCreateBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        code, out = ob_svc.service_create_session({**body.model_dump(), "user_id": uid})
         if code == 201:
             return out
         return _respond(code, out)
 
     @app.patch("/onboarding/session/{session_id}/step/{step}", tags=["onboarding"])
-    def onboarding_step(session_id: str, step: int, body: dict[str, Any]) -> dict:
+    def onboarding_step(
+        session_id: str, step: int, body: dict[str, Any], authorization: Optional[str] = Header(None),
+    ) -> dict:
+        _owned(authorization, ob_svc.service_get_session(session_id))
         return _respond(*ob_svc.service_patch_step(session_id, step, body))
 
     @app.post("/onboarding/session/{session_id}/complete", tags=["onboarding"])
-    def onboarding_complete(session_id: str) -> dict:
+    def onboarding_complete(session_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, ob_svc.service_get_session(session_id))
         return _respond(*ob_svc.service_complete(session_id))
 
     @app.get("/users/{user_id}/dna", tags=["onboarding"])
-    def get_dna(user_id: str) -> dict:
-        return _respond(*ob_svc.service_get_dna(user_id))
+    def get_dna(user_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*ob_svc.service_get_dna(uid))
 
     @app.get("/users/{user_id}/personal-constitution", tags=["onboarding"])
-    def get_constitution(user_id: str) -> dict:
-        return _respond(*ob_svc.service_get_constitution(user_id))
+    def get_constitution(user_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*ob_svc.service_get_constitution(uid))
 
     @app.get("/constitution/core", tags=["constitution"])
     def get_core_constitution() -> dict:
         return _respond(*core_const_svc.service_get_core_constitution())
 
     @app.get("/academy/tree", tags=["academy"])
-    def academy_tree(user_id: str = Query(...)) -> dict:
-        return _respond(*academy_svc.service_get_tree(user_id))
+    def academy_tree(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*academy_svc.service_get_tree(uid))
 
     @app.get("/academy/nodes/{node_id}", tags=["academy"])
-    def academy_node(node_id: str, user_id: str = Query(...)) -> dict:
-        return _respond(*academy_svc.service_get_node(user_id, node_id))
+    def academy_node(
+        node_id: str, user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None),
+    ) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*academy_svc.service_get_node(uid, node_id))
 
     @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
-    def academy_read(node_id: str, body: AcademyReadBody) -> dict:
+    def academy_read(node_id: str, body: AcademyReadBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         payload = body.model_dump()
+        payload["user_id"] = uid
         payload["node_id"] = node_id or payload.get("node_id")
         return _respond(*academy_svc.service_mark_read(payload))
 
     @app.post("/academy/kuat", tags=["academy"])
-    def academy_kuat(body: AcademyKuatBody) -> dict:
-        return _respond(*academy_svc.service_submit_kuat(body.model_dump()))
+    def academy_kuat(body: AcademyKuatBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        return _respond(*academy_svc.service_submit_kuat({**body.model_dump(), "user_id": uid}))
 
     @app.post("/goals", tags=["goals"], status_code=201)
-    def goals_create(body: GoalCreateBody) -> dict:
-        code, out = goals_svc.service_create_goal(body.model_dump(exclude_none=True))
+    def goals_create(body: GoalCreateBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        code, out = goals_svc.service_create_goal({**body.model_dump(exclude_none=True), "user_id": uid})
         if code == 201:
             return out
         return _respond(code, out)
 
     @app.get("/goals", tags=["goals"])
-    def goals_list(user_id: str = Query(...), type: Optional[str] = Query(None, alias="type")) -> dict:
-        return _respond(*goals_svc.service_list_goals(user_id, type))
+    def goals_list(
+        user_id: Optional[str] = Query(None),
+        type: Optional[str] = Query(None, alias="type"),
+        authorization: Optional[str] = Header(None),
+    ) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*goals_svc.service_list_goals(uid, type))
 
     @app.get("/goals/{goal_id}", tags=["goals"])
-    def goals_get(goal_id: str) -> dict:
-        return _respond(*goals_svc.service_get_goal(goal_id))
+    def goals_get(goal_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _uid, out = _owned(authorization, goals_svc.service_get_goal(goal_id))
+        return out
 
     @app.patch("/goals/{goal_id}/progress", tags=["goals"])
-    def goals_progress(goal_id: str, body: ProgressBody) -> dict:
+    def goals_progress(goal_id: str, body: ProgressBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, goals_svc.service_get_goal(goal_id))
         return _respond(*goals_svc.service_progress(goal_id, body.model_dump(exclude_none=True)))
 
     @app.get("/users/{user_id}/safety-gate", tags=["goals", "safety"])
-    def safety_gate(user_id: str) -> dict:
-        return _respond(*goals_svc.service_safety_gate(user_id))
+    def safety_gate(user_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*goals_svc.service_safety_gate(uid))
 
     @app.get("/users/{user_id}/health-score", tags=["health"])
-    def health_score(user_id: str) -> dict:
-        return _respond(*hs_svc.service_get_health_score(user_id))
+    def health_score(user_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*hs_svc.service_get_health_score(uid))
 
     @app.get("/users/{user_id}/mastery", tags=["mastery"])
-    def mastery_get(user_id: str, node_id: str = Query("no_efund_invest")) -> dict:
+    def mastery_get(
+        user_id: str, node_id: str = Query("no_efund_invest"), authorization: Optional[str] = Header(None),
+    ) -> dict:
         from welora.mastery import service_get_mastery
-        return _respond(*service_get_mastery(user_id, node_id))
+        uid = _owner(authorization, user_id)
+        return _respond(*service_get_mastery(uid, node_id))
 
     @app.patch("/users/{user_id}/mastery", tags=["mastery"])
-    def mastery_patch(user_id: str, body: MasteryPatchBody) -> dict:
+    def mastery_patch(user_id: str, body: MasteryPatchBody, authorization: Optional[str] = Header(None)) -> dict:
         from welora.mastery import service_patch_mastery
-        return _respond(*service_patch_mastery(user_id, body.model_dump()))
+        uid = _owner(authorization, user_id)
+        return _respond(*service_patch_mastery(uid, body.model_dump()))
 
     @app.post("/agent/pre-rule", tags=["agent"])
-    def agent_pre_rule(body: PreRuleBody) -> dict:
-        code, out = pre_svc.service_evaluate(message=body.message, user_id=body.user_id, context_seed=body.context)
+    def agent_pre_rule(body: PreRuleBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        code, out = pre_svc.service_evaluate(message=body.message, user_id=uid, context_seed=body.context)
         return _respond(code, out)
 
     @app.post("/agent/chat", tags=["agent"])
-    def agent_chat(body: ChatBody) -> dict:
+    def agent_chat(body: ChatBody, authorization: Optional[str] = Header(None)) -> dict:
         from welora.llm_adapter import make_llm_callable
-        code, out = chat_svc.service_chat(user_id=body.user_id, message=body.message, context_seed=body.context, call_llm=make_llm_callable())
+        uid = _owner(authorization, body.user_id)
+        code, out = chat_svc.service_chat(user_id=uid, message=body.message, context_seed=body.context, call_llm=make_llm_callable())
         return _respond(code, out)
 
     @app.get("/agent/decision-logs", tags=["agent"])
-    def agent_logs(user_id: str = Query(...), limit: int = Query(20, ge=1, le=100)) -> dict:
-        return _respond(*chat_svc.service_list_logs(user_id, limit))
+    def agent_logs(
+        user_id: Optional[str] = Query(None),
+        limit: int = Query(20, ge=1, le=100),
+        authorization: Optional[str] = Header(None),
+    ) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*chat_svc.service_list_logs(uid, limit))
 
     @app.post("/parser/csv", tags=["parser"])
     def parse_csv(body: CsvParseBody) -> dict:
+        # Public by design: pure text parse, no user data read or written.
         return _respond(*csv_svc.service_parse_csv(text=body.text, filename=body.filename or ""))
 
     @app.get("/budget", tags=["budget"])
-    def budget_get(user_id: str = Query(...)) -> dict:
-        return _respond(*budget_svc.service_get(user_id))
+    def budget_get(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        return _respond(*budget_svc.service_get(uid))
 
     @app.post("/budget", tags=["budget"])
-    def budget_post(body: BudgetApplyBody) -> dict:
-        return _respond(*budget_svc.service_apply(body.model_dump()))
+    def budget_post(body: BudgetApplyBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        return _respond(*budget_svc.service_apply({**body.model_dump(), "user_id": uid}))
 
     @app.post("/budget/draft-from-avg", tags=["budget"])
-    def budget_draft_from_avg(body: BudgetDraftFromAvgBody) -> dict:
-        return _respond(*budget_svc.service_draft_from_avg(body.model_dump()))
+    def budget_draft_from_avg(body: BudgetDraftFromAvgBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        return _respond(*budget_svc.service_draft_from_avg({**body.model_dump(), "user_id": uid}))
 
     @app.post("/budget/close-period", tags=["budget"])
     @app.post("/budget/rollover", tags=["budget"])
-    def budget_close_period(body: BudgetClosePeriodBody) -> dict:
-        return _respond(*budget_svc.service_close_period(body.model_dump()))
+    def budget_close_period(body: BudgetClosePeriodBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        return _respond(*budget_svc.service_close_period({**body.model_dump(), "user_id": uid}))
 
     @app.get("/content", tags=["content"])
     def content_index() -> dict:
@@ -1002,17 +1102,21 @@ def create_app() -> FastAPI:
 
     @app.get("/content/{key}", tags=["content"])
     def content_by_key(key: str) -> dict:
-        return _respond(*content_svc.service_get_content(key))
+        code, out = content_svc.service_get_content(key)
+        if code == 200 and isinstance(out, dict):
+            out = content_svc.strip_internal_headers_payload(out)
+        return _respond(code, out)
 
 
     @app.post("/agent/mode-c/propose", tags=["agent", "mode-c"])
-    def mode_c_propose(body: ModeCProposeBody) -> dict:
+    def mode_c_propose(body: ModeCProposeBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         # Always resolve gate + confidence server-side; ignore client spoof fields.
         if body.persona:
-            mode_c_svc.set_persona(user_id=body.user_id, persona=str(body.persona))
-        gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
+            mode_c_svc.set_persona(user_id=uid, persona=str(body.persona))
+        gate, conf = mode_c_svc.resolve_server_gate_confidence(uid)
         return _respond(*mode_c_svc.propose_act(
-            user_id=body.user_id,
+            user_id=uid,
             message=body.message,
             gate_status=str(gate),
             answer_confidence=float(conf),
@@ -1024,14 +1128,16 @@ def create_app() -> FastAPI:
     def mode_c_confirm(
         body: ModeCConfirmBody,
         x_test_cool_off_advance: Optional[str] = Header(None, alias="X-Test-Cool-Off-Advance"),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
+        uid = _owner(authorization, body.user_id)
         # Re-check gate + confidence on confirm (client fields ignored).
-        gate, conf = mode_c_svc.resolve_server_gate_confidence(body.user_id)
+        gate, conf = mode_c_svc.resolve_server_gate_confidence(uid)
         advance = str(x_test_cool_off_advance or "").strip().lower() in (
             "1", "true", "yes", "y", "on",
         )
         code, out = mode_c_svc.confirm_act(
-            user_id=body.user_id,
+            user_id=uid,
             proposal_id=body.proposal_id,
             confirm=bool(body.confirm),
             gate_status=str(gate),
@@ -1042,89 +1148,98 @@ def create_app() -> FastAPI:
         return _respond(code, out)
 
     @app.post("/os/persona", tags=["os", "cool-off"])
-    def os_persona_set(body: dict[str, Any]) -> dict:
+    def os_persona_set(body: dict[str, Any], authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.get("user_id"))
         return _respond(*mode_c_svc.set_persona(
-            user_id=str(body.get("user_id") or ""),
+            user_id=uid,
             persona=str(body.get("persona") or ""),
         ))
 
     @app.get("/os/persona", tags=["os", "cool-off"])
-    def os_persona_get(user_id: str = Query(...)) -> dict:
-        p = mode_c_svc.get_persona(user_id)
+    def os_persona_get(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, user_id)
+        p = mode_c_svc.get_persona(uid)
         return {
-            "user_id": user_id,
+            "user_id": uid,
             "persona": p,
             "floor_months": mode_c_svc.PERSONA_FLOOR_MONTHS.get(p),
             "policy_version": mode_c_svc.POLICY_COOL_OFF,
         }
 
     @app.post("/agent/mode-c/undo", tags=["agent", "mode-c"])
-    def mode_c_undo(body: ModeCUndoBody) -> dict:
+    def mode_c_undo(body: ModeCUndoBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         return _respond(*mode_c_svc.undo_act(
-            user_id=body.user_id,
+            user_id=uid,
             act_id=body.act_id,
             undo_token=body.undo_token,
         ))
 
     @app.get("/os/envelopes", tags=["os", "mode-c"])
-    def os_envelopes(user_id: str = Query(...)) -> dict:
-        return _respond(*mode_c_svc.list_envelopes(user_id))
+    def os_envelopes(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.list_envelopes(_owner(authorization, user_id)))
 
     @app.get("/os/reminders", tags=["os", "mode-c"])
-    def os_reminders(user_id: str = Query(...)) -> dict:
-        return _respond(*mode_c_svc.list_reminders(user_id))
+    def os_reminders(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.list_reminders(_owner(authorization, user_id)))
 
     @app.get("/os/estate-checklist", tags=["os", "mode-c"])
-    def os_estate(user_id: str = Query(...)) -> dict:
-        return _respond(*mode_c_svc.get_estate_checklist(user_id))
+    def os_estate(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.get_estate_checklist(_owner(authorization, user_id)))
 
     @app.post("/os/envelopes/cross-take", tags=["os", "mode-c"])
-    def os_cross_take(body: ModeCCrossTakeBody) -> dict:
+    def os_cross_take(body: ModeCCrossTakeBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         return _respond(*mode_c_svc.deny_cross_take(
-            user_id=body.user_id,
+            user_id=uid,
             from_envelope_id=body.from_envelope_id,
             to_envelope_id=body.to_envelope_id,
             amount=float(body.amount or 0),
         ))
 
     @app.post("/os/companion", tags=["os", "dual-control"])
-    def os_companion_create(body: CompanionLinkBody) -> dict:
+    def os_companion_create(body: CompanionLinkBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         return _respond(*mode_c_svc.set_companion(
-            user_id=body.user_id,
+            user_id=uid,
             companion_user_id=body.companion_user_id,
             role=body.role,
             relation=body.relation,
         ))
 
     @app.get("/os/companion", tags=["os", "dual-control"])
-    def os_companion_list(user_id: str = Query(...)) -> dict:
-        return _respond(*mode_c_svc.list_companions(user_id))
+    def os_companion_list(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.list_companions(_owner(authorization, user_id)))
 
     @app.get("/os/dual-control/pending", tags=["os", "dual-control"])
-    def os_dual_pending(user_id: str = Query(...)) -> dict:
-        return _respond(*mode_c_svc.list_pending_dual(user_id))
+    def os_dual_pending(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*mode_c_svc.list_pending_dual(_owner(authorization, user_id)))
 
     @app.post("/agent/mode-c/companion-confirm", tags=["agent", "mode-c", "dual-control"])
-    def mode_c_companion_confirm(body: ModeCCompanionConfirmBody) -> dict:
+    def mode_c_companion_confirm(body: ModeCCompanionConfirmBody, authorization: Optional[str] = Header(None)) -> dict:
+        # The actor is the companion: token user must BE companion_user_id.
+        cid = _owner(authorization, body.companion_user_id)
         # Ignore client spoof flags (dual_ok / skip_dual / is_companion / gate).
         return _respond(*mode_c_svc.companion_confirm_act(
-            companion_user_id=body.companion_user_id,
+            companion_user_id=cid,
             proposal_id=body.proposal_id,
             confirm=bool(body.confirm),
         ))
 
     @app.post("/agent/mode-c/cancel-pending", tags=["agent", "mode-c", "dual-control"])
-    def mode_c_cancel_pending(body: ModeCCancelPendingBody) -> dict:
+    def mode_c_cancel_pending(body: ModeCCancelPendingBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         return _respond(*mode_c_svc.cancel_pending_dual(
-            user_id=body.user_id,
+            user_id=uid,
             proposal_id=body.proposal_id,
         ))
 
 
     # --- WeloraOS P0 Accounts CRUD (manual + consent + soft-hide) ---
     @app.post("/os/accounts", tags=["os", "accounts"], status_code=201)
-    def os_accounts_create(body: AccountCreateBody) -> dict:
-        payload = body.model_dump(exclude_none=True)
+    def os_accounts_create(body: AccountCreateBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        payload = {**body.model_dump(exclude_none=True), "user_id": uid}
         code, out = accounts_svc.service_create_account(payload)
         # Preserve consent_required + consent_text for the gate UI / tests.
         if code >= 400 and out.get("consent_required"):
@@ -1135,49 +1250,58 @@ def create_app() -> FastAPI:
 
     @app.get("/os/accounts", tags=["os", "accounts"])
     def os_accounts_list(
-        user_id: str = Query(...),
+        user_id: Optional[str] = Query(None),
         include_hidden: bool = Query(False),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
+        uid = _owner(authorization, user_id)
         return _respond(*accounts_svc.service_list_accounts(
-            user_id, include_hidden=include_hidden,
+            uid, include_hidden=include_hidden,
         ))
 
     @app.get("/os/accounts/{account_id}", tags=["os", "accounts"])
-    def os_accounts_get(account_id: str) -> dict:
-        return _respond(*accounts_svc.service_get_account(account_id))
+    def os_accounts_get(account_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _uid, out = _owned(authorization, accounts_svc.service_get_account(account_id))
+        return out
 
     @app.patch("/os/accounts/{account_id}", tags=["os", "accounts"])
-    def os_accounts_patch(account_id: str, body: AccountUpdateBody) -> dict:
+    def os_accounts_patch(account_id: str, body: AccountUpdateBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, accounts_svc.service_get_account(account_id))
         return _respond(*accounts_svc.service_update_account(
             account_id, body.model_dump(exclude_none=True),
         ))
 
     @app.patch("/os/accounts/{account_id}/balance", tags=["os", "accounts"])
-    def os_accounts_balance(account_id: str, body: AccountBalanceBody) -> dict:
+    def os_accounts_balance(account_id: str, body: AccountBalanceBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, accounts_svc.service_get_account(account_id))
         return _respond(*accounts_svc.service_set_balance(
             account_id, body.model_dump(),
         ))
 
     @app.post("/os/accounts/{account_id}/hide", tags=["os", "accounts"])
-    def os_accounts_hide(account_id: str) -> dict:
+    def os_accounts_hide(account_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, accounts_svc.service_get_account(account_id))
         return _respond(*accounts_svc.service_hide_account(account_id))
 
     @app.delete("/os/accounts/{account_id}", tags=["os", "accounts"])
-    def os_accounts_soft_delete(account_id: str) -> dict:
+    def os_accounts_soft_delete(account_id: str, authorization: Optional[str] = Header(None)) -> dict:
         """Soft-delete alias — hide, never hard-delete."""
+        _owned(authorization, accounts_svc.service_get_account(account_id))
         return _respond(*accounts_svc.service_hide_account(account_id))
 
     @app.post("/os/accounts/seed-persona", tags=["os", "accounts"])
-    def os_accounts_seed(body: AccountSeedBody) -> dict:
+    def os_accounts_seed(body: AccountSeedBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
         return _respond(*accounts_svc.service_seed_from_persona(
-            body.user_id, body.persona_id,
+            uid, body.persona_id,
         ))
 
 
     # --- WeloraOS P0 Transactions (manual + split; CSV parser separate) ---
     @app.post("/os/transactions", tags=["os", "transactions"], status_code=201)
-    def os_transactions_create(body: TransactionCreateBody) -> dict:
-        payload = body.model_dump(exclude_none=True)
+    def os_transactions_create(body: TransactionCreateBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        payload = {**body.model_dump(exclude_none=True), "user_id": uid}
         code, out = tx_svc.service_create_transaction(payload)
         if code >= 400 and out.get("consent_required"):
             raise HTTPException(status_code=code, detail=out)
@@ -1187,52 +1311,61 @@ def create_app() -> FastAPI:
 
     @app.get("/os/transactions", tags=["os", "transactions"])
     def os_transactions_list(
-        user_id: str = Query(...),
+        user_id: Optional[str] = Query(None),
         account_id: Optional[str] = Query(None),
         include_hidden: bool = Query(False),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
+        uid = _owner(authorization, user_id)
         return _respond(*tx_svc.service_list_transactions(
-            user_id, account_id=account_id, include_hidden=include_hidden,
+            uid, account_id=account_id, include_hidden=include_hidden,
         ))
 
     @app.get("/os/transactions/{tx_id}", tags=["os", "transactions"])
-    def os_transactions_get(tx_id: str) -> dict:
-        return _respond(*tx_svc.service_get_transaction(tx_id))
+    def os_transactions_get(tx_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _uid, out = _owned(authorization, tx_svc.service_get_transaction(tx_id))
+        return out
 
     @app.patch("/os/transactions/{tx_id}", tags=["os", "transactions"])
-    def os_transactions_patch(tx_id: str, body: TransactionUpdateBody) -> dict:
+    def os_transactions_patch(tx_id: str, body: TransactionUpdateBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, tx_svc.service_get_transaction(tx_id))
         return _respond(*tx_svc.service_update_transaction(
             tx_id, body.model_dump(exclude_none=True),
         ))
 
     @app.post("/os/transactions/{tx_id}/split", tags=["os", "transactions"])
-    def os_transactions_split(tx_id: str, body: TransactionSplitBody) -> dict:
+    def os_transactions_split(tx_id: str, body: TransactionSplitBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, tx_svc.service_get_transaction(tx_id))
         return _respond(*tx_svc.service_split_transaction(
             tx_id, body.model_dump(exclude_none=True),
         ))
 
     @app.post("/os/transactions/{tx_id}/hide", tags=["os", "transactions"])
-    def os_transactions_hide(tx_id: str) -> dict:
+    def os_transactions_hide(tx_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, tx_svc.service_get_transaction(tx_id))
         return _respond(*tx_svc.service_hide_transaction(tx_id))
 
     @app.delete("/os/transactions/{tx_id}", tags=["os", "transactions"])
-    def os_transactions_soft_delete(tx_id: str) -> dict:
+    def os_transactions_soft_delete(tx_id: str, authorization: Optional[str] = Header(None)) -> dict:
         """Soft-delete alias — hide, never hard-delete."""
+        _owned(authorization, tx_svc.service_get_transaction(tx_id))
         return _respond(*tx_svc.service_hide_transaction(tx_id))
 
 
     # --- WeloraOS P0 Categories (Fixed/Variable/Goals + tags + soft-disable) ---
     @app.get("/os/categories/defaults", tags=["os", "categories"])
     def os_categories_defaults() -> dict:
+        # Public by design: static default taxonomy, no user data.
         return _respond(*categories_svc.service_defaults())
 
     @app.post("/os/categories/seed-defaults", tags=["os", "categories"])
-    def os_categories_seed(body: CategorySeedBody) -> dict:
-        return _respond(*categories_svc.service_seed_defaults(body.user_id))
+    def os_categories_seed(body: CategorySeedBody, authorization: Optional[str] = Header(None)) -> dict:
+        return _respond(*categories_svc.service_seed_defaults(_owner(authorization, body.user_id)))
 
     @app.post("/os/categories", tags=["os", "categories"], status_code=201)
-    def os_categories_create(body: CategoryCreateBody) -> dict:
-        payload = body.model_dump(exclude_none=True)
+    def os_categories_create(body: CategoryCreateBody, authorization: Optional[str] = Header(None)) -> dict:
+        uid = _owner(authorization, body.user_id)
+        payload = {**body.model_dump(exclude_none=True), "user_id": uid}
         code, out = categories_svc.service_create_category(payload)
         if code == 201:
             return out
@@ -1240,32 +1373,40 @@ def create_app() -> FastAPI:
 
     @app.get("/os/categories", tags=["os", "categories"])
     def os_categories_list(
-        user_id: str = Query(...),
+        user_id: Optional[str] = Query(None),
         include_disabled: bool = Query(False),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
+        uid = _owner(authorization, user_id)
         return _respond(*categories_svc.service_list_categories(
-            user_id, include_disabled=include_disabled,
+            uid, include_disabled=include_disabled,
         ))
 
     @app.get("/os/categories/{category_id}", tags=["os", "categories"])
-    def os_categories_get(category_id: str) -> dict:
-        return _respond(*categories_svc.service_get_category(category_id))
+    def os_categories_get(category_id: str, authorization: Optional[str] = Header(None)) -> dict:
+        _uid, out = _owned(authorization, categories_svc.service_get_category(category_id))
+        return out
 
     @app.patch("/os/categories/{category_id}", tags=["os", "categories"])
-    def os_categories_patch(category_id: str, body: CategoryUpdateBody) -> dict:
+    def os_categories_patch(category_id: str, body: CategoryUpdateBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, categories_svc.service_get_category(category_id))
         return _respond(*categories_svc.service_update_category(
             category_id, body.model_dump(exclude_none=True),
         ))
 
     @app.post("/os/categories/{category_id}/reassign", tags=["os", "categories"])
-    def os_categories_reassign(category_id: str, body: CategoryReassignBody) -> dict:
+    def os_categories_reassign(category_id: str, body: CategoryReassignBody, authorization: Optional[str] = Header(None)) -> dict:
+        _owned(authorization, categories_svc.service_get_category(category_id))
         payload = body.model_dump(exclude_none=True)
         return _respond(*categories_svc.service_reassign_category(category_id, payload))
 
     @app.post("/os/categories/{category_id}/disable", tags=["os", "categories"])
     def os_categories_disable(
-        category_id: str, body: Optional[CategoryDisableBody] = None,
+        category_id: str,
+        body: Optional[CategoryDisableBody] = None,
+        authorization: Optional[str] = Header(None),
     ) -> dict:
+        _owned(authorization, categories_svc.service_get_category(category_id))
         payload = body.model_dump(exclude_none=True) if body else {}
         code, out = categories_svc.service_disable_category(category_id, payload)
         # Preserve reassign_required + counts for the UI / tests.
@@ -1294,42 +1435,32 @@ def create_app() -> FastAPI:
         user_id: Optional[str] = Query(None),
         authorization: Optional[str] = Header(None),
     ) -> dict:
-        uid = (user_id or "").strip() or None
-        if not uid and authorization and authorization.lower().startswith("bearer "):
-            token = authorization[7:].strip()
-            try:
-                me = auth_svc.service_me(token)
-                if isinstance(me, tuple):
-                    _code, payload = me
-                    if isinstance(payload, dict):
-                        uid = payload.get("user_id") or payload.get("id")
-                elif isinstance(me, dict):
-                    uid = me.get("user_id") or me.get("id")
-            except Exception:
-                uid = None
-        return entitlements_svc.get_me(uid)
+        # Anonymous (no token, no user_id) → FREE view; user_id only with the owner's token.
+        return entitlements_svc.get_me(_optional_owner(authorization, user_id))
 
     @app.get("/api/core/v1/entitlements/has", tags=["entitlements"])
     def entitlements_has(
         key: str = Query(..., min_length=1),
         user_id: Optional[str] = Query(None),
+        authorization: Optional[str] = Header(None),
     ) -> dict:
-        ok = entitlements_svc.has_entitlement(user_id, key)
-        return {"key": key, "allowed": ok, "user_id": user_id or "anonymous"}
+        uid = _optional_owner(authorization, user_id)
+        ok = entitlements_svc.has_entitlement(uid, key)
+        return {"key": key, "allowed": ok, "user_id": uid or "anonymous"}
 
     @app.post("/api/core/v1/entitlements/trial/aca/start", tags=["entitlements"])
-    def entitlements_trial_aca_start(body: EntitlementTrialStartBody) -> dict:
+    def entitlements_trial_aca_start(body: EntitlementTrialStartBody, authorization: Optional[str] = Header(None)) -> dict:
         return _respond(*entitlements_svc.start_aca_trial(
-            user_id=body.user_id,
+            user_id=_optional_owner(authorization, body.user_id),
             phone=body.phone,
             otp_code=body.otp_code,
         ))
 
     @app.post("/api/core/v1/entitlements/student/start", tags=["entitlements"])
-    def entitlements_student_start(body: EntitlementStudentStartBody) -> dict:
+    def entitlements_student_start(body: EntitlementStudentStartBody, authorization: Optional[str] = Header(None)) -> dict:
         """P4 — student verify → 12 months free then ACA_SV; blocks OS sell."""
         return _respond(*entitlements_svc.start_student_path(
-            user_id=body.user_id,
+            user_id=_optional_owner(authorization, body.user_id),
             student_id=body.student_id,
             verification_method=body.verification_method,
             email=body.email,
@@ -1353,7 +1484,9 @@ def create_app() -> FastAPI:
         return entitlements_svc.founding_family_status(plan_code)
 
     @app.post("/api/core/v1/entitlements/plan-change/preview", tags=["entitlements"])
-    def entitlements_plan_change_preview(body: EntitlementPlanChangePreviewBody) -> dict:
+    def entitlements_plan_change_preview(
+        body: EntitlementPlanChangePreviewBody, authorization: Optional[str] = Header(None),
+    ) -> dict:
         """P6 — upgrade/downgrade + prorate preview (checkout remains off)."""
         return _respond(*entitlements_svc.preview_plan_change(
             from_plan=body.from_plan,
@@ -1361,7 +1494,7 @@ def create_app() -> FastAPI:
             interval=body.interval,
             days_remaining=body.days_remaining,
             days_in_period=body.days_in_period,
-            user_id=body.user_id,
+            user_id=_optional_owner(authorization, body.user_id),
         ))
 
     @app.get("/api/core/v1/entitlements/lifetime", tags=["entitlements"])

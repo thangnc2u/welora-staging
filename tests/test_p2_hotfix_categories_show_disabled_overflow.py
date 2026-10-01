@@ -14,6 +14,8 @@ os.environ.setdefault("WELORA_STORE", "memory")
 
 from fastapi.testclient import TestClient
 
+from tests._authz import authed
+
 from welora.api.app import create_app
 from welora.fixtures import reset_all_stores
 from welora.os_categories import (
@@ -32,7 +34,7 @@ CATEGORIES_HTML = (ROOT / "welora" / "api" / "static" / "categories.html").read_
 class TestP2HotfixCategoriesShowDisabledOverflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(create_app())
+        cls.client = authed(TestClient(create_app()))
 
     def setUp(self) -> None:
         reset_all_stores()

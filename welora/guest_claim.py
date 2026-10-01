@@ -113,12 +113,7 @@ def _has_verified_login(conn, acc) -> bool:
     phone = bool(str(acc["phone"] or "").strip())
     if pw and (email or phone):
         return True
-    if email and str(acc["email_verified_at"] or "").strip():
-        return True
-    row = conn.execute(
-        "SELECT 1 FROM otp_challenges WHERE user_id=? AND consumed=1 LIMIT 1", (acc["user_id"],)
-    ).fetchone()
-    return bool(row)
+    return auth_svc.has_verified_contact(conn, acc)  # e-mail OTP or consumed phone OTP (shared)
 
 
 def claim_guest_data(account_uid: str, guest_token: str) -> dict[str, Any]:

@@ -12,14 +12,19 @@
 * KUAT limits reuse ``auth_rate_events`` (migration 013, same hashing / pruning as the auth limits).
   A failed-KUAT slot is RESERVED before grading (insert → commit → count, like the login limit of
   #238) and released only when the attempt passes, so parallel submits can never exceed a cap.
-  Buckets: per (user, node) short window + daily cap; per client IP (all accounts — shared NAT);
-  for guests (device-only accounts, no credentials) additionally per IP across ALL guests and per
-  device id, over 24 h.
+  Buckets: per (user, node) short window + daily cap; per client IP (all accounts — shared NAT)
+  over WELORA_KUAT_COOLDOWN_S AND over 24 h (round 3: throwaway accounts); for guests additionally
+  per IP across ALL guests and per device id, over 24 h. "Guest" for these budgets (round 3) =
+  every account WITHOUT a verified contact — device-only visitors AND registered accounts that
+  never completed an OTP (see ``_identity`` / ``auth.has_verified_contact``).
+  The client IP is ``auth_ratelimit.client_ip`` (#239 trust rules, never a raw X-Forwarded-For),
+  bucketed with ``ip_bucket`` (IPv6 → /64).
 
 Env (all optional; a value ≤ 0 disables that limit):
   WELORA_KUAT_MAX_FAILS (3) failed KUATs per user+node per WELORA_KUAT_COOLDOWN_S (1800 s)
   WELORA_KUAT_DAILY_MAX_FAILS (10) failed KUATs per user+node per 24 h
   WELORA_KUAT_IP_MAX_FAILS (30) failed KUATs per client IP (any account) per WELORA_KUAT_COOLDOWN_S
+  WELORA_KUAT_IP_DAY_MAX_FAILS (60) failed KUATs per client IP (any account, verified or not) per 24 h
   WELORA_KUAT_GUEST_IP_MAX_FAILS (6) failed KUATs of ALL guests on one client IP per WELORA_KUAT_GUEST_WINDOW_S
   WELORA_KUAT_GUEST_DEVICE_MAX_FAILS (6) failed KUATs per guest device id per WELORA_KUAT_GUEST_WINDOW_S
   WELORA_KUAT_GUEST_WINDOW_S (86400) window of the two guest limits
@@ -68,6 +73,10 @@ def ip_max_fails() -> int:
     return _env_int("WELORA_KUAT_IP_MAX_FAILS", 30)
 
 
+def ip_day_max_fails() -> int:
+    return _env_int("WELORA_KUAT_IP_DAY_MAX_FAILS", 60)
+
+
 def guest_ip_max_fails() -> int:
     return _env_int("WELORA_KUAT_GUEST_IP_MAX_FAILS", 6)
 
@@ -98,7 +107,7 @@ class KuatCooldown(Exception):
     def __init__(self, retry_after: float, reason: str):
         super().__init__(reason)
         self.retry_after = max(1, int(retry_after + 0.999))
-        self.reason = reason  # fails | daily | ip | guest_ip | device | starts
+        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | device | unverified_device | starts
 
 
 def _ts(iso: str) -> float:
@@ -150,20 +159,38 @@ def save_profile(user_id: str, profile: dict) -> int:
 
 
 # --------------------------------------------------------------------------- limits
-def _identity(conn, user_id: str) -> tuple[bool, Optional[str]]:
-    """(is_guest, device_id). Guest = a device-only account (no password / e-mail / phone / other
-    login kind — same rule as auth._is_pure_device_guest); an unknown user id is treated as a guest."""
-    from welora.auth import _is_pure_device_guest
+GUEST, UNVERIFIED, VERIFIED = "guest", "unverified", "verified"
+
+
+def _identity(conn, user_id: str) -> tuple[str, Optional[str]]:
+    """(kind, device_id) for the KUAT budgets (round 3):
+
+    * ``guest`` — a device-only account (auth._is_pure_device_guest) or an unknown user id;
+    * ``unverified`` — a registered ``guest``-role account WITHOUT a verified contact: no e-mail
+      proven by e-mail OTP and no consumed phone-OTP challenge (``auth.has_verified_contact``).
+      Register (password + e-mail/phone) alone proves nothing, so throwaway accounts land here;
+    * ``verified`` — a verified contact, or a non-``guest`` role (``demo`` personas P1–P6 seeded by
+      the server, admin roles).
+    guest + unverified share the guest IP / device buckets."""
+    from welora.auth import _is_pure_device_guest, has_verified_contact, is_reserved_device_id
 
     row = conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
     if not row:
-        return True, None
+        return GUEST, None
     dev = str(row["device_id"] or "").strip() or None
-    return bool(_is_pure_device_guest(conn, row)), dev
+    if _is_pure_device_guest(conn, row):
+        return GUEST, dev
+    role = str(row["role"] or "guest").strip().lower()
+    if role != "guest" or has_verified_contact(conn, row):
+        return VERIFIED, dev
+    # registered but unverified: its device_id is a random internal marker (one per account), so
+    # a device bucket on it would only duplicate the per-account limits — the shared guest IP
+    # bucket is what binds throwaway accounts.
+    return UNVERIFIED, (None if is_reserved_device_id(dev) else dev)
 
 
-def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> list[tuple[str, str, int, int]]:
-    """(scope, key_hash, max, window) buckets a failed KUAT counts against."""
+def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> tuple[list[tuple[str, str, int, int]], str]:
+    """((scope, key_hash, max, window) buckets a failed KUAT counts against, identity kind)."""
     un = f"user:{user_id}|node:{node_id}"
     out = []
     if max_fails() > 0:
@@ -171,24 +198,32 @@ def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> list[tuple[str
     if daily_max_fails() > 0:
         out.append(("kuat_user_node_day", _key_hash("kuat_user_node_day", un), daily_max_fails(), DAY_S))
     real_ip = _valid_ip(ip)  # a real client address only (not e.g. a test client's placeholder)
-    if real_ip and ip_max_fails() > 0:
-        out.append(("kuat_ip", _key_hash("kuat_ip", ip_bucket(real_ip)), ip_max_fails(), cooldown_s()))
-    guest, device = _identity(conn, user_id)
-    if guest:
-        if real_ip and guest_ip_max_fails() > 0:
-            out.append(("kuat_guest_ip", _key_hash("kuat_guest_ip", ip_bucket(real_ip)), guest_ip_max_fails(),
-                        guest_window_s()))
+    ipb = ip_bucket(real_ip) if real_ip else ""
+    if ipb and ip_max_fails() > 0:
+        out.append(("kuat_ip", _key_hash("kuat_ip", ipb), ip_max_fails(), cooldown_s()))
+    if ipb and ip_day_max_fails() > 0:
+        out.append(("kuat_ip_day", _key_hash("kuat_ip_day", ipb), ip_day_max_fails(), DAY_S))
+    kind, device = _identity(conn, user_id)
+    if kind != VERIFIED:
+        if ipb and guest_ip_max_fails() > 0:
+            out.append(("kuat_guest_ip", _key_hash("kuat_guest_ip", ipb), guest_ip_max_fails(), guest_window_s()))
         if device and guest_device_max_fails() > 0:
             out.append(("kuat_guest_device", _key_hash("kuat_guest_device", device), guest_device_max_fails(),
                         guest_window_s()))
-    return out
+    return out, kind
 
 
-_REASON = {"kuat_user_node": "fails", "kuat_user_node_day": "daily", "kuat_ip": "ip", "kuat_guest_ip": "guest_ip",
-           "kuat_guest_device": "device", "kuat_start": "starts"}
+_REASON = {"kuat_user_node": "fails", "kuat_user_node_day": "daily", "kuat_ip": "ip", "kuat_ip_day": "ip_day",
+           "kuat_guest_ip": "guest_ip", "kuat_guest_device": "device", "kuat_start": "starts"}
+_UNVERIFIED_REASON = {"guest_ip": "unverified_ip", "device": "unverified_device"}
 
 
-def _check(conn, action: str, buckets, now: float) -> None:
+def _reason(scope: str, kind: str) -> str:
+    r = _REASON[scope]
+    return _UNVERIFIED_REASON.get(r, r) if kind == UNVERIFIED else r
+
+
+def _check(conn, action: str, buckets, now: float, kind: str = VERIFIED) -> None:
     worst = None
     for scope, kh, mx, win in buckets:
         rows = conn.execute(
@@ -200,7 +235,7 @@ def _check(conn, action: str, buckets, now: float) -> None:
             # the window frees up when the mx-th most recent event leaves it
             wait = _ts(rows[mx - 1]["created_at"]) + win - now
             if worst is None or wait > worst[0]:
-                worst = (wait, _REASON[scope])
+                worst = (wait, _reason(scope, kind))
     if worst:
         raise KuatCooldown(*worst)
 
@@ -211,7 +246,8 @@ def check_kuat_allowed(user_id: str, node_id: str, ip: Optional[str] = None, *, 
     t = time.time() if now is None else float(now)
     conn = _conn()
     try:
-        _check(conn, FAIL_ACTION, _keys(conn, user_id, node_id, ip), t)
+        buckets, kind = _keys(conn, user_id, node_id, ip)
+        _check(conn, FAIL_ACTION, buckets, t, kind)
     finally:
         conn.close()
 
@@ -250,7 +286,7 @@ def reserve_kuat_fail(user_id: str, node_id: str, ip: Optional[str] = None, *,
     stamp = _iso(t)
     conn = _conn()
     try:
-        buckets = _keys(conn, user_id, node_id, ip)
+        buckets, kind = _keys(conn, user_id, node_id, ip)
         if not buckets:
             return FailReservation([])
         ids = [str(uuid.uuid4()) for _ in buckets]
@@ -274,7 +310,7 @@ def reserve_kuat_fail(user_id: str, node_id: str, ip: Optional[str] = None, *,
                 pivot = others[len(others) - mx] if len(others) >= mx else (others[0] if others else stamp)
                 wait = _ts(pivot) + win - t
                 if worst is None or wait > worst[0]:
-                    worst = (wait, _REASON[scope])
+                    worst = (wait, _reason(scope, kind))
         if worst:
             _delete_events(conn, ids)
             conn.commit()
@@ -290,7 +326,7 @@ def record_kuat_fail(user_id: str, node_id: str, ip: Optional[str] = None, *, no
     conn = _conn()
     try:
         stamp = _iso(t)
-        for scope, kh, _mx, _win in _keys(conn, user_id, node_id, ip):
+        for scope, kh, _mx, _win in _keys(conn, user_id, node_id, ip)[0]:
             conn.execute(
                 "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
                 (str(uuid.uuid4()), FAIL_ACTION, scope, kh, stamp),

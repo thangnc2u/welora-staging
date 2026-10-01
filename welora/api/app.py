@@ -836,6 +836,8 @@ def create_app() -> FastAPI:
             "dialect": dialect,
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
             "mail_provider": _mail_provider_name(),
+            "otp_echo": auth_svc.otp_echo_enabled(),
+            "sms_enabled": auth_svc.sms_provider_configured(),
             "gate_months": 3,
             "hard_deny": True,
             "git_sha": _short_git_sha(),

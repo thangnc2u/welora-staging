@@ -152,6 +152,20 @@ def login_or_register_device(
         conn.close()
 
 
+def otp_echo_enabled() -> bool:
+    """P0: the phone-OTP code is echoed in the API response ONLY when WELORA_OTP_ECHO=1
+    (staging demo). Unset / any other value → never echoed. Production must not set it."""
+    import os
+
+    return (os.environ.get("WELORA_OTP_ECHO") or "").strip() == "1"
+
+
+def sms_provider_configured() -> bool:
+    """No SMS delivery integration exists in this codebase (see renewal/push: no SMS / Zalo).
+    Kept explicit so the UI can say 'Kênh SMS chưa bật' instead of pretending a code was sent."""
+    return False
+
+
 def request_otp(
     phone: str,
     *,
@@ -181,13 +195,17 @@ def request_otp(
             (challenge_id, phone, code, _iso(expires)),
         )
         conn.commit()
-        return {
+        out = {
             "challenge_id": challenge_id,
             "phone_masked": _mask_phone(phone),
             "expires_at": _iso(expires),
-            "pilot_code": code,
-            "pilot_note": "Code echoed for pilot/tests only. Never in production.",
+            "sms_enabled": sms_provider_configured(),
+            "otp_echo": otp_echo_enabled(),
         }
+        if out["otp_echo"]:
+            out["pilot_code"] = code
+            out["pilot_note"] = "Code echoed because WELORA_OTP_ECHO=1 (staging demo only). Never in production."
+        return out
     finally:
         conn.close()
 

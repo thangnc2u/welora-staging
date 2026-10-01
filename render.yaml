@@ -38,6 +38,10 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Phone-OTP code echo (no SMS provider exists). Staging demo only: set "1" in the Dashboard
+      # to show the code on /app/otp. Production must NOT set it. Unset/other → never echoed.
+      - key: WELORA_OTP_ECHO
+        sync: false
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

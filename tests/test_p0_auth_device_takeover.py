@@ -30,6 +30,7 @@ from welora.safety_gate import TARGET_MONTHS
 ENV_KEYS = (
     "WELORA_ENV", "WELORA_STORE", "WELORA_DB_URL", "WELORA_GUEST_DEMO", "WELORA_MAIL_SYNC", "WELORA_OTP_FIXED",
     "WELORA_ADMIN_EMAILS", "WELORA_ADMIN_TOTP_SECRETS", "WELORA_CHECKOUT_ENABLED", "WELORA_SMTP_HOST",
+    "WELORA_OTP_ECHO",
 )
 FOUNDER = "founder@example.test"
 
@@ -141,6 +142,7 @@ class TestDeviceTakeoverPerUserType(_Base):
         self.assertEqual(login.json()["user_id"], uid)
 
     def _otp(self, phone):
+        os.environ["WELORA_OTP_ECHO"] = "1"  # staging demo flag: these tests read the echoed code
         req = self.client.post("/auth/otp/request", json={"phone": phone})
         self.assertEqual(req.status_code, 200, req.text)
         ver = self.client.post("/auth/otp/verify", json={"challenge_id": req.json()["challenge_id"], "code": req.json()["pilot_code"]})
@@ -189,6 +191,76 @@ class TestDeviceTakeoverPerUserType(_Base):
         self.assertEqual(v.json()["role"], "admin")
         uid = v.json()["user_id"]
         self.assert_takeover_blocked(uid, derived("email:", FOUNDER))
+
+
+class TestOtpEchoFlag(_Base):
+    """pilot_code is echoed only with WELORA_OTP_ECHO=1 (default OFF)."""
+
+    def _request(self, phone="0933334444"):
+        r = self.client.post("/auth/otp/request", json={"phone": phone})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
+    def _stored_code(self, challenge_id):
+        return self.q1("SELECT code FROM otp_challenges WHERE challenge_id=?", (challenge_id,))["code"]
+
+    def test_default_off_no_echo_and_health_false(self):
+        for val in (None, "", "0", "true", "yes", "on", " 2 "):
+            if val is None:
+                os.environ.pop("WELORA_OTP_ECHO", None)
+            else:
+                os.environ["WELORA_OTP_ECHO"] = val
+            with self.subTest(flag=val):
+                body = self._request()
+                code = self._stored_code(body["challenge_id"])
+                self.assertNotIn("pilot_code", body)
+                self.assertNotIn("pilot_note", body)
+                self.assertNotIn(code, str(body))
+                self.assertIs(body["otp_echo"], False)
+                self.assertIs(body["sms_enabled"], False)
+                h = self.client.get("/health").json()
+                self.assertIs(h["otp_echo"], False)
+                self.assertIs(h["sms_enabled"], False)
+
+    def test_flag_off_user_can_still_type_code_and_errors_do_not_leak(self):
+        os.environ.pop("WELORA_OTP_ECHO", None)
+        body = self._request("0944445555")
+        code = self._stored_code(body["challenge_id"])
+        wrong = "000000" if code != "000000" else "111111"
+        bad = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": wrong})
+        self.assertEqual(bad.status_code, 400)
+        self.assertNotIn(code, bad.text)
+        ok = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": code})
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertNotIn(code, ok.text)
+        reused = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": code})
+        self.assertNotIn(code, reused.text)
+
+    def test_flag_on_echoes_code_and_health_true(self):
+        os.environ["WELORA_OTP_ECHO"] = "1"
+        body = self._request()
+        self.assertEqual(body["pilot_code"], self._stored_code(body["challenge_id"]))
+        self.assertIs(body["otp_echo"], True)
+        self.assertIs(self.client.get("/health").json()["otp_echo"], True)
+
+    def test_otp_page_notice_when_no_code(self):
+        from pathlib import Path
+
+        html = (Path(__file__).resolve().parents[1] / "welora" / "api" / "static" / "otp.html").read_text(encoding="utf-8")
+        self.assertIn('id="otpNotice"', html)
+        self.assertIn("Kênh SMS chưa bật", html)
+        self.assertIn("Mã đã gửi qua SMS", html)
+        self.assertIn("d.sms_enabled", html)
+        self.assertIn('id="code"', html)  # code input stays available
+        self.assertNotIn("innerHTML", html)
+
+    def test_render_yaml_declares_flag_without_value(self):
+        from pathlib import Path
+
+        y = (Path(__file__).resolve().parents[1] / "render.yaml").read_text(encoding="utf-8")
+        i = y.index("- key: WELORA_OTP_ECHO")
+        self.assertIn("sync: false", y[i:i + 80])
+        self.assertNotIn("value:", y[i:i + 80].split("- key:")[1])
 
 
 class TestPureGuestAndPrefixes(_Base):

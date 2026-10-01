@@ -34,6 +34,7 @@ button{margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#1
     <div class="label">Mã thử (môi trường thử)</div>
     <div id="pilotCode"></div>
   </div>
+  <p class="muted hide" id="otpNotice"></p>
   <div class="label">Mã OTP</div>
   <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code"/>
   <button type="button" id="btnVerify">Xác thực</button>
@@ -58,8 +59,14 @@ document.getElementById('btnRequest').addEventListener('click', async()=>{
     document.getElementById('phoneMasked').textContent=d.phone_masked||'—';
     const wrap=document.getElementById('pilotWrap');
     const pc=document.getElementById('pilotCode');
-    if(d.pilot_code){pc.textContent=String(d.pilot_code);wrap.classList.remove('hide');}
-    else{pc.textContent='';wrap.classList.add('hide');}
+    const notice=document.getElementById('otpNotice');
+    if(d.pilot_code){pc.textContent=String(d.pilot_code);wrap.classList.remove('hide');notice.textContent='';notice.classList.add('hide');}
+    else{
+      /* code not echoed (WELORA_OTP_ECHO off) — the user still types the code below */
+      pc.textContent='';wrap.classList.add('hide');
+      notice.textContent=d.sms_enabled?'Mã đã gửi qua SMS':'Kênh SMS chưa bật';
+      notice.classList.remove('hide');
+    }
   }catch(e){
     showErr('Không xin được mã');
   }

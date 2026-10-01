@@ -53,7 +53,7 @@ document.getElementById('btnRequest').addEventListener('click', async()=>{
   if(phone.length<8){showErr('Nhập số điện thoại hợp lệ');return;}
   try{
     const r=await fetch('/auth/otp/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
-    if(!r.ok){showErr('Không xin được mã');return;}
+    if(!r.ok){const e=await r.json().catch(()=>({}));showErr((e.detail&&e.detail.message)||'Không xin được mã');return;}
     const d=await r.json();
     challenge=d.challenge_id||'';
     document.getElementById('phoneMasked').textContent=d.phone_masked||'—';

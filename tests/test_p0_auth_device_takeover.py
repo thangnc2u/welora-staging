@@ -30,7 +30,8 @@ from welora.safety_gate import TARGET_MONTHS
 ENV_KEYS = (
     "WELORA_ENV", "WELORA_STORE", "WELORA_DB_URL", "WELORA_GUEST_DEMO", "WELORA_MAIL_SYNC", "WELORA_OTP_FIXED",
     "WELORA_ADMIN_EMAILS", "WELORA_ADMIN_TOTP_SECRETS", "WELORA_CHECKOUT_ENABLED", "WELORA_SMTP_HOST",
-    "WELORA_OTP_ECHO",
+    "WELORA_OTP_ECHO", "WELORA_RESET_ECHO", "WELORA_RL_WINDOW_S", "WELORA_RL_TARGET_MAX", "WELORA_RL_IP_MAX",
+    "WELORA_RL_VERIFY_TARGET_MAX", "WELORA_RL_VERIFY_IP_MAX",
 )
 FOUNDER = "founder@example.test"
 
@@ -205,17 +206,17 @@ class TestOtpEchoFlag(_Base):
         return self.q1("SELECT code FROM otp_challenges WHERE challenge_id=?", (challenge_id,))["code"]
 
     def test_default_off_no_echo_and_health_false(self):
+        os.environ["WELORA_OTP_FIXED"] = "1"  # known code, so we can assert it never appears
         for val in (None, "", "0", "true", "yes", "on", " 2 "):
             if val is None:
                 os.environ.pop("WELORA_OTP_ECHO", None)
             else:
                 os.environ["WELORA_OTP_ECHO"] = val
             with self.subTest(flag=val):
-                body = self._request()
-                code = self._stored_code(body["challenge_id"])
+                body = self._request(f"09{abs(hash(str(val))) % 10**8:08d}")
                 self.assertNotIn("pilot_code", body)
                 self.assertNotIn("pilot_note", body)
-                self.assertNotIn(code, str(body))
+                self.assertNotIn(auth_svc.FIXED_OTP, str({k: v for k, v in body.items() if k != "challenge_id"}))
                 self.assertIs(body["otp_echo"], False)
                 self.assertIs(body["sms_enabled"], False)
                 h = self.client.get("/health").json()
@@ -224,24 +225,31 @@ class TestOtpEchoFlag(_Base):
 
     def test_flag_off_user_can_still_type_code_and_errors_do_not_leak(self):
         os.environ.pop("WELORA_OTP_ECHO", None)
+        os.environ["WELORA_OTP_FIXED"] = "1"
+        code = auth_svc.FIXED_OTP
         body = self._request("0944445555")
-        code = self._stored_code(body["challenge_id"])
-        wrong = "000000" if code != "000000" else "111111"
-        bad = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": wrong})
+        stored = self._stored_code(body["challenge_id"])
+        self.assertTrue(stored.startswith("sha256:"))  # hashed at rest
+        self.assertNotIn(code, stored)
+        bad = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": "000000"})
         self.assertEqual(bad.status_code, 400)
         self.assertNotIn(code, bad.text)
         ok = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": code})
         self.assertEqual(ok.status_code, 200, ok.text)
-        self.assertNotIn(code, ok.text)
+        self.assertNotIn(code, ok.text.replace(ok.json()["token"], ""))
         reused = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": code})
+        self.assertNotEqual(reused.status_code, 200)
         self.assertNotIn(code, reused.text)
 
     def test_flag_on_echoes_code_and_health_true(self):
         os.environ["WELORA_OTP_ECHO"] = "1"
         body = self._request()
-        self.assertEqual(body["pilot_code"], self._stored_code(body["challenge_id"]))
+        self.assertRegex(body["pilot_code"], r"^\d{6}$")
+        self.assertNotEqual(self._stored_code(body["challenge_id"]), body["pilot_code"])
         self.assertIs(body["otp_echo"], True)
         self.assertIs(self.client.get("/health").json()["otp_echo"], True)
+        ok = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": body["pilot_code"]})
+        self.assertEqual(ok.status_code, 200, ok.text)
 
     def test_otp_page_notice_when_no_code(self):
         from pathlib import Path

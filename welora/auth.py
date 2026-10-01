@@ -152,6 +152,34 @@ def login_or_register_device(
         conn.close()
 
 
+def _otp_code_hash(challenge_id: str, code: str) -> str:
+    """Phone-OTP code at rest: salted per challenge like email-OTP (`sha256:` marks hashed rows)."""
+    return "sha256:" + hashlib.sha256(f"welora-phone-otp:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+
+
+def _otp_code_matches(challenge_id: str, stored: str, code: str) -> bool:
+    import hmac
+
+    stored = stored or ""
+    c = (code or "").strip()
+    if stored.startswith("sha256:"):
+        return hmac.compare_digest(stored, _otp_code_hash(challenge_id, c))
+    return bool(stored) and hmac.compare_digest(stored, c)  # in-flight legacy plaintext rows (10-min TTL)
+
+
+def otp_challenge_phone(challenge_id: str, *, url: str | None = None) -> Optional[str]:
+    """Phone of a challenge (rate-limit key for /auth/otp/verify); None if unknown."""
+    if not challenge_id:
+        return None
+    ensure_auth_schema(url)
+    conn = get_connection(url)
+    try:
+        row = conn.execute("SELECT phone FROM otp_challenges WHERE challenge_id=?", (challenge_id,)).fetchone()
+        return row["phone"] if row else None
+    finally:
+        conn.close()
+
+
 def otp_echo_enabled() -> bool:
     """P0: the phone-OTP code is echoed in the API response ONLY when WELORA_OTP_ECHO=1
     (staging demo). Unset / any other value → never echoed. Production must not set it."""
@@ -192,7 +220,7 @@ def request_otp(
     try:
         conn.execute(
             "INSERT INTO otp_challenges(challenge_id, phone, code, expires_at) VALUES (?,?,?,?)",
-            (challenge_id, phone, code, _iso(expires)),
+            (challenge_id, phone, _otp_code_hash(challenge_id, code), _iso(expires)),
         )
         conn.commit()
         out = {
@@ -236,7 +264,7 @@ def verify_otp(
         if _now() > expires:
             raise ValueError("OTP expired")
 
-        if (code or "").strip() != row["code"]:
+        if not _otp_code_matches(challenge_id, row["code"], code):
             conn.execute(
                 "UPDATE otp_challenges SET attempts=attempts+1 WHERE challenge_id=?",
                 (challenge_id,),
@@ -617,6 +645,17 @@ def logout_guest(token: str, *, url: str | None = None) -> dict[str, Any]:
     return {"revoked": bool(ok)}
 
 
+RESET_GENERIC_MSG = "Nếu tài khoản tồn tại, yêu cầu đặt lại mật khẩu đã được ghi nhận."
+
+
+def reset_echo_enabled() -> bool:
+    """P0: reset_token is echoed in the API response ONLY when WELORA_RESET_ECHO=1
+    (staging demo; there is no reset e-mail/SMS delivery yet). Production must not set it."""
+    import os
+
+    return (os.environ.get("WELORA_RESET_ECHO") or "").strip() == "1"
+
+
 def request_password_reset(
     *,
     email: str | None = None,
@@ -624,17 +663,28 @@ def request_password_reset(
     url: str | None = None,
 ) -> dict[str, Any]:
     """
-    Forgot-password MVP — TOKEN STUB (no email/SMS delivery).
+    Forgot-password MVP — token stub (no email/SMS delivery yet).
 
-    Staging always returns reset_token in the body when the account exists
-    so partners can walk through reset without prod mail. When the account
-    does not exist, return a generic ok (no user enumeration).
+    The response is identical whether or not the account exists (same status, keys and
+    Vietnamese message) — no account enumeration. Only with WELORA_RESET_ECHO=1 (staging)
+    is a token minted and echoed for an existing guest/demo account. The token is never logged.
     """
     ensure_auth_schema(url)
     email_n = _norm_email(email) if email else None
     phone_n = _norm_phone(phone) if phone else None
     if not email_n and not phone_n:
         raise ValueError("cần email hoặc số điện thoại")
+    echo = reset_echo_enabled()
+    base = {
+        "ok": True,
+        "approach": "token_stub",
+        "message": RESET_GENERIC_MSG,
+        "note": RESET_GENERIC_MSG,
+        "reset_echo": echo,
+        "delivery": "none",
+    }
+    if not echo:
+        return base  # no lookup, no token: nothing to deliver it with
 
     conn = get_connection(url)
     try:
@@ -647,11 +697,6 @@ def request_password_reset(
             row = conn.execute(
                 "SELECT user_id, role FROM users WHERE phone=?", (phone_n,)
             ).fetchone()
-        base = {
-            "ok": True,
-            "approach": "token_stub",
-            "note": "Staging stub — không gửi email/SMS. Dùng reset_token bên dưới (nếu có).",
-        }
         if not row:
             return base
         role = (row["role"] or "guest").strip().lower()
@@ -666,7 +711,7 @@ def request_password_reset(
         conn.commit()
         base["reset_token"] = token
         base["expires_at"] = _iso(expires)
-        base["pilot_note"] = "Token echoed for staging/partner only. Never in production."
+        base["pilot_note"] = "Token echoed because WELORA_RESET_ECHO=1 (staging only). Never in production."
         return base
     finally:
         conn.close()
@@ -705,12 +750,21 @@ def reset_password_with_token(
         role = (user["role"] or "guest").strip().lower()
         if role not in GUEST_ROLES:
             raise PermissionError("reset bị từ chối (role)")
+        # single-use, atomic across instances: only the request that flips consumed 0→1 proceeds
+        cur = conn.execute(
+            "UPDATE password_reset_tokens SET consumed=1 WHERE token=? AND consumed=0", (tok,)
+        )
+        if (cur.rowcount or 0) != 1:
+            conn.rollback()
+            raise ValueError("token đã dùng")
         conn.execute(
             "UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE user_id=?",
             (_hash_password(pw), user["user_id"]),
         )
+        # any other outstanding reset token for this user is void once the password changed
         conn.execute(
-            "UPDATE password_reset_tokens SET consumed=1 WHERE token=?", (tok,)
+            "UPDATE password_reset_tokens SET consumed=1 WHERE user_id=? AND consumed=0",
+            (user["user_id"],),
         )
         # Revoke outstanding password sessions
         conn.execute(

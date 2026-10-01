@@ -458,6 +458,21 @@ def _require_login(authorization: Optional[str]) -> str:
     return uid
 
 
+def _auth_rate_limit(request: Request, action: str, target: Optional[str]) -> None:
+    """429 (VI) when the shared-DB limit for this IP or phone/email is exceeded."""
+    from welora import auth_ratelimit as rl
+
+    ip = rl.client_ip(request.client.host if request.client else None, request.headers.get("x-forwarded-for"))
+    try:
+        rl.check_and_record(action, ip=ip, target=target)
+    except rl.RateLimited as e:
+        raise HTTPException(
+            status_code=429,
+            detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+            headers={"Retry-After": str(e.retry_after)},
+        )
+
+
 # --- P0 authz: user-scoped data — effective user = bearer token owner (IDOR fix) ---
 AUTH_REQUIRED_MSG = "Bạn cần đăng nhập để xem hoặc thay đổi dữ liệu này."
 FORBIDDEN_OTHER_USER_MSG = "Bạn không có quyền truy cập dữ liệu của người dùng khác."
@@ -837,6 +852,7 @@ def create_app() -> FastAPI:
             "llm": os.environ.get("WELORA_LLM_PROVIDER", "stub"),
             "mail_provider": _mail_provider_name(),
             "otp_echo": auth_svc.otp_echo_enabled(),
+            "reset_echo": auth_svc.reset_echo_enabled(),
             "sms_enabled": auth_svc.sms_provider_configured(),
             "gate_months": 3,
             "hard_deny": True,
@@ -867,11 +883,13 @@ def create_app() -> FastAPI:
         return _respond(code, out)
 
     @app.post("/auth/otp/request", tags=["auth"])
-    def auth_otp_request(body: OtpRequestBody) -> dict:
+    def auth_otp_request(body: OtpRequestBody, request: Request) -> dict:
+        _auth_rate_limit(request, "otp_request", body.phone)
         return _respond(*auth_svc.service_otp_request(body.model_dump()))
 
     @app.post("/auth/otp/verify", tags=["auth"])
-    def auth_otp_verify(body: OtpVerifyBody) -> dict:
+    def auth_otp_verify(body: OtpVerifyBody, request: Request) -> dict:
+        _auth_rate_limit(request, "otp_verify", auth_svc.otp_challenge_phone(body.challenge_id))
         return _respond(*auth_svc.service_otp_verify(body.model_dump()))
 
     # Admin bootstrap (WELORA_ADMIN_EMAILS) — code emailed to listed addresses only, never echoed
@@ -906,7 +924,8 @@ def create_app() -> FastAPI:
         return _respond(*auth_svc.service_logout(token))
 
     @app.post("/auth/forgot-password", tags=["auth"])
-    def auth_forgot_password(body: ForgotPasswordBody) -> dict:
+    def auth_forgot_password(body: ForgotPasswordBody, request: Request) -> dict:
+        _auth_rate_limit(request, "forgot_password", body.email or body.phone)
         return _respond(*auth_svc.service_forgot_password(body.model_dump()))
 
     @app.post("/auth/reset-password", tags=["auth"])

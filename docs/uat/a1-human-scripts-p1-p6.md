@@ -21,7 +21,7 @@
 | P5 | 55–64 Cửa sổ 10 năm trước hưu | `pre_retire` | `demo-p5@welora.demo` |
 | P6 | 65+ Tuổi vàng và hộ đồng hành | `retire_companion` | `demo-p6@welora.demo` |
 
-- Nếu account trống trên staging: `POST /auth/demo/seed` rồi login lại.
+- Dữ liệu P1–P6 tự seed sau mỗi deploy/khởi động (`/health` → `demo_seed: ok`). Nếu account trống trên staging: admin (đã 2FA) gọi `POST /auth/demo/seed` rồi login lại — trang login không còn tự seed.
 - **Primary path:** seed-login (đối tác survey sẵn demo).  
 - **Alternate:** register mới tại `/app/register` (Email hoặc SĐT) — ghi rõ trong Notes nếu dùng.
 
@@ -81,7 +81,7 @@ Không bắt buộc URL node `02.x` (CP). Trên GP dùng **tiêu đề bài** tr
 
 - Thiết bị: iPhone Safari ưu tiên (hoặc Android Chrome).  
 - **Login primary:** `/app/login` → `demo-p1@welora.demo` / `WeloraDemo1!`  
-  - Nếu trống: `POST /auth/demo/seed` rồi login lại.  
+  - Nếu trống: kiểm tra `/health` `demo_seed`; admin (2FA) gọi `POST /auth/demo/seed` rồi login lại.  
 - **Alternate:** `/app/register` email `ten+p1@...` — không dùng mật khẩu seed.  
 - Giả định `[Inf]`: thu nhập ~15tr/tháng · nợ thẻ tuỳ chọn ~5tr · EF mục tiêu ~36tr.
 

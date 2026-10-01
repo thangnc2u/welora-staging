@@ -49,6 +49,26 @@ function run(file, ctx) {
   vm.runInContext(fs.readFileSync(path.join(STATIC, file), "utf8"), ctx, { filename: file });
 }
 
+function makeDom() {
+  const els = {};
+  function el(id, tag) {
+    const e = {
+      id, tag: tag || "div", hidden: false, textContent: "", value: "", title: "", type: "", className: "",
+      children: [], listeners: {}, focused: false,
+      addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
+      appendChild(c) { this.children.push(c); return c; },
+      focus() { this.focused = true; },
+      click() { (this.listeners.click || []).forEach((fn) => fn({})); },
+    };
+    return e;
+  }
+  const document = {
+    getElementById(id) { return els[id] || (els[id] = el(id)); },
+    createElement(tag) { return el("", tag); },
+  };
+  return { document, els };
+}
+
 const scenarios = {
   async gate_guest_onboarding() {
     const out = {};
@@ -102,6 +122,30 @@ const scenarios = {
     const uid = await w.WeloraSession.resolveUserId();
     const g = await w.fetch("/goals", { method: "POST", body: "{}" });
     return { uid, goal: g.status, redirect: replaced, stored: w.localStorage.getItem("welora_token"), auths: calls.map((c) => c.path + "=" + c.auth) };
+  },
+
+  async login_page_demo_list() {
+    const html = fs.readFileSync(path.join(STATIC, "login.html"), "utf8");
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    const routes = {
+      "/auth/demo/accounts": () => [200, { enabled: true, email: "partner@welora.demo", password_hint: "pw",
+        accounts: [{ persona: "P1", email: "demo-p1@welora.demo", label: "Demo P1" }, { persona: "P4", email: "demo-p4@welora.demo", label: "Demo P4" }] }],
+    };
+    const { w, calls } = makeWindow("/app/login", {}, routes);
+    const methods = [];
+    const f = w.fetch;
+    w.fetch = (u, init) => { methods.push(((init && init.method) || "GET") + " " + u); return f(u, init); };
+    const { document, els } = makeDom();
+    w.document = document;
+    w.setTimeout = () => 0;
+    const ctx = vm.createContext(w);
+    for (const src of scripts) vm.runInContext(src, ctx, { filename: "login-inline.js" });
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    const list = els.demoList ? els.demoList.children : [];
+    if (list[1]) list[1].children[0].click();
+    return { methods, box_hidden: els.demoBox.hidden, hint: els.demoHint.textContent,
+             picks: list.map((li) => li.children[0].textContent), identifier: els.identifier.value,
+             pw_focused: els.password.focused, paths: calls.map((c) => c.path) };
   },
 
   async other_401_codes_untouched() {

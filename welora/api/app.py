@@ -948,8 +948,26 @@ def create_app() -> FastAPI:
 
     @app.post("/auth/login", tags=["auth"])
     def auth_login(body: GuestLoginBody, request: Request) -> dict:
-        _auth_rate_limit(request, "login", body.email or body.phone)
-        return _respond(*auth_svc.service_login(body.model_dump()))
+        """Rate limit counts FAILED logins only (per account+IP, per account, per IP) — shared demo
+        accounts and correct passwords from other IPs are never locked out by someone else's typos."""
+        from welora import auth_ratelimit as rl
+
+        ip = rl.client_ip(request.client.host if request.client else None, headers=request.headers)
+        target = body.email or body.phone
+        try:
+            rl.login_check(ip=ip, target=target)
+        except rl.RateLimited as e:
+            raise HTTPException(
+                status_code=429,
+                detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+                headers={"Retry-After": str(e.retry_after)},
+            )
+        code, out = auth_svc.service_login(body.model_dump())
+        if code == 401:
+            rl.login_record_failure(ip=ip, target=target)
+        elif code == 200:
+            rl.login_clear_pair(ip=ip, target=target)
+        return _respond(code, out)
 
     @app.post("/auth/logout", tags=["auth"])
     def auth_logout(authorization: Optional[str] = Header(None)) -> dict:
@@ -967,12 +985,24 @@ def create_app() -> FastAPI:
     def auth_reset_password(body: ResetPasswordBody) -> dict:
         return _respond(*auth_svc.service_reset_password(body.model_dump()))
 
-    @app.post("/auth/demo/seed", tags=["auth"])
-    def auth_demo_seed() -> dict:
-        """Partner walkthrough seed — P1–P6 login aliases + OS fixtures (no gate/Hard Deny bypass).
-        P0 follow-up: one DB transaction + advisory lock (same runner as the startup seed)."""
+    @app.get("/auth/demo/accounts", tags=["auth"])
+    def auth_demo_accounts() -> dict:
+        """Read-only demo persona list for /app/login (aliases + labels, no user_ids). Never seeds."""
         from welora import demo_seed_runner
 
+        return demo_seed_runner.public_demo_accounts()
+
+    @app.post("/auth/demo/seed", tags=["auth"])
+    def auth_demo_seed(authorization: Optional[str] = Header(None)) -> dict:
+        """Partner walkthrough seed — P1–P6 login aliases + OS fixtures (no gate/Hard Deny bypass).
+        P0 follow-up: one DB transaction + advisory lock (same runner as the startup seed).
+        CoS review: admin + 2FA only (opening /app/login used to reseed while others demoed);
+        always 404 when WELORA_ENV=production. The startup auto-seed keeps the data fresh."""
+        from welora import demo_seed_runner
+
+        if demo_seed_runner.is_production():
+            raise HTTPException(status_code=404, detail="Not Found")
+        _require_admin_2fa(authorization)
         try:
             return demo_seed_runner.run_demo_seed(wait=True)
         except Exception as exc:

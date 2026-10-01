@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from tests._authz import authed
+from tests._authz import admin_demo_seed, authed
 
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
@@ -52,7 +52,7 @@ class TestP2UatResidualDemoPrerule(unittest.TestCase):
                 os.environ[key] = prev
 
     def test_demo_seed_p2_p4_dna_and_goals(self):
-        r = self.client.post("/auth/demo/seed")
+        r = admin_demo_seed(self.client)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
         self.assertEqual(body.get("email"), "partner@welora.demo")

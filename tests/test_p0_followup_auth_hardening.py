@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from starlette.datastructures import Headers
 
+from tests._authz import admin_demo_seed
 from tests._db_target import db_env
 from welora import admin_bootstrap, mailer
 from welora import auth as auth_svc
@@ -28,7 +29,8 @@ ENV_KEYS = (
     "WELORA_ENV", "WELORA_STORE", "WELORA_DB_URL", "WELORA_GUEST_DEMO", "WELORA_OTP_FIXED", "WELORA_OTP_ECHO",
     "WELORA_RESET_ECHO", "WELORA_MAIL_SYNC", "WELORA_ADMIN_EMAILS", "WELORA_TOKEN_TTL_DAYS",
     "WELORA_DEVICE_TOKEN_TTL_DAYS", "WELORA_RL_WINDOW_S", "WELORA_RL_TARGET_MAX", "WELORA_RL_IP_MAX",
-    "WELORA_RL_VERIFY_TARGET_MAX", "WELORA_RL_VERIFY_IP_MAX", "WELORA_RL_LOGIN_TARGET_MAX", "WELORA_RL_LOGIN_IP_MAX",
+    "WELORA_RL_VERIFY_TARGET_MAX", "WELORA_RL_VERIFY_IP_MAX", "WELORA_RL_LOGIN_PAIR_MAX", "WELORA_RL_LOGIN_ACCOUNT_MAX",
+    "WELORA_RL_LOGIN_IP_MAX", "WELORA_ADMIN_TOTP_SECRETS",
 )
 PW = "matkhau-dai-1"
 
@@ -95,7 +97,7 @@ class TestTokenExpiry(_Base):
         ch = self.client.post("/auth/otp/request", json={"phone": "+84901110001"}).json()
         tokens["otp"] = self.client.post("/auth/otp/verify", json={"challenge_id": ch["challenge_id"], "code": "123456"}).json()["token"]
         # demo partner account → password-kind token for a demo-role user
-        self.assertEqual(self.client.post("/auth/demo/seed").status_code, 200)
+        self.assertEqual(admin_demo_seed(self.client).status_code, 200)
         d = self.client.post("/auth/login", json={"email": auth_svc.DEMO_EMAIL, "password": auth_svc.DEMO_PASSWORD})
         self.assertEqual(d.status_code, 200, d.text)
         tokens["demo"] = d.json()["token"]
@@ -229,29 +231,105 @@ class TestAtomicOtpVerify(_Base):
 
 # ---------------------------------------------------------------- #4 rate limits + client IP
 class TestLoginRegisterRateLimit(_Base):
-    def test_login_per_target(self):
-        os.environ.update({"WELORA_RL_LOGIN_TARGET_MAX": "3", "WELORA_RL_LOGIN_IP_MAX": "100"})
-        self.register("rl-a@example.test")
-        codes = [self.login("rl-a@example.test", ip=f"203.0.113.{i}").status_code for i in range(1, 5)]
-        self.assertEqual(codes, [200, 200, 200, 429])
-        r = self.login("rl-a@example.test", ip="203.0.113.99")
-        self.assertEqual(r.json()["detail"]["error_code"], "RATE_LIMITED")
-        self.assertEqual(r.json()["detail"]["message"], rl.RATE_LIMIT_MSG)
-        self.assertTrue(r.headers.get("Retry-After"))
-        # wrong passwords count too (brute force), and another account is unaffected
-        self.register("rl-b@example.test")
-        self.assertEqual(self.login("rl-b@example.test").status_code, 200)
+    """CoS review of PR #237: only FAILED logins count; lock per account+IP, account-wide and per-IP."""
 
-    def test_login_per_ip_uses_real_client_ip_not_shared_proxy(self):
-        os.environ.update({"WELORA_RL_LOGIN_TARGET_MAX": "100", "WELORA_RL_LOGIN_IP_MAX": "3"})
+    BAD = "sai-mat-khau-1"
+
+    def test_defaults_and_envs(self):
+        self.assertEqual(rl.login_limits(), {"pair": 10, "target": 50, "ip": 30})
+        os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "4", "WELORA_RL_LOGIN_ACCOUNT_MAX": "9", "WELORA_RL_LOGIN_IP_MAX": "7"})
+        self.assertEqual(rl.login_limits(), {"pair": 4, "target": 9, "ip": 7})
+
+    def test_twenty_correct_logins_never_429(self):
+        self.register("rl-ok@example.test")
+        codes = [self.login("rl-ok@example.test", ip="203.0.113.5").status_code for _ in range(20)]
+        self.assertEqual(codes, [200] * 20)
+        self.assertEqual(self.q("SELECT COUNT(*) AS n FROM auth_rate_events WHERE action='login_fail'")[0]["n"], 0)
+
+    def test_shared_demo_account_many_staff(self):
+        """Partner staff on one office IP share P2: 25 logins in a row, no 429."""
+        self.assertEqual(admin_demo_seed(self.client).status_code, 200)
+        codes = [self.client.post("/auth/login", json={"email": auth_svc.DEMO_EMAIL, "password": auth_svc.DEMO_PASSWORD},
+                                  headers={"CF-Connecting-IP": "203.0.113.77"}).status_code for _ in range(25)]
+        self.assertEqual(set(codes), {200})
+
+    def test_pair_lock_does_not_block_other_ip(self):
+        self.register("rl-a@example.test")
+        for _ in range(10):
+            self.assertEqual(self.login("rl-a@example.test", ip="198.51.100.1", password=self.BAD).status_code, 401)
+        locked = self.login("rl-a@example.test", ip="198.51.100.1")  # even the right password from A
+        self.assertEqual(locked.status_code, 429)
+        self.assertEqual(locked.json()["detail"], {"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG})
+        self.assertTrue(int(locked.headers["Retry-After"]) > 0)
+        self.assertEqual(self.login("rl-a@example.test", ip="198.51.100.2").status_code, 200)  # IP B fine
+        self.register("rl-a2@example.test")
+        self.assertEqual(self.login("rl-a2@example.test", ip="198.51.100.1").status_code, 200)  # A, other account
+
+    def test_success_does_not_consume_and_clears_pair(self):
+        os.environ["WELORA_RL_LOGIN_PAIR_MAX"] = "3"
+        self.register("rl-s@example.test")
+        for _ in range(2):
+            self.assertEqual(self.login("rl-s@example.test", ip="198.51.100.9", password=self.BAD).status_code, 401)
+        for _ in range(5):
+            self.assertEqual(self.login("rl-s@example.test", ip="198.51.100.9").status_code, 200)
+        # pair bucket reset by the success → 2 more typos still allowed, the 3rd locks
+        codes = [self.login("rl-s@example.test", ip="198.51.100.9", password=self.BAD).status_code for _ in range(4)]
+        self.assertEqual(codes, [401, 401, 401, 429])
+
+    def test_global_account_threshold(self):
+        os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "3", "WELORA_RL_LOGIN_ACCOUNT_MAX": "7"})
+        self.register("rl-g@example.test")
+        n = 0
+        for i in range(1, 4):  # 3 IPs × ≤3 failures — never trips a pair lock before the account lock
+            for _ in range(3):
+                if n < 7:
+                    self.assertEqual(self.login("rl-g@example.test", ip=f"198.51.100.{20 + i}", password=self.BAD).status_code, 401)
+                    n += 1
+        self.assertEqual(n, 7)
+        # account-wide: a fresh IP is refused too, even with the right password
+        self.assertEqual(self.login("rl-g@example.test", ip="198.51.100.99").status_code, 429)
+        self.register("rl-g2@example.test")
+        self.assertEqual(self.login("rl-g2@example.test", ip="198.51.100.99").status_code, 200)
+
+    def test_global_default_is_50(self):
+        os.environ["WELORA_RL_LOGIN_IP_MAX"] = "0"  # isolate the account bucket
+        self.register("rl-50@example.test")
+        for i in range(50):
+            ip = f"198.51.{100 + i // 9}.{i % 9 + 1}"  # ≤ 9 per IP → below the pair limit
+            self.assertEqual(self.login("rl-50@example.test", ip=ip, password=self.BAD).status_code, 401, i)
+        self.assertEqual(self.login("rl-50@example.test", ip="203.0.113.250").status_code, 429)
+
+    def test_per_ip_ceiling(self):
+        os.environ["WELORA_RL_LOGIN_IP_MAX"] = "5"
+        ip = "192.0.2.10"
+        for i in range(5):  # spraying different accounts from one IP
+            self.assertEqual(self.login(f"spray{i}@example.test", ip=ip, password=self.BAD).status_code, 401)
         self.register("rl-c@example.test")
-        for _ in range(3):
-            self.assertEqual(self.login("rl-c@example.test", ip="192.0.2.10", password="sai-mat-khau").status_code, 401)
-        self.assertEqual(self.login("rl-c@example.test", ip="192.0.2.10").status_code, 429)
+        self.assertEqual(self.login("rl-c@example.test", ip=ip).status_code, 429)
         # same Cloudflare edge / Render proxy (same XFF tail), different real client → own bucket
         other = self.client.post("/auth/login", json={"email": "rl-c@example.test", "password": PW},
                                  headers={"CF-Connecting-IP": "192.0.2.11", "X-Forwarded-For": "192.0.2.10, 172.71.1.1"})
         self.assertEqual(other.status_code, 200, other.text)
+
+    def test_per_ip_default_is_30(self):
+        for i in range(30):
+            self.assertEqual(self.login(f"s{i}@example.test", ip="192.0.2.99", password=self.BAD).status_code, 401)
+        self.assertEqual(self.login("s-last@example.test", ip="192.0.2.99", password=self.BAD).status_code, 429)
+
+    def test_window_expiry(self):
+        os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "2", "WELORA_RL_WINDOW_S": "900"})
+        old = 1_000_000.0
+        for _ in range(2):
+            rl.login_record_failure(ip="192.0.2.60", target="w@example.test", now=old)
+        with self.assertRaises(rl.RateLimited):
+            rl.login_check(ip="192.0.2.60", target="w@example.test", now=old + 10)
+        rl.login_check(ip="192.0.2.60", target="w@example.test", now=old + 901)  # window passed
+
+    def test_phone_target_normalised(self):
+        os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "2"})
+        p = lambda phone: self.client.post("/auth/login", json={"phone": phone, "password": "x" * 8},
+                                           headers={"CF-Connecting-IP": "192.0.2.40"}).status_code
+        self.assertEqual([p("+84 912 345 678"), p("0912345678"), p("+84912345678")], [401, 401, 429])
 
     def test_register_per_target_and_ip(self):
         os.environ.update({"WELORA_RL_TARGET_MAX": "2", "WELORA_RL_IP_MAX": "3"})
@@ -263,12 +341,6 @@ class TestLoginRegisterRateLimit(_Base):
         self.assertEqual(self.register("rl-g@example.test", ip="192.0.2.30").status_code, 201)
         self.assertEqual(self.register("rl-h@example.test", ip="192.0.2.30").status_code, 429)  # per IP
         self.assertEqual(self.register("rl-h@example.test", ip="192.0.2.31").status_code, 201)
-
-    def test_phone_target_normalised(self):
-        os.environ.update({"WELORA_RL_LOGIN_TARGET_MAX": "2"})
-        p = lambda phone: self.client.post("/auth/login", json={"phone": phone, "password": "x" * 8},
-                                           headers={"CF-Connecting-IP": "192.0.2.40"}).status_code
-        self.assertEqual([p("+84 912 345 678"), p("0912345678"), p("+84912345678")], [401, 401, 429])
 
     def test_no_raw_pii_stored(self):
         self.register("rl-pii@example.test", ip="192.0.2.50")

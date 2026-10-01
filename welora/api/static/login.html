@@ -28,6 +28,8 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
 .ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:10px;font-weight:600}
 .links{margin-top:14px;font-size:13px}
 .links a{color:var(--link,#E8C86A);text-decoration:none;font-weight:600}
+.demo-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:6px}
+.demo-pick{padding:4px 8px;border-radius:8px;border:1px solid var(--border-default,#2F3D54);background:var(--bg-subtle,#0B1220);color:var(--text-secondary);font-size:12px;cursor:pointer}
 .demo{margin-top:12px;padding:10px;border-radius:10px;border:1px dashed var(--border-strong,#3D4F6A);font-size:12px;color:var(--text-secondary)}
 </style>
 </head>
@@ -51,6 +53,7 @@ button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;cursor:pointer
   <p class="links"><a id="linkForgot" href="/app/forgot-password">Quên mật khẩu?</a></p>
   <div class="demo" id="demoBox" hidden>
     Tài khoản demo partner: <span id="demoHint"></span>
+    <ul id="demoList" class="demo-list" aria-label="Tài khoản demo P1–P6"></ul>
   </div>
 </div>
 <script>
@@ -90,15 +93,31 @@ document.getElementById('btnLogin').addEventListener('click', async()=>{
     setTimeout(()=>{location.href='/app';},400);
   }catch(e){showErr('Không kết nối được');}
 });
+/* CoS review (PR #237): read-only list — opening login must never reseed demo data
+   (the seed endpoint is admin-only; the startup auto-seed keeps P1–P6 fresh). */
 (async()=>{
   try{
-    const r=await fetch('/auth/demo/seed',{method:'POST'});
+    const r=await fetch('/auth/demo/accounts');
     if(!r.ok) return;
     const d=await r.json();
-    if(d.email){
-      document.getElementById('demoBox').hidden=false;
-      document.getElementById('demoHint').textContent=d.email+' / '+ (d.password_hint||'');
-    }
+    if(!d.enabled||!d.email) return;
+    document.getElementById('demoBox').hidden=false;
+    document.getElementById('demoHint').textContent=d.email+' / '+(d.password_hint||'');
+    const list=document.getElementById('demoList');
+    (d.accounts||[]).forEach((a)=>{
+      const li=document.createElement('li');
+      const b=document.createElement('button');
+      b.type='button';
+      b.className='demo-pick';
+      b.textContent=(a.persona||'')+' · '+(a.email||'');
+      b.title=a.label||'';
+      b.addEventListener('click',()=>{
+        document.getElementById('identifier').value=a.email||'';
+        document.getElementById('password').focus();
+      });
+      li.appendChild(b);
+      list.appendChild(li);
+    });
   }catch(_e){}
 })();
 </script>

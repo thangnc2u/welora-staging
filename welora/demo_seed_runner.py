@@ -48,13 +48,40 @@ def _db_mode() -> bool:
     return url.startswith("postgresql://") or url.startswith("postgres://")
 
 
+def is_production() -> bool:
+    return (os.environ.get("WELORA_ENV") or "").strip().lower() in ("production", "prod")
+
+
+def public_demo_accounts() -> dict[str, Any]:
+    """Read-only list for /app/login (GET /auth/demo/accounts): persona aliases + labels only.
+
+    No user_ids, tokens or hashes. ``password_hint`` is the shared public demo password the login
+    page has always displayed (the demo accounts exist only when WELORA_GUEST_DEMO is on and never
+    in production). Never seeds or writes anything."""
+    from welora.auth import DEMO_EMAIL, DEMO_PASSWORD, guest_demo_enabled
+
+    if is_production() or not guest_demo_enabled():
+        return {"enabled": False, "accounts": []}
+    from welora.partner_demo_seed import DEMO_PERSONA_ALIASES
+
+    accounts = [
+        {
+            "persona": pid,
+            "email": meta["email"],
+            "label": meta.get("display_name") or pid,
+            "household": meta.get("household") or "",
+        }
+        for pid, meta in sorted(DEMO_PERSONA_ALIASES.items())
+    ]
+    return {"enabled": True, "email": DEMO_EMAIL, "password_hint": DEMO_PASSWORD, "accounts": accounts}
+
+
 def autoseed_wanted() -> tuple[bool, str]:
     from welora.auth import guest_demo_enabled
 
     if not guest_demo_enabled():
         return False, "WELORA_GUEST_DEMO=0"
-    env = (os.environ.get("WELORA_ENV") or "").strip().lower()
-    if env in ("production", "prod"):
+    if is_production():
         return False, "WELORA_ENV=production"
     if (os.environ.get("WELORA_DEMO_AUTOSEED") or "1").strip() == "0":
         return False, "WELORA_DEMO_AUTOSEED=0"

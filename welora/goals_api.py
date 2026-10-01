@@ -293,10 +293,10 @@ def _apply_debt_goal_flags(user_id: str, flags: dict) -> dict:
     return flags
 
 
-def service_safety_gate(user_id: str) -> tuple[int, dict]:
-    if not user_id:
-        return 400, {"error": "user_id is required"}
-    goal = STORE.get_active_for_user(user_id)
+def gate_flags(user_id: str) -> dict:
+    """Flags exactly as the Safety Gate sees them — in-process copy, then (DB store) the persisted
+    row (debt flags + server-written mastery), then DNA + debt_payoff goal. Shared by
+    /safety-gate and the Health Score so both agree after a restart / on another instance."""
     flags = get_user_flags(user_id)
     if _use_db_store():
         try:
@@ -308,7 +308,14 @@ def service_safety_gate(user_id: str) -> tuple[int, dict]:
             flags["mastery_no_efund_invest"] = effective_mastery_state(user_id)
         except Exception:
             pass
-    flags = _apply_debt_goal_flags(user_id, flags)
+    return _apply_debt_goal_flags(user_id, flags)
+
+
+def service_safety_gate(user_id: str) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    goal = STORE.get_active_for_user(user_id)
+    flags = gate_flags(user_id)
     if not goal:
         result = compute_safety_gate(
             months_covered=0.0,

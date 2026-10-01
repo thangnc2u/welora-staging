@@ -319,17 +319,21 @@ class TestLoginRegisterRateLimit(_Base):
     def test_window_expiry(self):
         os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "2", "WELORA_RL_WINDOW_S": "900"})
         old = 1_000_000.0
+        acc = "email:w@example.test"
         for _ in range(2):
-            rl.login_record_failure(ip="192.0.2.60", target="w@example.test", now=old)
+            rl.login_commit_failure(rl.login_reserve(ip="192.0.2.60", account=acc, now=old), now=old)
         with self.assertRaises(rl.RateLimited):
-            rl.login_check(ip="192.0.2.60", target="w@example.test", now=old + 10)
-        rl.login_check(ip="192.0.2.60", target="w@example.test", now=old + 901)  # window passed
+            rl.login_reserve(ip="192.0.2.60", account=acc, now=old + 10)
+        rl.login_release(rl.login_reserve(ip="192.0.2.60", account=acc, now=old + 901))  # window passed
 
     def test_phone_target_normalised(self):
+        """Formatting variants of one phone resolve to the same account → one budget."""
         os.environ.update({"WELORA_RL_LOGIN_PAIR_MAX": "2"})
+        r = self.client.post("/auth/register", json={"phone": "0912345678", "password": PW}, headers={"CF-Connecting-IP": "192.0.2.41"})
+        self.assertEqual(r.status_code, 201, r.text)
         p = lambda phone: self.client.post("/auth/login", json={"phone": phone, "password": "x" * 8},
                                            headers={"CF-Connecting-IP": "192.0.2.40"}).status_code
-        self.assertEqual([p("+84 912 345 678"), p("0912345678"), p("+84912345678")], [401, 401, 429])
+        self.assertEqual([p("0912 345 678"), p("0912-345-678"), p("(0912) 345678")], [401, 401, 429])
 
     def test_register_per_target_and_ip(self):
         os.environ.update({"WELORA_RL_TARGET_MAX": "2", "WELORA_RL_IP_MAX": "3"})

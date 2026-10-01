@@ -1,25 +1,31 @@
 """P0 · rate limits for unauthenticated auth endpoints, counted in the shared DB.
 
-Actions: ``otp_request``, ``otp_verify``, ``forgot_password``, ``login``, ``register``. Each allowed attempt records one
-row per scope (``target`` = normalised phone/email, ``ip`` = client IP) in ``auth_rate_events``
-(migration 013). An attempt is refused (HTTP 429, Vietnamese message) when either scope already
-has ``max`` rows inside the sliding window. Shared DB → limits hold across instances and restarts;
-count-then-insert is not transactional, so concurrent bursts may overshoot by a request or two.
+Actions: ``otp_request``, ``otp_verify``, ``forgot_password``, ``register``. Each allowed attempt
+records one row per scope (``target`` = normalised phone/email, ``ip`` = client IP) in
+``auth_rate_events`` (migration 013). An attempt is refused (HTTP 429, Vietnamese message) when
+either scope already has ``max`` rows inside the sliding window. Shared DB → limits hold across
+instances and restarts. For these actions the check (count) and the record (insert) are two
+statements, not one transaction, so a concurrent burst may overshoot by about the concurrency level;
+``/auth/login`` (below) reserves first and does not have that gap.
 
 Env (all optional): WELORA_RL_WINDOW_S (900), WELORA_RL_TARGET_MAX (5), WELORA_RL_IP_MAX (20),
 WELORA_RL_VERIFY_TARGET_MAX (10), WELORA_RL_VERIFY_IP_MAX (40). ``register`` uses the TARGET/IP
 pair (every attempt counts). A value ≤ 0 disables that limit.
 
-``/auth/login`` is different (CoS review of PR #237): only FAILED attempts (HTTP 401) are recorded
-(action ``login_fail``), successful logins never consume quota — partner staff share the P1–P6
-demo accounts. Before the password is checked, the attempt is refused when any failure bucket in
-the window is full:
+``/auth/login`` counts FAILED attempts only (action ``login_fail``) — partner staff share the P1–P6
+demo accounts, so correct logins must never consume quota. Buckets per window:
   * ``pair``    account + client IP     WELORA_RL_LOGIN_PAIR_MAX     (10)
   * ``target``  account, all IPs        WELORA_RL_LOGIN_ACCOUNT_MAX  (50)
   * ``ip``      client IP, all accounts WELORA_RL_LOGIN_IP_MAX       (30)
-So 10 wrong passwords from IP A lock only (account, A); the right password from IP B still works
-until the account-wide threshold. A successful login clears that (account, IP) pair bucket.
-
+"account" is the RESOLVED account (``auth.login_rate_key``): ``user:<id>`` for an existing user —
+so its email and phone share one budget — else the normalised identifier used for the lookup.
+A login naming both email and phone is rejected (400) before any of this.
+Reserve-then-count (``login_reserve``): before the password hash runs, one row per bucket is
+inserted and committed, then each bucket is counted INCLUDING in-flight reservations; over the
+limit → the reservation is deleted and 429. A wrong password keeps the rows (that is the failure
+record); a correct login (or a non-guess outcome such as 400/403) deletes them, and a correct login
+also clears its (account, IP) pair bucket. A burst therefore cannot exceed the limit; at the exact
+boundary concurrent attempts may both be refused (fail-safe), and they can simply retry.
 Client IP (``client_ip``): CF-Connecting-IP → True-Client-IP → first X-Forwarded-For hop → TCP peer,
 and the headers are honoured ONLY when the peer is a private/loopback address (the proxy). On Render
 every request arrives through Cloudflare + Render's internal proxy, so the peer is always private
@@ -183,7 +189,7 @@ def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], u
         conn.close()
 
 
-# --- /auth/login: failures only --------------------------------------------------------------
+# --- /auth/login: failures only, reserve-then-count -------------------------------------------
 
 def login_limits() -> dict[str, int]:
     """Failure ceilings per window: {"pair": account+IP, "target": account, "ip": client IP}."""
@@ -194,82 +200,114 @@ def login_limits() -> dict[str, int]:
     }
 
 
-def _login_scopes(ip: Optional[str], target: Optional[str]) -> list[tuple[str, str, int]]:
+def _login_scopes(ip: Optional[str], account: Optional[str]) -> list[tuple[str, str, int]]:
     lim = login_limits()
-    tgt = normalise_target(target)
+    acc = (account or "").strip()
     ipk = (ip or "").strip().lower()
     out: list[tuple[str, str, int]] = []
-    if tgt and ipk and lim["pair"] > 0:
-        out.append(("pair", _key_hash("pair", tgt + "|" + ipk), lim["pair"]))
-    if tgt and lim["target"] > 0:
-        out.append(("target", _key_hash("target", tgt), lim["target"]))
+    if acc and ipk and lim["pair"] > 0:
+        out.append(("pair", _key_hash("pair", acc + "|" + ipk), lim["pair"]))
+    if acc and lim["target"] > 0:
+        out.append(("target", _key_hash("target", acc), lim["target"]))
     if ipk and lim["ip"] > 0:
         out.append(("ip", _key_hash("ip", ipk), lim["ip"]))
     return out
 
 
-def login_check(*, ip: Optional[str], target: Optional[str], url: Optional[str] = None,
-                now: Optional[float] = None) -> None:
-    """Raise RateLimited when a login failure bucket is full. Records nothing."""
-    scopes = _login_scopes(ip, target)
+class LoginAttempt:
+    """Rows reserved for one in-flight login (see module docstring)."""
+
+    def __init__(self, event_ids: list[str], url: Optional[str]) -> None:
+        self.event_ids = event_ids
+        self.url = url
+
+
+def _delete_events(conn, ids: list[str]) -> None:
+    if ids:
+        conn.execute(
+            "DELETE FROM auth_rate_events WHERE event_id IN (" + ",".join("?" * len(ids)) + ")",
+            tuple(ids),
+        )
+
+
+def login_reserve(*, ip: Optional[str], account: Optional[str], url: Optional[str] = None,
+                  now: Optional[float] = None) -> LoginAttempt:
+    """Insert one failure row per bucket, commit, then count. Raise RateLimited (reservation
+    removed) when any bucket now holds more than its max."""
+    scopes = _login_scopes(ip, account)
     if not scopes:
-        return
+        return LoginAttempt([], url)
     from welora.auth import ensure_auth_schema
 
     ensure_auth_schema(url)
     t = time.time() if now is None else float(now)
     win = window_s()
     since = _iso(t - win)
+    stamp = _iso(t)
+    ids = [str(uuid.uuid4()) for _ in scopes]
     conn = get_connection(url)
     try:
+        for (scope, kh, _mx), eid in zip(scopes, ids):
+            conn.execute(
+                "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
+                (eid, LOGIN_FAIL_ACTION, scope, kh, stamp),
+            )
+        conn.commit()  # visible to every concurrent attempt before anyone counts
         for scope, kh, mx in scopes:
             rows = conn.execute(
-                "SELECT created_at FROM auth_rate_events WHERE action=? AND scope=? AND key_hash=? AND created_at>=? "
-                "ORDER BY created_at",
+                "SELECT event_id, created_at FROM auth_rate_events "
+                "WHERE action=? AND scope=? AND key_hash=? AND created_at>=? ORDER BY created_at, event_id",
                 (LOGIN_FAIL_ACTION, scope, kh, since),
             ).fetchall()
-            if len(rows) >= mx:
-                oldest = datetime.fromisoformat(rows[len(rows) - mx]["created_at"]).timestamp()
-                raise RateLimited(oldest + win - t)
+            if len(rows) > mx:
+                _delete_events(conn, ids)
+                conn.commit()
+                mine = set(ids)
+                others = [r["created_at"] for r in rows if r["event_id"] not in mine]
+                pivot = others[len(others) - mx] if len(others) >= mx else (others[0] if others else stamp)
+                raise RateLimited(datetime.fromisoformat(pivot).timestamp() + win - t)
+        return LoginAttempt(ids, url)
     finally:
         conn.close()
 
 
-def login_record_failure(*, ip: Optional[str], target: Optional[str], url: Optional[str] = None,
-                         now: Optional[float] = None) -> None:
-    """One row per bucket for a failed (401) login."""
-    scopes = _login_scopes(ip, target)
-    if not scopes:
+def login_commit_failure(attempt: LoginAttempt, *, now: Optional[float] = None) -> None:
+    """Wrong password: the reserved rows stay as the failure record (prune old rows)."""
+    if not attempt.event_ids:
         return
-    from welora.auth import ensure_auth_schema
-
-    ensure_auth_schema(url)
     t = time.time() if now is None else float(now)
-    stamp = _iso(t)
-    conn = get_connection(url)
+    conn = get_connection(attempt.url)
     try:
-        for scope, kh, _mx in scopes:
-            conn.execute(
-                "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
-                (str(uuid.uuid4()), LOGIN_FAIL_ACTION, scope, kh, stamp),
-            )
         conn.execute("DELETE FROM auth_rate_events WHERE created_at<?", (_iso(t - max(window_s(), _PRUNE_AFTER_S)),))
         conn.commit()
     finally:
         conn.close()
 
 
-def login_clear_pair(*, ip: Optional[str], target: Optional[str], url: Optional[str] = None) -> None:
+def login_release(attempt: LoginAttempt) -> None:
+    """Correct login / not a password guess: drop the reservation (never consumes quota)."""
+    if not attempt.event_ids:
+        return
+    conn = get_connection(attempt.url)
+    try:
+        _delete_events(conn, attempt.event_ids)
+        conn.commit()
+    finally:
+        conn.close()
+    attempt.event_ids = []
+
+
+def login_clear_pair(*, ip: Optional[str], account: Optional[str], url: Optional[str] = None) -> None:
     """A successful login forgets that (account, IP) pair's failures; account/IP totals stay."""
-    tgt = normalise_target(target)
+    acc = (account or "").strip()
     ipk = (ip or "").strip().lower()
-    if not (tgt and ipk):
+    if not (acc and ipk):
         return
     conn = get_connection(url)
     try:
         conn.execute(
             "DELETE FROM auth_rate_events WHERE action=? AND scope='pair' AND key_hash=?",
-            (LOGIN_FAIL_ACTION, _key_hash("pair", tgt + "|" + ipk)),
+            (LOGIN_FAIL_ACTION, _key_hash("pair", acc + "|" + ipk)),
         )
         conn.commit()
     finally:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -135,7 +136,7 @@ class TestP2AuthGuestDemo(unittest.TestCase):
         self.assertEqual(good.status_code, 200)
 
     def test_demo_seed_partner(self):
-        r = self.client.post("/auth/demo/seed")
+        r = admin_demo_seed(self.client)
         self.assertEqual(r.status_code, 200, r.text)
         d = r.json()
         self.assertIn(d.get("role"), ("demo", None))

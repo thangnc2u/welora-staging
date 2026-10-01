@@ -67,13 +67,122 @@ def get_postgres_dsn(url: str | None = None) -> str:
     return raw
 
 
+# --- Ambient transaction (P0 follow-up: demo seed in ONE transaction) -----------------------
+# Code paths such as the demo seed go through many repositories, each of which opens its own
+# connection and commits. Inside ``ambient_transaction(url)`` every get_connection() for the same
+# database on the SAME thread returns one shared connection whose commit()/close() are deferred:
+# the block commits once at the end (or rolls back on error), so other connections/instances see
+# either the old state or the new state, never a half-written one. Other threads are unaffected.
+import threading as _threading
+from contextlib import contextmanager as _contextmanager
+
+_AMBIENT = _threading.local()
+
+
+def _target_key(url: str | None) -> tuple[str, str]:
+    dialect = detect_dialect(url)
+    if dialect == "sqlite":
+        return ("sqlite", str(get_db_path(url)))
+    return ("postgres", get_postgres_dsn(url))
+
+
+class _AmbientConnection:
+    """Shared connection handed out inside ambient_transaction(); commit/close are deferred."""
+
+    def __init__(self, conn: Any) -> None:
+        self._real = conn
+
+    def execute(self, sql: str, params: Any = ()):
+        return self._real.execute(sql, params)
+
+    def executemany(self, sql: str, seq: Any):
+        return self._real.executemany(sql, seq)
+
+    def executescript(self, sql: str):  # sqlite: executescript would COMMIT implicitly
+        raise RuntimeError("executescript() is not allowed inside ambient_transaction()")
+
+    def cursor(self):
+        return self._real.cursor()
+
+    def commit(self) -> None:  # deferred to the end of the ambient block
+        return None
+
+    def rollback(self) -> None:
+        raise RuntimeError("rollback inside ambient_transaction() — aborting the whole block")
+
+    def close(self) -> None:
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._real, name)
+
+
+def in_ambient_transaction() -> bool:
+    return getattr(_AMBIENT, "conn", None) is not None
+
+
+@_contextmanager
+def ambient_transaction(url: str | None = None, *, sqlite_immediate: bool = True):
+    """Yield the shared connection; commit at the end, roll back on any exception.
+
+    SQLite: ``BEGIN IMMEDIATE`` takes the write lock up-front (a second writer waits / gets
+    "database is locked"). Postgres: one transaction on one connection (READ COMMITTED readers
+    keep seeing the previous committed rows until COMMIT)."""
+    if in_ambient_transaction():
+        raise RuntimeError("nested ambient_transaction() is not supported")
+    key = _target_key(url)
+    real = _open_connection(url)
+    try:
+        if key[0] == "sqlite" and sqlite_immediate:
+            real.execute("BEGIN IMMEDIATE")
+        _AMBIENT.conn = _AmbientConnection(real)
+        _AMBIENT.key = key
+        try:
+            yield _AMBIENT.conn
+        except BaseException:
+            try:
+                real.rollback()
+            finally:
+                _AMBIENT.conn = None
+                _AMBIENT.key = None
+            raise
+        _AMBIENT.conn = None
+        _AMBIENT.key = None
+        real.commit()
+    finally:
+        _AMBIENT.conn = None
+        _AMBIENT.key = None
+        try:
+            real.close()
+        except Exception:
+            pass
+
+
 def get_connection(url: str | None = None) -> Any:
     """
     Return a DB-API connection.
 
     - sqlite: sqlite3.Connection with Row factory + FK on
     - postgres: psycopg Connection with dict_row (requires psycopg)
+    - inside ambient_transaction() on this thread (same database): the shared connection
     """
+    amb = getattr(_AMBIENT, "conn", None)
+    if amb is not None:
+        try:
+            if _target_key(url) == getattr(_AMBIENT, "key", None):
+                return amb
+        except ValueError:
+            pass
+    return _open_connection(url)
+
+
+def _open_connection(url: str | None = None) -> Any:
     dialect = detect_dialect(url)
     if dialect == "sqlite":
         path = get_db_path(url)

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+from contextlib import contextmanager
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from welora import auth as auth_svc
@@ -22,6 +23,7 @@ from welora.db.connection import get_connection
 _USERS_PATH = re.compile(r"^/users/([^/?]+)/")
 _SKIP_PREFIXES = ("/auth/", "/api/admin/", "/api/checkout/", "/static/")
 METRICS_ADMIN_PREFIX = "test-metrics-admin-"
+SEED_ADMIN_PREFIX = "test-seed-admin-"
 
 
 def token_for(user_id: str, kind: str = "device", role: str | None = None) -> str:
@@ -108,3 +110,33 @@ def authed(client):
 
     client.request = request
     return client
+
+
+@contextmanager
+def admin_2fa_headers(prefix: str = SEED_ADMIN_PREFIX):
+    """Bearer headers of a throwaway admin with a live 2FA session (TOTP secret set in the env
+    for the duration, because _require_admin_2fa re-checks enrolment on every request)."""
+    import uuid
+
+    from welora import admin_2fa
+
+    admin_uid = prefix + uuid.uuid4().hex[:12]
+    secret = admin_2fa.generate_secret()
+    key = "WELORA_ADMIN_TOTP_SECRETS"
+    prev = os.environ.get(key)
+    os.environ[key] = f"{admin_uid}:{secret}" + (f",{prev}" if prev else "")
+    try:
+        tok = token_for(admin_uid, kind="email_otp", role="admin")
+        admin_2fa.open_session(admin_uid, tok, admin_2fa.totp(secret))
+        yield {"Authorization": "Bearer " + tok}
+    finally:
+        if prev is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = prev
+
+
+def admin_demo_seed(client):
+    """POST /auth/demo/seed as admin+2FA (CoS review of PR #237: the endpoint is admin-only)."""
+    with admin_2fa_headers() as h:
+        return client.post("/auth/demo/seed", headers=h)

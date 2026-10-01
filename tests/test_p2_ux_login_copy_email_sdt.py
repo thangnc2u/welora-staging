@@ -8,6 +8,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
 
@@ -102,7 +103,7 @@ class TestP2UxLoginSingleIdentifier(unittest.TestCase):
 
     def test_demo_partner_login_still_works_via_email_payload(self):
         """Identifier path for demo still hits /auth/login with email field."""
-        seed = self.client.post("/auth/demo/seed")
+        seed = admin_demo_seed(self.client)
         self.assertEqual(seed.status_code, 200, seed.text)
         email = seed.json().get("email") or "partner@welora.demo"
         parts = _split_identifier_js_logic(email)

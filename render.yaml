@@ -46,9 +46,23 @@ services:
       # Dashboard. Production must NOT set it. Unset/other → never echoed.
       - key: WELORA_RESET_ECHO
         sync: false
-      # Optional auth rate limits (defaults: window 900 s, 5/target, 20/IP; verify 10/target, 40/IP):
-      # WELORA_RL_WINDOW_S, WELORA_RL_TARGET_MAX, WELORA_RL_IP_MAX,
+      # Optional auth rate limits (defaults: window 900 s, 5/target, 20/IP; verify 10/target, 40/IP;
+      # register uses the 5/20 defaults): WELORA_RL_WINDOW_S, WELORA_RL_TARGET_MAX, WELORA_RL_IP_MAX,
       # WELORA_RL_VERIFY_TARGET_MAX, WELORA_RL_VERIFY_IP_MAX — set in the Dashboard only if needed.
+      # /auth/login counts FAILED attempts only (shared demo accounts never lock): per account+IP
+      # WELORA_RL_LOGIN_PAIR_MAX (10), per account from all IPs WELORA_RL_LOGIN_ACCOUNT_MAX (50),
+      # per IP across accounts WELORA_RL_LOGIN_IP_MAX (30).
+      # Client IP for limits: CF-Connecting-IP → True-Client-IP → first X-Forwarded-For → peer, headers
+      # trusted only when the TCP peer is a private/loopback proxy (Render behind Cloudflare).
+      # Login-token lifetime (P0 follow-up): WELORA_TOKEN_TTL_DAYS (default 30) for password / OTP /
+      # e-mail-OTP / demo tokens; WELORA_DEVICE_TOKEN_TTL_DAYS for guest /auth/device tokens (defaults
+      # to WELORA_TOKEN_TTL_DAYS). Legacy tokens without expires_at get max(created_at+TTL, now+7d).
+      # Guest/partner demo (P1–P6 auto-seed on startup, /auth/demo, /auth/device guests):
+      # WELORA_GUEST_DEMO unset = ON (staging). PRODUCTION MUST SET WELORA_GUEST_DEMO=0 and must NOT set
+      # WELORA_OTP_ECHO, WELORA_RESET_ECHO or WELORA_OTP_FIXED. WELORA_DEMO_AUTOSEED=0 disables only the
+      # startup seed (also never runs when WELORA_ENV=production). POST /auth/demo/seed is admin+2FA
+      # only and 404 in production; /app/login reads GET /auth/demo/accounts and never seeds.
+      # WELORA_DEBUG_PRERULE is no longer read: /app/pre-rule is a regular (login-gated) page.
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

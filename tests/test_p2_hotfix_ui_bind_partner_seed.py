@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from welora.agent import (
     CONFIDENCE_THRESHOLD,
     HARD,
@@ -137,9 +138,9 @@ class TestP2HotfixUiBindPartnerSeed(unittest.TestCase):
         self.assertIn("welora_token", gate)
 
     def test_seed_login_me_matches_accounts_goals_gate(self):
-        seed = self.client.post("/auth/demo/seed")
+        seed = admin_demo_seed(self.client)
         self.assertEqual(seed.status_code, 200, seed.text)
-        seed2 = self.client.post("/auth/demo/seed")
+        seed2 = admin_demo_seed(self.client)
         self.assertEqual(seed2.status_code, 200, seed2.text)
         body2 = seed2.json()
         self.assertTrue(body2.get("already") or body2.get("seeded") is False)

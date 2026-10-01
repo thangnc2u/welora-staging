@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 import re
 from typing import Any, Optional
 
@@ -286,6 +287,16 @@ def _respond(code: int, body: dict) -> dict:
 
 
 
+def _demo_seed_status() -> str:
+    """Startup demo seed outcome for UAT: ok | skipped | failed | pending (no secrets)."""
+    try:
+        from welora import demo_seed_runner
+
+        return str(demo_seed_runner.LAST_RUN.get("status") or "pending")
+    except Exception:  # pragma: no cover
+        return "unknown"
+
+
 def _short_git_sha() -> str:
     """Short tip SHA for UAT deploy confirmation (Render: RENDER_GIT_COMMIT)."""
     import os
@@ -462,7 +473,7 @@ def _auth_rate_limit(request: Request, action: str, target: Optional[str]) -> No
     """429 (VI) when the shared-DB limit for this IP or phone/email is exceeded."""
     from welora import auth_ratelimit as rl
 
-    ip = rl.client_ip(request.client.host if request.client else None, request.headers.get("x-forwarded-for"))
+    ip = rl.client_ip(request.client.host if request.client else None, headers=request.headers)
     try:
         rl.check_and_record(action, ip=ip, target=target)
     except rl.RateLimited as e:
@@ -479,9 +490,22 @@ FORBIDDEN_OTHER_USER_MSG = "Bạn không có quyền truy cập dữ liệu củ
 
 
 def _require_user(authorization: Optional[str]) -> str:
-    """401 (VI) unless the bearer token resolves to a live session (password/OTP/device/demo)."""
+    """401 (VI) unless the bearer token resolves to a live session (password/OTP/device/demo).
+    An expired token gets error_code TOKEN_EXPIRED so the FE can clear it and send to login."""
     uid = _bearer_uid(authorization)
     if not uid:
+        token = _bearer_token(authorization)
+        state = "unknown"
+        if token:
+            try:
+                state, _ = auth_svc.token_state(token)
+            except Exception:
+                state = "unknown"
+        if state == "expired":
+            raise HTTPException(
+                status_code=401,
+                detail={"error_code": "TOKEN_EXPIRED", "message": auth_svc.TOKEN_EXPIRED_MSG},
+            )
         raise HTTPException(
             status_code=401,
             detail={"error_code": "AUTH_REQUIRED", "message": AUTH_REQUIRED_MSG},
@@ -587,6 +611,16 @@ async def _lifespan(_app: FastAPI):
 
     # WELORA_ADMIN_EMAILS: promote verified listed users / demote unlisted admins (audited, never raises)
     admin_bootstrap.startup_sync()
+    # P0 follow-up: legacy tokens (expires_at NULL) get a bounded expiry — never raises
+    try:
+        auth_svc.backfill_legacy_token_expiry()
+    except Exception as e:  # pragma: no cover
+        logging.getLogger("welora.auth").warning("token expiry backfill failed: %s", type(e).__name__)
+    # P0 follow-up: demo P1–P6 seed after every deploy (WELORA_GUEST_DEMO on, non-production),
+    # one transaction + advisory lock, background thread → never blocks or crashes startup
+    from welora import demo_seed_runner
+
+    demo_seed_runner.start_background_seed()
     if checkout_svc.checkout_enabled():
         checkout_svc.start_reconcile_loop()
         renewal_svc.start_loop()  # mục 7 reminders + grace/downgrade, same process
@@ -719,11 +753,8 @@ def create_app() -> FastAPI:
     @app.get("/app/pre-rule", include_in_schema=False)
     @app.get("/app/pre-rule/", include_in_schema=False)
     def prerule_ui() -> FileResponse:
-        """Debug-only UI — off by default (WELORA_DEBUG_PRERULE=1 to enable)."""
-        import os
-        flag = (os.environ.get("WELORA_DEBUG_PRERULE") or "0").strip().lower()
-        if flag not in ("1", "true", "yes", "on"):
-            raise HTTPException(status_code=404, detail="Not Found")
+        """Pre-Rule check page (P0 follow-up: /app links here — always served; login-gated
+        client-side like every /app page, calls POST /agent/pre-rule with the bearer token)."""
         return _serve_app_html(static_dir, "prerule.html")
 
     @app.get("/app/health-score", include_in_schema=False)
@@ -854,6 +885,8 @@ def create_app() -> FastAPI:
             "otp_echo": auth_svc.otp_echo_enabled(),
             "reset_echo": auth_svc.reset_echo_enabled(),
             "sms_enabled": auth_svc.sms_provider_configured(),
+            "token_ttl_days": auth_svc.token_ttl_days(),
+            "demo_seed": _demo_seed_status(),
             "gate_months": 3,
             "hard_deny": True,
             "git_sha": _short_git_sha(),
@@ -909,12 +942,32 @@ def create_app() -> FastAPI:
         return _respond(*auth_svc.service_me(token))
 
     @app.post("/auth/register", tags=["auth"], status_code=201)
-    def auth_register(body: GuestRegisterBody) -> dict:
+    def auth_register(body: GuestRegisterBody, request: Request) -> dict:
+        _auth_rate_limit(request, "register", body.email or body.phone)
         return _respond(*auth_svc.service_register(body.model_dump()))
 
     @app.post("/auth/login", tags=["auth"])
-    def auth_login(body: GuestLoginBody) -> dict:
-        return _respond(*auth_svc.service_login(body.model_dump()))
+    def auth_login(body: GuestLoginBody, request: Request) -> dict:
+        """Rate limit counts FAILED logins only (per account+IP, per account, per IP) — shared demo
+        accounts and correct passwords from other IPs are never locked out by someone else's typos."""
+        from welora import auth_ratelimit as rl
+
+        ip = rl.client_ip(request.client.host if request.client else None, headers=request.headers)
+        target = body.email or body.phone
+        try:
+            rl.login_check(ip=ip, target=target)
+        except rl.RateLimited as e:
+            raise HTTPException(
+                status_code=429,
+                detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+                headers={"Retry-After": str(e.retry_after)},
+            )
+        code, out = auth_svc.service_login(body.model_dump())
+        if code == 401:
+            rl.login_record_failure(ip=ip, target=target)
+        elif code == 200:
+            rl.login_clear_pair(ip=ip, target=target)
+        return _respond(code, out)
 
     @app.post("/auth/logout", tags=["auth"])
     def auth_logout(authorization: Optional[str] = Header(None)) -> dict:
@@ -932,30 +985,32 @@ def create_app() -> FastAPI:
     def auth_reset_password(body: ResetPasswordBody) -> dict:
         return _respond(*auth_svc.service_reset_password(body.model_dump()))
 
+    @app.get("/auth/demo/accounts", tags=["auth"])
+    def auth_demo_accounts() -> dict:
+        """Read-only demo persona list for /app/login (aliases + labels, no user_ids). Never seeds."""
+        from welora import demo_seed_runner
+
+        return demo_seed_runner.public_demo_accounts()
+
     @app.post("/auth/demo/seed", tags=["auth"])
-    def auth_demo_seed() -> dict:
-        """Partner walkthrough seed — P1–P6 login aliases + OS fixtures (no gate/Hard Deny bypass)."""
-        code, out = auth_svc.service_demo_seed()
-        if not auth_svc.guest_demo_enabled():
-            return _respond(code, out)
-        out.pop("flag", None)
+    def auth_demo_seed(authorization: Optional[str] = Header(None)) -> dict:
+        """Partner walkthrough seed — P1–P6 login aliases + OS fixtures (no gate/Hard Deny bypass).
+        P0 follow-up: one DB transaction + advisory lock (same runner as the startup seed).
+        CoS review: admin + 2FA only (opening /app/login used to reseed while others demoed);
+        always 404 when WELORA_ENV=production. The startup auto-seed keeps the data fresh."""
+        from welora import demo_seed_runner
+
+        if demo_seed_runner.is_production():
+            raise HTTPException(status_code=404, detail="Not Found")
+        _require_admin_2fa(authorization)
         try:
-            from welora.fixtures import seed_priority_demo_personas
-            personas = seed_priority_demo_personas()
-            out["personas"] = {
-                pid: {
-                    "user_id": fx["user_id"],
-                    "household": fx.get("household"),
-                    "persona_id": fx.get("persona_id", pid),
-                    "os_goals": list(fx.get("os_goals") or []),
-                    "os_accounts_count": len(fx.get("os_accounts") or []),
-                    "safety_gate": (fx.get("safety_gate") or {}).get("status"),
-                }
-                for pid, fx in personas.items()
-            }
-        except Exception as exc:  # pragma: no cover — surface seed errors without 500 if account ok
-            out["personas_error"] = str(exc)
-        return _respond(code, out)
+            return demo_seed_runner.run_demo_seed(wait=True)
+        except Exception as exc:
+            logging.getLogger("welora.demo_seed").exception("demo seed failed: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail={"error_code": "DEMO_SEED_FAILED", "message": "Chưa tạo được dữ liệu demo — thử lại sau ít phút."},
+            )
 
     # ------------------------------------------------------------------
     # P0 authz — every user-scoped route below requires a bearer token and

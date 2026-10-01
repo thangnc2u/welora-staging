@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from welora.api.app import create_app
 from welora.auth import DEMO_EMAIL, DEMO_PASSWORD
 from welora.fixtures import reset_all_stores
@@ -171,7 +172,7 @@ class TestPartnerDemoSeedIdempotent(unittest.TestCase):
         self.assertEqual(set(counts2["P1"]["goal_types"]), {"emergency_fund", "debt_payoff"})
 
     def test_http_demo_seed_and_all_six_logins(self):
-        r = self.client.post("/auth/demo/seed")
+        r = admin_demo_seed(self.client)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
         self.assertEqual(body.get("email"), DEMO_EMAIL)

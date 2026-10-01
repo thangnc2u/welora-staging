@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from tests._db_target import db_env
 from welora.api.app import AUTH_REQUIRED_MSG, FORBIDDEN_OTHER_USER_MSG, create_app
 from welora.safety_gate import TARGET_MONTHS
@@ -268,7 +269,7 @@ class TestMetricsContentAndDemo(_Base):
     def test_demo_personas_login_and_read_own_data(self):
         from welora.auth import DEMO_PASSWORD
 
-        seed = self.call("POST", "/auth/demo/seed")
+        seed = admin_demo_seed(self.client)
         self.assertEqual(seed.status_code, 200, seed.text)
         emails = ((seed.json().get("rich") or {}).get("persona_emails")) or {}
         self.assertEqual(set(emails), {"P1", "P2", "P3", "P4", "P5", "P6"})

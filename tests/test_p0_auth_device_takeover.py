@@ -18,6 +18,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from tests._authz import admin_demo_seed
 from tests._db_target import db_env
 from welora import auth as auth_svc
 from welora import checkout as co
@@ -166,7 +167,7 @@ class TestDeviceTakeoverPerUserType(_Base):
         self.assert_no_token(self.device(derived("phone:", phone)), uid, codes=(403,))
 
     def test_demo_persona(self):
-        seed = self.client.post("/auth/demo/seed")
+        seed = admin_demo_seed(self.client)
         self.assertEqual(seed.status_code, 200, seed.text)
         emails = seed.json()["rich"]["persona_emails"]
         for pid in ("P1", "P4"):
@@ -177,7 +178,7 @@ class TestDeviceTakeoverPerUserType(_Base):
             with self.subTest(pid=pid):
                 self.assert_takeover_blocked(uid, derived("demo:", email))
         # re-seed + login still work afterwards
-        self.assertEqual(self.client.post("/auth/demo/seed").status_code, 200)
+        self.assertEqual(admin_demo_seed(self.client).status_code, 200)
         again = self.client.post("/auth/login", json={"email": emails["P1"], "password": auth_svc.DEMO_PASSWORD})
         self.assertEqual(again.status_code, 200, again.text)
 

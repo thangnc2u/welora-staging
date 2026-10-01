@@ -1,5 +1,7 @@
 /* Welora early auth gate — sync, blocking, before body paint.
-   /app/* requires welora_token; auth pages allowlisted. No logout query deeplink. */
+   /app/* requires welora_token; auth pages allowlisted. No logout query deeplink.
+   P0 follow-up (Founder): guests may onboard before logging in — /app/onboarding is exempt and
+   runs on the in-memory /auth/device guest token (session.js); no token is written here. */
 (function () {
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";
   var allow = {
@@ -8,7 +10,8 @@
     "/app/forgot-password": 1,
     "/app/reset-password": 1,
     "/app/otp": 1,
-    "/app/admin/login": 1
+    "/app/admin/login": 1,
+    "/app/onboarding": 1
   };
   if (allow[path]) {
     /* Hotfix #4 belt: wipe stray token on /app/login entry (keep device_id). */

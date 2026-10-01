@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from tests._authz import authed
+from tests._authz import admin_demo_seed, authed
 
 from welora.api.app import create_app
 from welora.safety_gate import TARGET_MONTHS
@@ -52,7 +52,7 @@ class TestP2UatResidualDemoPrerule(unittest.TestCase):
                 os.environ[key] = prev
 
     def test_demo_seed_p2_p4_dna_and_goals(self):
-        r = self.client.post("/auth/demo/seed")
+        r = admin_demo_seed(self.client)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
         self.assertEqual(body.get("email"), "partner@welora.demo")
@@ -103,9 +103,13 @@ class TestP2UatResidualDemoPrerule(unittest.TestCase):
         self.assertNotIn("WELORA_GUEST_DEMO", r.text)
         self.assertIn("Tài khoản demo partner", r.text)
 
-    def test_prerule_gated_off_by_default(self):
+    def test_prerule_served_and_login_gated(self):
+        # P0 follow-up: /app links to /app/pre-rule → the page is always served (was a 404 unless
+        # WELORA_DEBUG_PRERULE=1). It is login-gated client-side like every /app page.
         r = self.client.get("/app/pre-rule")
-        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('id="q"', r.text)
+        self.assertIn("/static/auth-gate.js", r.text)
         os.environ["WELORA_DEBUG_PRERULE"] = "1"
         client = authed(TestClient(create_app()))
         r2 = client.get("/app/pre-rule")

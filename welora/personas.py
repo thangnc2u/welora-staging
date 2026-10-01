@@ -189,10 +189,7 @@ def apply_debt_priority_lock(
     else:
         pri = str(raw_pri).strip().lower()
         if pri not in NEAR_TERM_PRIORITY_VALUES:
-            raise ValueError(
-                "near_term_priority must be one of: "
-                + ", ".join(sorted(NEAR_TERM_PRIORITY_VALUES))
-            )
+            raise ValueError("Ưu tiên gần: lựa chọn chưa hợp lệ — vui lòng chọn một mục có sẵn.")
     if pri == "debt" and not debt:
         raise ValueError(DEBT_PRIORITY_CONFLICT_VI)
     if debt and raw_pri in (None, ""):
@@ -550,10 +547,7 @@ def normalize_household(value: str) -> str:
         return v
     if v in LEGACY_LIFE_STAGE_TO_HOUSEHOLD:
         return LEGACY_LIFE_STAGE_TO_HOUSEHOLD[v]
-    raise ValueError(
-        f"household must be one of: {', '.join(sorted(HOUSEHOLD_VALUES))} "
-        f"(or legacy life_stage)"
-    )
+    raise ValueError("Hộ gia đình: lựa chọn chưa hợp lệ — vui lòng chọn một mục có sẵn.")
 
 
 def resolve_step1_identity(payload: dict[str, Any]) -> dict[str, str]:
@@ -567,7 +561,7 @@ def resolve_step1_identity(payload: dict[str, Any]) -> dict[str, str]:
     if raw is None or raw == "":
         raw = payload.get("life_stage")
     if raw is None or raw == "":
-        raise ValueError("step 1 requires household (or legacy life_stage)")
+        raise ValueError("Bước 1: vui lòng chọn hoặc nhập «Hộ gia đình».")
     household = normalize_household(str(raw))
     persona_id = HOUSEHOLD_TO_PERSONA[household]
     return {

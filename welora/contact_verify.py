@@ -1,0 +1,450 @@
+"""Contact verification after register — ticket "Xác minh OTP sau đăng ký + phone OTP gắn tài khoản
+có sẵn" (migration 020).
+
+Flow
+* ``POST /auth/register`` (e-mail or phone + password) creates the account as before and then calls
+  ``issue_after_register`` → a 6-digit verification code bound to THAT ``user_id`` (no second
+  account, no lookup by identifier). E-mail goes through the existing mailer (``WELORA_MAIL_PROVIDER``
+  — Resend on staging); phone through ``welora.sms`` (disabled today → no code is created, the user
+  is told "Kênh SMS chưa bật" and can verify later).
+* ``POST /auth/verify/request`` (resend) and ``POST /auth/verify/confirm`` take the BEARER session —
+  never an e-mail / phone — so they expose no account-enumeration surface. A ``challenge_id`` that
+  belongs to another user behaves exactly like an unknown one.
+* Success sets ``users.email_verified_at`` / ``users.phone_verified_at`` (only if the account's
+  contact still equals the code's target) → ``auth.has_verified_contact`` is true → KUAT uses the
+  verified budget and the account is a valid guest-claim target.
+
+Code at rest: ``sha256:`` of a per-challenge salted string (never stored or logged in clear, never
+echoed — not even with WELORA_OTP_ECHO). TTL ``WELORA_VERIFY_OTP_TTL_S`` (600 s). At most
+``WELORA_VERIFY_MAX_ATTEMPTS`` (5) code checks per challenge: every check first RESERVES an attempt
+with one conditional UPDATE (``attempts < max AND consumed = 0 AND not expired``), so even a
+concurrent burst cannot exceed the limit; the correct code then consumes the challenge with
+``UPDATE … SET consumed=1 WHERE consumed=0`` (rowcount 1 = the single winner). A new code
+supersedes (``consumed=2``) the user's older open codes for the channel. Resend cooldown
+``WELORA_VERIFY_RESEND_COOLDOWN_S`` (60 s); request/confirm are also rate-limited per user and per
+client IP in ``auth_rate_events`` (``auth_ratelimit`` actions ``verify_request`` / ``verify_confirm``).
+
+Who can verify: registered ``guest``-role accounts with an unverified e-mail or phone. Demo personas
+(public password, own KUAT budget) and device-only guests are not offered verification; admin roles
+already verify by e-mail OTP. Note: verifying an e-mail listed in WELORA_ADMIN_EMAILS proves the
+mailbox exactly like the admin e-mail OTP does, so ``admin_bootstrap.startup_sync`` promotes it on
+the next start (same rule as today for a verified listed address).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import logging
+import os
+import secrets
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from welora.db.connection import get_connection
+
+log = logging.getLogger("welora.contact_verify")
+
+CHANNELS = ("email", "phone")
+OPEN, USED, SUPERSEDED = 0, 1, 2
+
+MSG_INVALID = "Mã xác minh không đúng hoặc đã hết hạn. Vui lòng kiểm tra lại hoặc bấm «Gửi lại mã»."
+MSG_TOO_MANY = "Bạn đã nhập sai quá số lần cho phép. Vui lòng bấm «Gửi lại mã» để nhận mã mới."
+MSG_NOT_ELIGIBLE = "Tài khoản này không cần xác minh hoặc không có email / số điện thoại để xác minh."
+MSG_ALREADY = "Email / số điện thoại của bạn đã được xác minh."
+MSG_COOLDOWN = "Vui lòng chờ {s} giây trước khi gửi lại mã."
+MSG_SENT_EMAIL = "Chúng tôi đã gửi mã xác minh gồm 6 chữ số tới email {target}. Vui lòng kiểm tra hộp thư (cả mục Spam)."
+MSG_SENT_SMS = "Chúng tôi đã gửi mã xác minh gồm 6 chữ số qua SMS tới số {target}."
+MSG_SMS_OFF = (
+    "Kênh SMS hiện chưa được bật nên Welora chưa thể gửi mã xác minh tới số điện thoại {target}. "
+    "Bạn vẫn sử dụng ứng dụng bình thường và có thể xác minh sau."
+)
+MSG_VERIFIED = "Cảm ơn bạn! Tài khoản đã được xác minh."
+MAIL_SUBJECT = "Welora · Mã xác minh tài khoản"
+MAIL_BODY = (
+    "Xin chào,\n\n"
+    "Mã xác minh tài khoản Welora của bạn là: {code}\n\n"
+    "Mã có hiệu lực trong {minutes} phút và chỉ dùng được một lần. Vui lòng không chia sẻ mã này với bất kỳ ai, "
+    "kể cả nhân viên Welora.\n\n"
+    "Nếu bạn không đăng ký tài khoản Welora, xin vui lòng bỏ qua email này.\n\n"
+    "Trân trọng,\nWelora\n"
+)
+SMS_BODY = "Welora: ma xac minh tai khoan cua ban la {code}. Hieu luc {minutes} phut. Vui long khong chia se ma nay."
+
+
+class VerifyError(Exception):
+    def __init__(self, status: int, code: str, message: str, retry_after: int = 0):
+        super().__init__(message)
+        self.status, self.code, self.message, self.retry_after = status, code, message, retry_after
+
+    def body(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"error_code": self.code, "message": self.message}
+        if self.retry_after:
+            out["retry_after_s"] = self.retry_after
+        return out
+
+
+# --------------------------------------------------------------------------- config
+
+def _env_int(key: str, default: int, lo: int, hi: int) -> int:
+    try:
+        v = int(str(os.environ.get(key, "")).strip() or default)
+    except ValueError:
+        v = default
+    return max(lo, min(hi, v))
+
+
+def ttl_s() -> int:
+    return _env_int("WELORA_VERIFY_OTP_TTL_S", 600, 60, 3600)
+
+
+def max_attempts() -> int:
+    return _env_int("WELORA_VERIFY_MAX_ATTEMPTS", 5, 1, 10)
+
+
+def resend_cooldown_s() -> int:
+    return _env_int("WELORA_VERIFY_RESEND_COOLDOWN_S", 60, 0, 900)
+
+
+# --------------------------------------------------------------------------- migration 020 (SQLite)
+
+def _has_column(conn: Any, dialect: str, table: str, column: str) -> bool:
+    if dialect == "sqlite":
+        return any(str(r["name"]) == column for r in conn.execute(f"PRAGMA table_info({table})").fetchall())
+    row = conn.execute(
+        "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+        "AND table_name = ? AND column_name = ?",
+        (table, column),
+    ).fetchone()
+    return row is not None
+
+
+def apply_contact_verification_schema(conn: Any, dialect: str = "sqlite") -> dict[str, Any]:
+    """Migration 020 as an idempotent data step (SQLite; PostgreSQL runs the SQL file and records the
+    same version, so this step is skipped there — it is safe on both dialects anyway)."""
+    added = False
+    if not _has_column(conn, dialect, "users", "phone_verified_at"):
+        conn.execute("ALTER TABLE users ADD COLUMN phone_verified_at TEXT")
+        added = True
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS contact_verifications ("
+        " challenge_id TEXT PRIMARY KEY,"
+        " user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,"
+        " channel TEXT NOT NULL CHECK (channel IN ('email', 'phone')),"
+        " target TEXT NOT NULL,"
+        " code_hash TEXT NOT NULL,"
+        " attempts INTEGER NOT NULL DEFAULT 0,"
+        " consumed INTEGER NOT NULL DEFAULT 0,"
+        " created_at TEXT NOT NULL,"
+        " expires_at TEXT NOT NULL)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_contact_verif_user ON contact_verifications(user_id, created_at)")
+    conn.commit()
+    return {"phone_verified_at_added": added}
+
+
+# --------------------------------------------------------------------------- helpers
+
+def _iso(ts: float) -> str:
+    # fixed-width UTC → lexicographic order == time order (used in SQL comparisons)
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+
+def _ts(raw: Any) -> float:
+    try:
+        d = datetime.fromisoformat(str(raw))
+    except (TypeError, ValueError):
+        return 0.0
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d.timestamp()
+
+
+def _code_hash(challenge_id: str, code: str) -> str:
+    return "sha256:" + hashlib.sha256(f"welora-contact-verify:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+
+
+def _clean_code(code: Any) -> str:
+    return "".join(ch for ch in str(code or "") if ch.isdigit())[:12]
+
+
+def _mask(channel: str, target: str) -> str:
+    if channel == "email":
+        from welora.mailer import mask_email
+
+        return mask_email(target)
+    from welora.auth import _mask_phone
+
+    return _mask_phone(target)
+
+
+def _user(conn, uid: str):
+    return conn.execute("SELECT * FROM users WHERE user_id=?", (uid,)).fetchone()
+
+
+def _set(v: Any) -> bool:
+    return bool(str(v or "").strip())
+
+
+def _contacts(row) -> dict[str, Optional[str]]:
+    """channel → normalised target the account holds (None when absent)."""
+    from welora.phone import try_normalize
+
+    email = str(row["email"] or "").strip().lower() or None
+    ph = str(row["phone"] or "").strip()
+    return {"email": email, "phone": (try_normalize(ph) or ph or None) if ph else None}
+
+
+def eligible(conn, row) -> bool:
+    """Registered guest-role account with an e-mail or phone (not demo / admin / device guest)."""
+    from welora.auth import _is_pure_device_guest
+
+    if row is None:
+        return False
+    role = str(row["role"] or "guest").strip().lower()
+    if role != "guest" or _is_pure_device_guest(conn, row):
+        return False
+    c = _contacts(row)
+    return bool(c["email"] or c["phone"])
+
+
+def _unverified_channels(row) -> list[str]:
+    c = _contacts(row)
+    out = []
+    if c["email"] and not _set(row["email_verified_at"]):
+        out.append("email")
+    if c["phone"] and not _set(row["phone_verified_at"]):
+        out.append("phone")
+    return out
+
+
+def _deliverable(channel: str) -> bool:
+    if channel == "email":
+        return True
+    from welora import sms
+
+    return sms.enabled()
+
+
+def flags(conn, row) -> dict[str, Any]:
+    """Verification flags for /auth/me and the FE banner (booleans only, no PII beyond the row)."""
+    from welora.auth import has_verified_contact
+    from welora import sms
+
+    ok = eligible(conn, row)
+    pending = _unverified_channels(row) if ok else []
+    return {
+        "verified": bool(row is not None and has_verified_contact(conn, row)),
+        "email_verified": bool(row is not None and _set(row["email"]) and _set(row["email_verified_at"])),
+        "phone_verified": bool(row is not None and _set(row["phone"]) and _set(row["phone_verified_at"])),
+        "verify_eligible": ok,
+        "verify_channels": pending,
+        "can_verify_now": any(_deliverable(ch) for ch in pending),
+        "sms_enabled": sms.enabled(),
+    }
+
+
+def _latest_open(conn, uid: str, channel: Optional[str] = None):
+    q = "SELECT * FROM contact_verifications WHERE user_id=? AND consumed=0"
+    args: list[Any] = [uid]
+    if channel:
+        q += " AND channel=?"
+        args.append(channel)
+    q += " ORDER BY created_at DESC, challenge_id DESC LIMIT 1"
+    return conn.execute(q, tuple(args)).fetchone()
+
+
+def _public(ch, *, now: float, delivery: str, message: str) -> dict[str, Any]:
+    from welora import sms
+
+    cd = resend_cooldown_s()
+    return {
+        "challenge_id": ch["challenge_id"],
+        "channel": ch["channel"],
+        "target_masked": _mask(ch["channel"], ch["target"]),
+        "expires_at": ch["expires_at"],
+        "delivery": delivery,
+        "sms_enabled": sms.enabled(),
+        "resend_after_s": max(0, int(round(_ts(ch["created_at"]) + cd - now))),
+        "max_attempts": max_attempts(),
+        "attempts_left": max(0, max_attempts() - int(ch["attempts"] or 0)),
+        "message": message,
+    }
+
+
+def _deliver(channel: str, target: str, code: str) -> str:
+    minutes = max(1, ttl_s() // 60)
+    if channel == "email":
+        from welora import mailer
+
+        mailer.enqueue(target, MAIL_SUBJECT, MAIL_BODY.format(code=code, minutes=minutes))
+        return "email"
+    from welora import sms
+
+    return "sms" if sms.enqueue(target, SMS_BODY.format(code=code, minutes=minutes)) else "none"
+
+
+# --------------------------------------------------------------------------- issue / status / confirm
+
+def issue(uid: str, channel: Optional[str] = None, *, now: Optional[float] = None,
+          enforce_cooldown: bool = True, url: Optional[str] = None) -> dict[str, Any]:
+    """Create (and deliver) a verification code for the signed-in account. Raises VerifyError."""
+    t = time.time() if now is None else float(now)
+    want = (channel or "").strip().lower() or None
+    if want and want not in CHANNELS:
+        raise VerifyError(400, "VERIFY_CHANNEL_INVALID", "Kênh xác minh không hợp lệ (email hoặc phone).")
+    conn = get_connection(url)
+    try:
+        row = _user(conn, uid)
+        if not eligible(conn, row):
+            raise VerifyError(400, "VERIFY_NOT_ELIGIBLE", MSG_NOT_ELIGIBLE)
+        pending = _unverified_channels(row)
+        if not pending:
+            raise VerifyError(409, "ALREADY_VERIFIED", MSG_ALREADY)
+        if want and want not in pending:
+            raise VerifyError(409, "ALREADY_VERIFIED", MSG_ALREADY) if _contacts(row)[want] else \
+                VerifyError(400, "VERIFY_CHANNEL_INVALID", "Tài khoản chưa có " + ("email." if want == "email" else "số điện thoại."))
+        ch = want or (pending[0] if "email" not in pending else "email")
+        target = _contacts(row)[ch] or ""
+        if ch == "phone":
+            from welora.phone import phone_conflicted, PHONE_CONFLICT_MSG
+
+            if target.startswith("+") and phone_conflicted(conn, target):
+                raise VerifyError(409, "PHONE_CONFLICT_USE_EMAIL", PHONE_CONFLICT_MSG)
+            if not _deliverable("phone"):
+                from welora import sms
+
+                return {"challenge_id": None, "channel": "phone", "target_masked": _mask("phone", target),
+                        "expires_at": None, "delivery": "none", "sms_enabled": sms.enabled(),
+                        "resend_after_s": 0, "max_attempts": max_attempts(), "attempts_left": 0,
+                        "message": MSG_SMS_OFF.format(target=_mask("phone", target))}
+        prev = _latest_open(conn, uid, ch)
+        if enforce_cooldown and prev is not None:
+            wait = int(round(_ts(prev["created_at"]) + resend_cooldown_s() - t))
+            if wait > 0:
+                raise VerifyError(429, "VERIFY_RESEND_COOLDOWN", MSG_COOLDOWN.format(s=wait), retry_after=wait)
+        cid = str(uuid.uuid4())
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        conn.execute("UPDATE contact_verifications SET consumed=? WHERE user_id=? AND channel=? AND consumed=0",
+                     (SUPERSEDED, uid, ch))
+        conn.execute(
+            "INSERT INTO contact_verifications(challenge_id, user_id, channel, target, code_hash, attempts, consumed, "
+            "created_at, expires_at) VALUES (?,?,?,?,?,0,0,?,?)",
+            (cid, uid, ch, target, _code_hash(cid, code), _iso(t), _iso(t + ttl_s())),
+        )
+        conn.commit()
+        created = conn.execute("SELECT * FROM contact_verifications WHERE challenge_id=?", (cid,)).fetchone()
+    finally:
+        conn.close()
+    delivery = _deliver(ch, target, code)
+    log.info("verification code issued user=%s channel=%s to=%s", uid[:8], ch, _mask(ch, target))
+    msg = (MSG_SENT_EMAIL if ch == "email" else MSG_SENT_SMS).format(target=_mask(ch, target))
+    return _public(created, now=t, delivery=delivery, message=msg)
+
+
+def issue_after_register(uid: str, *, url: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """Called right after a successful register. Never raises (registration already succeeded)."""
+    try:
+        return issue(uid, enforce_cooldown=False, url=url)
+    except VerifyError as e:
+        return {"challenge_id": None, "delivery": "none", "error_code": e.code, "message": e.message}
+    except Exception as e:  # pragma: no cover - never break register
+        log.warning("verification issue after register failed: %s", type(e).__name__)
+        return None
+
+
+def status(uid: str, *, now: Optional[float] = None, url: Optional[str] = None) -> dict[str, Any]:
+    t = time.time() if now is None else float(now)
+    conn = get_connection(url)
+    try:
+        row = _user(conn, uid)
+        out = flags(conn, row)
+        c = _contacts(row) if row is not None else {"email": None, "phone": None}
+        out["email_masked"] = _mask("email", c["email"]) if c["email"] else None
+        out["phone_masked"] = _mask("phone", c["phone"]) if c["phone"] else None
+        out["pending"] = None
+        if out["verify_eligible"]:
+            ch = _latest_open(conn, uid)
+            if ch is not None and _ts(ch["expires_at"]) > t and int(ch["attempts"] or 0) < max_attempts() \
+                    and ch["channel"] in out["verify_channels"]:
+                out["pending"] = _public(ch, now=t, delivery="email" if ch["channel"] == "email" else "sms", message="")
+        return out
+    finally:
+        conn.close()
+
+
+def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Optional[float] = None,
+            url: Optional[str] = None) -> dict[str, Any]:
+    """Check a verification code of the signed-in account. Raises VerifyError (generic VI message)."""
+    t = time.time() if now is None else float(now)
+    c = _clean_code(code)
+    cid_in = (challenge_id or "").strip()
+    bad = VerifyError(400, "VERIFY_CODE_INVALID", MSG_INVALID)
+    conn = get_connection(url)
+    try:
+        if cid_in:
+            # a challenge of ANOTHER user is indistinguishable from an unknown one
+            ch = conn.execute("SELECT * FROM contact_verifications WHERE challenge_id=? AND user_id=?",
+                              (cid_in, uid)).fetchone()
+        else:
+            ch = _latest_open(conn, uid)
+        if ch is None or not c:
+            raise bad
+        cid = ch["challenge_id"]
+        # reserve one attempt atomically: the limit holds even for a concurrent burst
+        cur = conn.execute(
+            "UPDATE contact_verifications SET attempts=attempts+1 "
+            "WHERE challenge_id=? AND consumed=0 AND attempts<? AND expires_at>?",
+            (cid, max_attempts(), _iso(t)),
+        )
+        conn.commit()
+        if int(cur.rowcount or 0) != 1:
+            again = conn.execute("SELECT consumed, attempts, expires_at FROM contact_verifications WHERE challenge_id=?",
+                                 (cid,)).fetchone()
+            if again is not None and int(again["consumed"] or 0) == OPEN and _ts(again["expires_at"]) > t \
+                    and int(again["attempts"] or 0) >= max_attempts():
+                raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)
+            raise bad
+        if not hmac.compare_digest(str(ch["code_hash"] or ""), _code_hash(cid, c)):
+            left = max(0, max_attempts() - int(ch["attempts"] or 0) - 1)
+            if left == 0:
+                raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)
+            raise VerifyError(400, "VERIFY_CODE_INVALID", MSG_INVALID + f" (còn {left} lần thử)")
+        cur = conn.execute("UPDATE contact_verifications SET consumed=? WHERE challenge_id=? AND consumed=0",
+                           (USED, cid))
+        if int(cur.rowcount or 0) != 1:
+            conn.rollback()
+            raise bad  # a concurrent request with the same code won
+        stamp = _iso(t)
+        if ch["channel"] == "email":
+            cur = conn.execute(
+                "UPDATE users SET email_verified_at=COALESCE(NULLIF(email_verified_at,''), ?) "
+                "WHERE user_id=? AND LOWER(email)=?",
+                (stamp, uid, str(ch["target"]).lower()),
+            )
+        else:
+            from welora.phone import PHONE_CONFLICT_MSG, lookup_candidates, phone_conflicted
+
+            target = str(ch["target"])
+            if target.startswith("+") and phone_conflicted(conn, target):
+                conn.rollback()
+                raise VerifyError(409, "PHONE_CONFLICT_USE_EMAIL", PHONE_CONFLICT_MSG)
+            cands = lookup_candidates(target) if target.startswith("+") else [target]
+            cur = conn.execute(
+                "UPDATE users SET phone=?, phone_verified_at=COALESCE(NULLIF(phone_verified_at,''), ?) "
+                "WHERE user_id=? AND phone IN (" + ",".join("?" * len(cands)) + ")",
+                (target, stamp, uid, *cands),
+            )
+        if int(cur.rowcount or 0) != 1:
+            conn.rollback()
+            raise bad  # the account's contact changed since the code was sent
+        conn.commit()
+        row = _user(conn, uid)
+        out = {"ok": True, "channel": ch["channel"], "message": MSG_VERIFIED}
+        out.update(flags(conn, row))
+    finally:
+        conn.close()
+    log.info("contact verified user=%s channel=%s", uid[:8], ch["channel"])
+    return out

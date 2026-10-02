@@ -22,6 +22,11 @@ many guest users from one IP hits ``device_new``.
 Client-IP buckets (CoS review #239): IPv4 per address; IPv6 per /64 (``ip_bucket``), IPv4-mapped
 IPv6 counts as the IPv4 address — for every action including login and /auth/device.
 
+``verify_request`` / ``verify_confirm`` (migration 020, POST /auth/verify/request|confirm — bearer
+session): per signed-in user (``user:<id>``) + client IP — WELORA_RL_VERIFY_SEND_USER_MAX (5) /
+WELORA_RL_VERIFY_SEND_IP_MAX (20) and WELORA_RL_VERIFY_CONFIRM_USER_MAX (10) /
+WELORA_RL_VERIFY_CONFIRM_IP_MAX (40) per window.
+
 ``event`` (client analytics POST /api/core/v1/entitlements/events): per signed-in user
 (``user:<id>``), WELORA_RL_EVENT_USER_MAX (60 / window).
 
@@ -73,7 +78,8 @@ from welora.db.connection import get_connection
 
 log = logging.getLogger("welora.auth_ratelimit")
 RATE_LIMIT_MSG = "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau ít phút."
-ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register", "device", "device_new", "event")
+ACTIONS = ("otp_request", "otp_verify", "forgot_password", "register", "device", "device_new", "event",
+           "verify_request", "verify_confirm")
 LOGIN_FAIL_ACTION = "login_fail"
 _PRUNE_AFTER_S = 24 * 3600
 
@@ -105,6 +111,10 @@ def limits(action: str) -> tuple[int, int]:
         return 0, _env_int("WELORA_RL_DEVICE_NEW_IP_MAX", 30)
     if action == "event":  # POST /api/core/v1/entitlements/events — per signed-in user only
         return _env_int("WELORA_RL_EVENT_USER_MAX", 60), 0
+    if action == "verify_request":  # POST /auth/verify/request (send / resend) — per user + IP
+        return _env_int("WELORA_RL_VERIFY_SEND_USER_MAX", 5), _env_int("WELORA_RL_VERIFY_SEND_IP_MAX", 20)
+    if action == "verify_confirm":  # POST /auth/verify/confirm — per user + IP (+ 5 checks per code)
+        return _env_int("WELORA_RL_VERIFY_CONFIRM_USER_MAX", 10), _env_int("WELORA_RL_VERIFY_CONFIRM_IP_MAX", 40)
     return _env_int("WELORA_RL_TARGET_MAX", 5), _env_int("WELORA_RL_IP_MAX", 20)
 
 

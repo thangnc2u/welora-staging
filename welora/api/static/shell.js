@@ -241,6 +241,65 @@
     document.body.classList.add("welora-has-logout");
   })();
 
+  /* Migration 020: «Xác minh tài khoản» reminder for signed-in accounts whose e-mail / phone is not
+     verified yet (GET /auth/me → verify_eligible && !verified && can_verify_now). Skippable:
+     «Để sau» hides it for 24 h; it never blocks the page. Demo personas / device guests / admin
+     never see it (server flags). */
+  (function injectVerifyBanner() {
+    var skip = { "/app/login": 1, "/app/register": 1, "/app/forgot-password": 1, "/app/reset-password": 1,
+                 "/app/otp": 1, "/app/verify": 1 };
+    if (skip[path]) return;
+    var tok = "";
+    try { tok = localStorage.getItem("welora_token") || ""; } catch (_eVt) {}
+    if (!tok) return;
+    try {
+      var until = parseInt(localStorage.getItem("welora_verify_banner_until") || "0", 10) || 0;
+      if (until > Date.now()) return;
+    } catch (_eVu) {}
+    fetch("/auth/me", { headers: { Authorization: "Bearer " + tok } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (me) {
+        if (!me || !me.verify_eligible || me.verified || !me.can_verify_now) return;
+        if (document.getElementById("weloraVerifyBanner")) return;
+        var box = document.createElement("div");
+        box.id = "weloraVerifyBanner";
+        box.setAttribute("role", "status");
+        box.style.cssText = "margin:8px 0 12px;padding:12px 14px;border-radius:12px;border:1px solid var(--border-default,#2F3D54);" +
+          "background:var(--bg-surface,#1A2536);color:var(--text-primary,#F4F1E8);font-size:14px;line-height:1.4";
+        var t = document.createElement("strong");
+        t.textContent = "Xác minh tài khoản";
+        var p = document.createElement("div");
+        p.style.cssText = "margin-top:4px;color:var(--text-secondary,#A8B0C0);font-size:13px";
+        p.textContent = "Tài khoản của bạn chưa được xác minh. Xác minh email hoặc số điện thoại giúp bảo vệ tài khoản và mở đủ lượt làm bài KUAT.";
+        var row = document.createElement("div");
+        row.style.cssText = "margin-top:8px;display:flex;gap:12px;align-items:center";
+        var go = document.createElement("a");
+        go.id = "weloraVerifyGo";
+        go.className = "welora-btn-primary";
+        go.style.cssText = "padding:6px 12px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px";
+        go.href = "/app/verify?next=" + encodeURIComponent(path);
+        go.textContent = "Xác minh ngay";
+        var later = document.createElement("button");
+        later.type = "button";
+        later.id = "weloraVerifyLater";
+        later.style.cssText = "background:none;border:0;color:var(--text-secondary,#A8B0C0);text-decoration:underline;cursor:pointer;font-size:13px";
+        later.textContent = "Để sau";
+        later.addEventListener("click", function () {
+          try { localStorage.setItem("welora_verify_banner_until", String(Date.now() + 24 * 3600 * 1000)); } catch (_eVl) {}
+          if (box.parentNode) box.parentNode.removeChild(box);
+        });
+        row.appendChild(go);
+        row.appendChild(later);
+        box.appendChild(t);
+        box.appendChild(p);
+        box.appendChild(row);
+        var chrome = document.getElementById("weloraTopChrome");
+        if (chrome && chrome.parentNode) chrome.parentNode.insertBefore(box, chrome.nextSibling);
+        else document.body.insertBefore(box, document.body.firstChild);
+      })
+      .catch(function () {});
+  })();
+
   /* P1 ops-tabs: mark active from pathname if missing */
   (function markOpsTabs() {
     var cluster = document.getElementById("opsCluster");

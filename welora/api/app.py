@@ -53,6 +53,15 @@ class EmailOtpVerifyBody(BaseModel):
     challenge_id: str = Field(..., min_length=8, max_length=64)
     code: str = Field(..., min_length=4, max_length=12)
 
+class VerifyRequestBody(BaseModel):
+    channel: Optional[str] = Field(None, max_length=10)
+
+
+class VerifyConfirmBody(BaseModel):
+    code: str = Field(..., min_length=1, max_length=20)
+    challenge_id: Optional[str] = Field(None, max_length=64)
+
+
 class GuestRegisterBody(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -639,6 +648,11 @@ async def _lifespan(_app: FastAPI):
     from welora import admin_bootstrap
     from welora import renewal as renewal_svc
 
+    # Production refuses the test-only auth flags in code (ignored + CRITICAL log, never echoed)
+    _ignored = auth_svc.unsafe_auth_flags_ignored()
+    if _ignored:
+        logging.getLogger("welora.auth").critical(
+            "production: test-only auth flags are set and IGNORED: %s — remove them from the env", ",".join(_ignored))
     # WELORA_ADMIN_EMAILS: promote verified listed users / demote unlisted admins (audited, never raises)
     admin_bootstrap.startup_sync()
     # P0 follow-up: legacy tokens (expires_at NULL) get a bounded expiry — never raises
@@ -769,6 +783,11 @@ def create_app() -> FastAPI:
     @app.get("/app/login/", include_in_schema=False)
     def login_ui() -> FileResponse:
         return _serve_app_html(static_dir, "login.html")
+
+    @app.get("/app/verify", include_in_schema=False)
+    @app.get("/app/verify/", include_in_schema=False)
+    def verify_ui() -> FileResponse:
+        return _serve_app_html(static_dir, "verify.html")
 
     @app.get("/app/register", include_in_schema=False)
     @app.get("/app/register/", include_in_schema=False)
@@ -920,6 +939,8 @@ def create_app() -> FastAPI:
             "otp_echo": auth_svc.otp_echo_enabled(),
             "reset_echo": auth_svc.reset_echo_enabled(),
             "sms_enabled": auth_svc.sms_provider_configured(),
+            "otp_fixed": auth_svc.otp_fixed_enabled(),
+            "auth_test_flags_ignored": auth_svc.unsafe_auth_flags_ignored(),  # names only (production)
             "token_ttl_days": auth_svc.token_ttl_days(),
             "demo_seed": _demo_seed_status(),
             "gate_months": 3,
@@ -981,6 +1002,43 @@ def create_app() -> FastAPI:
         if authorization and authorization.lower().startswith("bearer "):
             token = authorization[7:].strip()
         return _respond(*auth_svc.service_me(token))
+
+    # Migration 020 — verification of the signed-in account's own e-mail / phone. Bearer session
+    # only (no identifier in the body → no enumeration surface); rate-limited per user + client IP.
+    def _verify_error(e) -> None:
+        headers = {"Retry-After": str(e.retry_after)} if e.retry_after else None
+        raise HTTPException(status_code=e.status, detail=e.body(), headers=headers)
+
+    @app.get("/auth/verify/status", tags=["auth"])
+    def auth_verify_status(authorization: Optional[str] = Header(None)) -> dict:
+        from welora import contact_verify
+
+        uid = _require_user(authorization)
+        return contact_verify.status(uid)
+
+    @app.post("/auth/verify/request", tags=["auth"])
+    def auth_verify_request(request: Request, body: Optional[VerifyRequestBody] = None,
+                            authorization: Optional[str] = Header(None)) -> dict:
+        from welora import contact_verify
+
+        uid = _require_user(authorization)
+        _auth_rate_limit(request, "verify_request", f"user:{uid}")
+        try:
+            return contact_verify.issue(uid, (body.channel if body else None))
+        except contact_verify.VerifyError as e:
+            _verify_error(e)
+
+    @app.post("/auth/verify/confirm", tags=["auth"])
+    def auth_verify_confirm(body: VerifyConfirmBody, request: Request,
+                            authorization: Optional[str] = Header(None)) -> dict:
+        from welora import contact_verify
+
+        uid = _require_user(authorization)
+        _auth_rate_limit(request, "verify_confirm", f"user:{uid}")
+        try:
+            return contact_verify.confirm(uid, body.code, body.challenge_id)
+        except contact_verify.VerifyError as e:
+            _verify_error(e)
 
     @app.post("/auth/register", tags=["auth"], status_code=201)
     def auth_register(body: GuestRegisterBody, request: Request) -> dict:

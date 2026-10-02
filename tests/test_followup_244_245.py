@@ -224,13 +224,11 @@ class TestOtpHmac(_Base):
         h2 = otp_hash.code_hash("d", "c1", "123456")
         self.assertNotEqual(h, h2)
         self.assertTrue(otp_hash.matches("d", "c1", h2, "123456"))
-        # legacy formats — accepted only where they existed before
+        # legacy formats — no longer accepted (follow-up sau #246/#247 item 3)
         leg = otp_hash.legacy_hash("d", "c1", "123456")
-        self.assertTrue(otp_hash.matches("d", "c1", leg, "123456"))
+        self.assertFalse(otp_hash.matches("d", "c1", leg, "123456"))
         self.assertFalse(otp_hash.matches("d", "c1", leg[7:], "123456"))
-        self.assertTrue(otp_hash.matches("d", "c1", leg[7:], "123456", legacy_bare_hex=True))
         self.assertFalse(otp_hash.matches("d", "c1", "123456", "123456"))
-        self.assertTrue(otp_hash.matches("d", "c1", "123456", "123456", legacy_plain=True))
         self.assertFalse(otp_hash.matches("d", "c1", "", ""))
 
     def test_key_source_and_startup_check(self):
@@ -257,13 +255,18 @@ class TestOtpHmac(_Base):
             otp_hash.startup_check()
         self.assertTrue(all(r.levelno == logging.WARNING for r in lg.records))
 
-    def test_production_without_key_still_starts_and_health_reports_source(self):
+    def test_production_without_key_refuses_to_start_staging_reports_source(self):
         from fastapi.testclient import TestClient
         from welora.api.app import create_app
 
         os.environ["WELORA_ENV"] = "production"
         os.environ.pop("WELORA_OTP_HMAC_KEY", None)
-        with TestClient(create_app()) as c:  # lifespan runs startup_check — no exception
+        with self.assertRaises(otp_hash.OtpKeyError) as e:  # follow-up sau #246/#247 item 4
+            with TestClient(create_app()):
+                pass
+        self.assertIn("WELORA_OTP_HMAC_KEY", str(e.exception))
+        os.environ["WELORA_ENV"] = "staging"
+        with TestClient(create_app()) as c:  # staging stays lenient
             h = c.get("/health").json()
         self.assertEqual(h["otp_hmac_key"], "derived")
         os.environ["WELORA_OTP_HMAC_KEY"] = "secret-value-" + "z" * 40
@@ -286,7 +289,7 @@ class TestOtpHmac(_Base):
         self.assertEqual(ch.status_code, 200, ch.text)
         return ch.json()["challenge_id"], hdr
 
-    def test_phone_otp_stored_hmac_and_legacy_rows_still_verify(self):
+    def test_phone_otp_stored_hmac_and_legacy_rows_refused(self):
         cid, hdr = self._otp_request("0913000001")
         stored = self.q("SELECT code FROM otp_challenges WHERE challenge_id=?", (cid,))[0]["code"]
         self.assertTrue(stored.startswith("hmac256:"))
@@ -299,18 +302,25 @@ class TestOtpHmac(_Base):
             self.x("UPDATE otp_challenges SET code=? WHERE challenge_id=?", (val, cid))
             bad = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "654321"}, headers=hdr)
             self.assertEqual(bad.status_code, 400, legacy)
-            ok = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "123456"}, headers=hdr)
-            self.assertEqual(ok.status_code, 200, (legacy, ok.text))
+            right = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "123456"}, headers=hdr)
+            self.assertEqual((right.status_code, right.json()), (400, bad.json()), legacy)  # like a wrong code
 
     def test_contact_codes_hmac_legacy_and_key_rotation(self):
         out = self.register("hmac.cv@example.test")
         cid, code = out["verification"]["challenge_id"], self.last_code()
         stored = self.q("SELECT code_hash FROM contact_verifications WHERE challenge_id=?", (cid,))[0]["code_hash"]
         self.assertTrue(stored.startswith("hmac256:"))
-        # issued before the deploy (sha256:) → still verifies until it expires
+        # an old-format (sha256:) row → refused exactly like a wrong code (item 3, sau #246/#247)
         self.x("UPDATE contact_verifications SET code_hash=? WHERE challenge_id=?",
                (otp_hash.legacy_hash("welora-contact-verify", cid, code), cid))
-        self.assertEqual(self.confirm(out["token"], code, cid).status_code, 200)
+        wrong = self.confirm(out["token"], "000000" if code != "000000" else "111111", cid)
+        right = self.confirm(out["token"], code, cid)
+        self.assertEqual(wrong.status_code, 400)
+        self.assertEqual(right.status_code, 400)
+        w, r = wrong.json()["detail"], right.json()["detail"]
+        self.assertEqual(r["error_code"], w["error_code"])  # same body, only the attempt count moves on
+        self.assertEqual(re.sub(r"\d+", "N", r["message"]), re.sub(r"\d+", "N", w["message"]))
+        self.assertEqual(int(re.findall(r"\d+", r["message"])[-1]), int(re.findall(r"\d+", w["message"])[-1]) - 1)
         # rotating the key only invalidates the codes open at that moment
         out2 = self.register("hmac.rot@example.test")
         cid2, code2 = out2["verification"]["challenge_id"], self.last_code("hmac.rot@example.test")
@@ -323,14 +333,14 @@ class TestOtpHmac(_Base):
                (otp_hash.legacy_hash("welora-contact-verify", cid3, code3), "2020-01-01T00:00:00.000000+00:00", cid3))
         self.assertEqual(self.confirm(out3["token"], code3, cid3).status_code, 400)
 
-    def test_admin_email_otp_hmac_and_bare_hex_legacy(self):
+    def test_admin_email_otp_hmac_only(self):
         from welora import admin_bootstrap as ab
 
         h = ab._code_hash("c9", "111222")
         self.assertTrue(h.startswith("hmac256:"))
         self.assertTrue(ab._code_matches("c9", h, "111222"))
         legacy = otp_hash.legacy_hash("welora-email-otp", "c9", "111222")[7:]
-        self.assertTrue(ab._code_matches("c9", legacy, "111222"))
+        self.assertFalse(ab._code_matches("c9", legacy, "111222"))  # bare-hex rows no longer accepted
         self.assertFalse(ab._code_matches("c9", "111222", "111222"))  # never plaintext for admin
 
 

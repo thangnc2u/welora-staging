@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "welora" / "api" / "static"
 PW = "matkhau-xacminh-1"
 ENV_KEYS = (
-    "WELORA_ENV", "WELORA_STORE", "WELORA_DB_URL", "WELORA_GUEST_DEMO", "WELORA_OTP_FIXED", "WELORA_OTP_ECHO",
+    "WELORA_ENV", "WELORA_OTP_HMAC_KEY", "WELORA_STORE", "WELORA_DB_URL", "WELORA_GUEST_DEMO", "WELORA_OTP_FIXED", "WELORA_OTP_ECHO",
     "WELORA_RESET_ECHO", "WELORA_MAIL_SYNC", "WELORA_ADMIN_EMAILS", "WELORA_RL_WINDOW_S", "WELORA_RL_TARGET_MAX",
     "WELORA_RL_IP_MAX", "WELORA_RL_LOGIN_PAIR_MAX", "WELORA_RL_LOGIN_ACCOUNT_MAX", "WELORA_RL_LOGIN_IP_MAX",
     "WELORA_RL_VERIFY_TARGET_MAX", "WELORA_RL_VERIFY_IP_MAX", "WELORA_RL_VERIFY_SEND_USER_MAX",
@@ -625,7 +625,8 @@ class TestProdGuard(_Base):
     def test_production_refuses_otp_echo_fixed_and_reset_echo(self):
         os.environ.update({"WELORA_OTP_ECHO": "1", "WELORA_OTP_FIXED": "1", "WELORA_RESET_ECHO": "1"})
         self.assertTrue(auth_svc.otp_echo_enabled() and auth_svc.otp_fixed_enabled() and auth_svc.reset_echo_enabled())
-        os.environ.update({"WELORA_ENV": "production", "WELORA_GUEST_DEMO": "0"})
+        # production needs WELORA_OTP_HMAC_KEY to start at all (follow-up sau #246/#247 item 4)
+        os.environ.update({"WELORA_ENV": "production", "WELORA_GUEST_DEMO": "0", "WELORA_OTP_HMAC_KEY": "p" * 48})
         self.assertFalse(auth_svc.otp_echo_enabled())
         self.assertFalse(auth_svc.otp_fixed_enabled())
         self.assertFalse(auth_svc.reset_echo_enabled())

@@ -189,20 +189,21 @@ class TestRateLimits(_Base):
 
 
 class TestPhoneOtpHashing(_Base):
-    def test_hashed_at_rest_and_legacy_plaintext_row_still_verifies(self):
+    def test_hashed_at_rest_and_legacy_plaintext_row_refused(self):
         os.environ["WELORA_OTP_ECHO"] = "1"
         r = self.client.post("/auth/otp/request", json={"phone": "0918000111"}).json()
         stored = self.q1("SELECT code FROM otp_challenges WHERE challenge_id=?", (r["challenge_id"],))["code"]
         self.assertTrue(stored.startswith("hmac256:"))
         self.assertNotIn(r["pilot_code"], stored)
-        # in-flight row written before this change (plaintext code)
+        # a plaintext row (pre-HMAC format) is no longer accepted: fails like a wrong code
+        # (follow-up sau #246/#247 item 3)
         cid = str(uuid.uuid4())
         self.x("INSERT INTO otp_challenges(challenge_id, phone, code, expires_at) VALUES (?,?,?,?)",
                (cid, "0918000222", "654321", "2099-01-01T00:00:00+00:00"))
         bad = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "111111"})
         self.assertEqual(bad.status_code, 400)
-        ok = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "654321"})
-        self.assertEqual(ok.status_code, 200, ok.text)
+        right = self.client.post("/auth/otp/verify", json={"challenge_id": cid, "code": "654321"})
+        self.assertEqual((right.status_code, right.json()), (400, bad.json()))
         # a hashed row cannot be verified by sending the stored hash itself
         r2 = self.client.post("/auth/otp/request", json={"phone": "0918000333"}).json()
         h = self.q1("SELECT code FROM otp_challenges WHERE challenge_id=?", (r2["challenge_id"],))["code"]

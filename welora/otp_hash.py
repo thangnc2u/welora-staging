@@ -14,14 +14,16 @@ Key — ``WELORA_OTP_HMAC_KEY`` (secret, set in the Render Dashboard, ≥ 32 ran
   database itself) — so staging keeps working with no new env and the codes in a DB dump still need
   a secret that is not in the dump;
 * no DB URL either (local / tests): a fixed development key.
-* production (WELORA_ENV=production|prod) does NOT refuse to start (that would break a deploy that
-  only forgot the env): it uses the derived key, logs CRITICAL at startup and /health reports
-  ``otp_hmac_key: "derived"`` so the omission is visible. Set the env before the first production
-  launch. Changing the key later only invalidates the codes open at that moment (≤ 10–60 min TTL).
+* production (WELORA_ENV=production|prod) REFUSES TO START unless the key comes from the env
+  (source ``dev`` or ``derived`` → ``OtpKeyError`` in the app lifespan, so uvicorn exits with a clear
+  error naming WELORA_OTP_HMAC_KEY — ticket "GP follow-up sau #246/#247" item 4). Staging / dev stay
+  lenient: the derived (or dev) key + a WARNING, and /health reports ``otp_hmac_key`` = the source.
+  Changing the key later only invalidates the codes open at that moment (≤ 10–60 min TTL).
 
-Transition (codes issued before this deploy): rows already stored as ``sha256:`` (or plaintext, the
-older phone-OTP rows) still verify with their old rule until they expire — every such code has a
-TTL of ≤ 1 h and the attempt limits are unchanged — and every new code is written as ``hmac256:``.
+Only ``hmac256:`` is accepted (item 3 of the same ticket): the pre-HMAC formats (``sha256:``,
+plaintext phone rows, bare-hex admin rows) were accepted only during the #246 transition; the key is
+set on staging since 02/10 ~21:59 and every such code has expired (TTL ≤ 1 h). A row still stored in
+an old format simply never matches — the caller answers exactly as for a wrong code.
 """
 
 from __future__ import annotations
@@ -59,6 +61,22 @@ def _key() -> bytes:
     return _DEV_KEY
 
 
+class OtpKeyError(RuntimeError):
+    """Production started without WELORA_OTP_HMAC_KEY."""
+
+
+def require_production_key() -> None:
+    """Raise ``OtpKeyError`` when WELORA_ENV=production and the key source is not ``env``."""
+    from welora.auth import is_production
+
+    src = key_source()
+    if is_production() and src != "env":
+        raise OtpKeyError(
+            f"{ENV} is not set (OTP key source: {src}) — production refuses to start. Set a random "
+            f"≥ {MIN_KEY_LEN}-char secret in the Render Dashboard, e.g. "
+            "python -c \"import secrets; print(secrets.token_urlsafe(48))\"")
+
+
 def startup_check() -> list[str]:
     """Problems to log at startup (CRITICAL in production, WARNING elsewhere). Never raises."""
     from welora.auth import is_production
@@ -82,26 +100,16 @@ def code_hash(domain: str, challenge_id: str, code: str) -> str:
 
 
 def legacy_hash(domain: str, challenge_id: str, code: str) -> str:
-    """The pre-HMAC format (``sha256:`` of the same salted string)."""
+    """The pre-HMAC format (``sha256:`` of the same salted string) — no longer accepted; kept so the
+    tests can store an old-format row and check it is refused."""
     return LEGACY_PREFIX + hashlib.sha256(f"{domain}:{challenge_id}:{code}".encode("utf-8")).hexdigest()
 
 
-def matches(domain: str, challenge_id: str, stored: str, code: str, *, legacy_bare_hex: bool = False,
-            legacy_plain: bool = False) -> bool:
-    """Constant-time check of ``code`` against a stored value in any supported format.
-
-    ``legacy_bare_hex``: the admin e-mail OTP stored the bare sha256 hex (no prefix) before.
-    ``legacy_plain``: the oldest phone-OTP rows stored the code itself (10-min TTL)."""
+def matches(domain: str, challenge_id: str, stored: str, code: str) -> bool:
+    """Constant-time check of ``code`` against a stored ``hmac256:`` value. Any other stored format
+    (``sha256:``, bare hex, plaintext) → False, like a wrong code."""
     stored = str(stored or "")
     c = str(code or "").strip()
-    if not stored or not c:
+    if not stored or not c or not stored.startswith(PREFIX):
         return False
-    if stored.startswith(PREFIX):
-        return hmac.compare_digest(stored, code_hash(domain, challenge_id, c))
-    if stored.startswith(LEGACY_PREFIX):
-        return hmac.compare_digest(stored, legacy_hash(domain, challenge_id, c))
-    if legacy_bare_hex and len(stored) == 64:
-        return hmac.compare_digest(stored, legacy_hash(domain, challenge_id, c)[len(LEGACY_PREFIX):])
-    if legacy_plain:
-        return hmac.compare_digest(stored, c)
-    return False
+    return hmac.compare_digest(stored, code_hash(domain, challenge_id, c))

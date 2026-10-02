@@ -384,11 +384,10 @@ def _otp_code_hash(challenge_id: str, code: str) -> str:
 
 
 def _otp_code_matches(challenge_id: str, stored: str, code: str) -> bool:
-    """``hmac256:`` (current) · ``sha256:`` (issued before the HMAC deploy, until expiry) · plaintext
-    (in-flight legacy rows, 10-min TTL)."""
+    """``hmac256:`` only — an old-format row (sha256: / plaintext) fails like a wrong code."""
     from welora import otp_hash
 
-    return otp_hash.matches("welora-phone-otp", challenge_id, stored, code, legacy_plain=True)
+    return otp_hash.matches("welora-phone-otp", challenge_id, stored, code)
 
 
 def otp_challenge_phone(challenge_id: str, *, url: str | None = None) -> Optional[str]:

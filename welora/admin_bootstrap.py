@@ -205,10 +205,10 @@ def _code_hash(challenge_id: str, code: str) -> str:
 
 
 def _code_matches(challenge_id: str, stored: str, code: str) -> bool:
-    """Current ``hmac256:`` rows + the bare sha256 hex stored before the HMAC deploy (until expiry)."""
+    """``hmac256:`` only — an old-format row (bare sha256 hex) fails like a wrong code."""
     from welora import otp_hash
 
-    return otp_hash.matches(_OTP_DOMAIN, challenge_id, stored, code, legacy_bare_hex=True)
+    return otp_hash.matches(_OTP_DOMAIN, challenge_id, stored, code)
 
 
 def request_email_otp(email: str, *, now: Optional[float] = None, url: Optional[str] = None) -> dict[str, Any]:

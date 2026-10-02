@@ -49,11 +49,15 @@ services:
         sync: false
       # OTP codes at rest (phone-OTP login, post-register verification, admin e-mail OTP) are HMAC'd
       # with this server secret (follow-up #244/#245 item 3). Set in the Dashboard: ≥ 32 random chars,
-      # e.g. python -c "import secrets; print(secrets.token_urlsafe(48))". Unset → a key derived from
-      # WELORA_DB_URL is used (service keeps running; production logs CRITICAL, /health
-      # otp_hmac_key=derived). Rotating it only invalidates the codes open at that moment (≤ 1 h).
+      # e.g. python -c "import secrets; print(secrets.token_urlsafe(48))". REQUIRED in production:
+      # WELORA_ENV=production refuses to start without it (startup error names WELORA_OTP_HMAC_KEY).
+      # Staging / dev: unset → a key derived from WELORA_DB_URL + a WARNING (/health otp_hmac_key
+      # shows env | derived | dev). Only hmac256 codes are accepted. Rotating the key only
+      # invalidates the codes open at that moment (≤ 1 h).
       - key: WELORA_OTP_HMAC_KEY
         sync: false
+      # Optional (no value here): WELORA_ACADEMY_SESSION_CACHE_MAX — max demo-session Academy profiles
+      # cached per worker (LRU, default 512, min 16; evicted sessions reload from the DB).
       # Migration 020 — verification OTP after register (e-mail via WELORA_MAIL_PROVIDER; codes are
       # never echoed): WELORA_VERIFY_OTP_TTL_S (600), WELORA_VERIFY_MAX_ATTEMPTS (5 per code),
       # WELORA_VERIFY_RESEND_COOLDOWN_S (60), WELORA_RL_VERIFY_SEND_USER_MAX (5) /

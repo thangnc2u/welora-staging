@@ -62,7 +62,8 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
             self.assertEqual(n["prereq_node_ids"], exp[5])
             self.assertEqual(n["module_id"], "M03")
             self.assertEqual(n["module_title"], "Tự Do Tài Chính")
-            self.assertEqual(len(QUESTIONS[n["node_id"]]), 3)
+            # follow-up item 5: the first lesson of the module has the 12-question N02 standard bank
+            self.assertEqual(len(QUESTIONS[n["node_id"]]), 12 if n["node_id"] == "N03-01" else 3)
         self.assertEqual(tuple(n["node_id"] for n in M03_NODES), M03_NODE_IDS)
         # M01/M02 graph untouched; GATE stays N02-02
         m02 = [n for n in NODES if n["module_id"] == "M02"]

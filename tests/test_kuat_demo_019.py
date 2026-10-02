@@ -238,7 +238,7 @@ class TestNonGateStartCapDb(unittest.TestCase):
         self.assertIn("ôn lại bài", c["message"])
         self.assertNotRegex(c["message"], NUDGE)
         self.assertEqual(c["retry_after"], 3600)
-        self.assertTrue(c["lesson_href"].startswith("/app/content?key="))
+        self.assertTrue(c["lesson_href"].startswith("/app/academy?node="))  # follow-up item 2 (was /app/content)
         self.assertEqual(o["nongate_events"], 5)
 
     def test_reload_other_network_and_gate_nodes_unaffected(self):

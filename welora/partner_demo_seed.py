@@ -1237,6 +1237,19 @@ def seed_p6_on_user(user_id: str) -> dict[str, Any]:
     }
 
 
+def _seed_academy_profile(user_id: str) -> None:
+    """migration-019 ticket item 4: the persona's Academy tree matches the mastery just seeded —
+    a persona that has passed the Safety Gate (mastery ≥ apply: P2, P3, P6) shows N02-01 + N02-02
+    mastered (XP + badges); the others (P1, P4, P5) start from an empty tree, like the rest of
+    their data (clear + upsert). DB store: written in the seed's ambient transaction (under the
+    advisory lock of demo_seed_runner), so it commits / rolls back with the rest of the seed."""
+    from welora import academy
+    from welora.mastery import GATE_MIN, _RANK
+
+    m = str((goals_api.USER_FLAGS.get(user_id) or {}).get("mastery_no_efund_invest") or "not_started")
+    academy.seed_profile(user_id, gate_passed=_RANK.get(m, 0) >= _RANK[GATE_MIN])
+
+
 def seed_partner_rich_demo(*, url: Optional[str] = None) -> dict[str, Any]:
     """Idempotent seed for all 6 persona login aliases (P1–P6).
 
@@ -1268,6 +1281,7 @@ def seed_partner_rich_demo(*, url: Optional[str] = None) -> dict[str, Any]:
             url=url,
         )
         persona = seeders[pid](auth["user_id"])
+        _seed_academy_profile(auth["user_id"])
         block = {
             **auth,
             "email": meta["email"],

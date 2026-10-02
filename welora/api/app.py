@@ -364,6 +364,24 @@ def _serve_app_html(static_dir: Path, name: str) -> HTMLResponse:
     return HTMLResponse(content=_cache_bust_shell_js(html))
 
 
+GUEST_ACADEMY_META = '<meta name="welora-guest-academy" content="1"/>'
+_AUTH_GATE_TAG = '<script src="/static/auth-gate.js"></script>'
+ACADEMY_LOGIN_REQUIRED_MSG = "Welorademy cần đăng nhập. Vui lòng đăng nhập hoặc đăng ký tài khoản để học tiếp."
+
+
+def _serve_academy_html(static_dir: Path) -> HTMLResponse:
+    """/app/academy (migration-019 ticket item 5). While WELORA_GUEST_DEMO is on, the server marks
+    the page open to device guests with ``<meta name="welora-guest-academy" content="1">`` placed
+    BEFORE auth-gate.js — the synchronous gate reads it (no extra request, nothing else exposed).
+    With WELORA_GUEST_DEMO=0 the marker is absent: auth-gate.js sends visitors without a login to
+    /app/login as before, and the Academy APIs refuse device guests (``_academy_owner``, 403).
+    no-store: a flag flip is never hidden behind a cached page."""
+    html = _cache_bust_shell_js((static_dir / "academy.html").read_text(encoding="utf-8"))
+    if auth_svc.guest_demo_enabled():
+        html = html.replace(_AUTH_GATE_TAG, GUEST_ACADEMY_META + "\n" + _AUTH_GATE_TAG, 1)
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
 
 class EntitlementTrialStartBody(BaseModel):
     phone: str = Field(..., min_length=8)
@@ -729,8 +747,8 @@ def create_app() -> FastAPI:
     @app.get("/app/academy", include_in_schema=False)
     @app.get("/app/academy/", include_in_schema=False)
     @app.get("/app/learn", include_in_schema=False)
-    def academy_ui() -> FileResponse:
-        return _serve_app_html(static_dir, "academy.html")
+    def academy_ui() -> HTMLResponse:
+        return _serve_academy_html(static_dir)
 
     @app.get("/app/dna", include_in_schema=False)
     @app.get("/app/dna/", include_in_schema=False)
@@ -906,6 +924,7 @@ def create_app() -> FastAPI:
             "demo_seed": _demo_seed_status(),
             "gate_months": 3,
             "hard_deny": True,
+            "guest_academy": auth_svc.guest_demo_enabled(),  # boolean only (WELORA_GUEST_DEMO)
             "git_sha": _short_git_sha(),
         }
         try:
@@ -1096,9 +1115,23 @@ def create_app() -> FastAPI:
     def get_core_constitution() -> dict:
         return _respond(*core_const_svc.service_get_core_constitution())
 
+    def _academy_owner(authorization: Optional[str], claimed: Optional[str] = None) -> str:
+        """Token owner of an Academy call. Device-only guests (POST /auth/device, no login) may use
+        Welorademy only while WELORA_GUEST_DEMO is on (staging / partner demo); with
+        WELORA_GUEST_DEMO=0 (production) they get 403 here — the server-side half of the
+        /app/academy guest gate (auth-gate.js is the client half)."""
+        uid = _owner(authorization, claimed)
+        if not auth_svc.guest_demo_enabled():
+            from welora import academy_store
+
+            if academy_store.is_device_guest(uid):
+                raise HTTPException(status_code=403, detail={"error_code": "ACADEMY_LOGIN_REQUIRED",
+                                                             "message": ACADEMY_LOGIN_REQUIRED_MSG})
+        return uid
+
     @app.get("/academy/tree", tags=["academy"])
     def academy_tree(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
-        uid = _owner(authorization, user_id)
+        uid = _academy_owner(authorization, user_id)
         return _respond(*academy_svc.service_get_tree(uid))
 
     def _kuat_ip(request: Request) -> str:
@@ -1116,12 +1149,13 @@ def create_app() -> FastAPI:
         node_id: str, request: Request, user_id: Optional[str] = Query(None),
         authorization: Optional[str] = Header(None),
     ) -> dict:
-        uid = _owner(authorization, user_id)
-        return _respond(*academy_svc.service_get_node(uid, node_id, ip=_kuat_ip(request)))
+        uid = _academy_owner(authorization, user_id)
+        return _respond(*academy_svc.service_get_node(uid, node_id, ip=_kuat_ip(request),
+                                                      session=_bearer_token(authorization)))
 
     @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
     def academy_read(node_id: str, body: AcademyReadBody, authorization: Optional[str] = Header(None)) -> dict:
-        uid = _owner(authorization, body.user_id)
+        uid = _academy_owner(authorization, body.user_id)
         payload = body.model_dump()
         payload["user_id"] = uid
         payload["node_id"] = node_id or payload.get("node_id")
@@ -1131,16 +1165,18 @@ def create_app() -> FastAPI:
     def academy_kuat_start(body: AcademyKuatStartBody, request: Request,
                            authorization: Optional[str] = Header(None)) -> dict:
         """GP P0b: issue a fresh KUAT attempt (random questions from the bank, shuffled options)."""
-        uid = _owner(authorization, body.user_id)
+        uid = _academy_owner(authorization, body.user_id)
         return _kuat_respond(*academy_svc.service_start_kuat({"user_id": uid, "node_id": body.node_id},
-                                                             ip=_kuat_ip(request)))
+                                                             ip=_kuat_ip(request),
+                                                             session=_bearer_token(authorization)))
 
     @app.post("/academy/kuat", tags=["academy"])
     def academy_kuat(body: AcademyKuatBody, request: Request, authorization: Optional[str] = Header(None)) -> dict:
         """Graded on the server against the attempt it issued; returns pass/fail + total score only."""
-        uid = _owner(authorization, body.user_id)
+        uid = _academy_owner(authorization, body.user_id)
         return _kuat_respond(*academy_svc.service_submit_kuat({**body.model_dump(), "user_id": uid},
-                                                              ip=_kuat_ip(request)))
+                                                              ip=_kuat_ip(request),
+                                                              session=_bearer_token(authorization)))
 
     @app.post("/goals", tags=["goals"], status_code=201)
     def goals_create(body: GoalCreateBody, authorization: Optional[str] = Header(None)) -> dict:

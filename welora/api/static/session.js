@@ -62,13 +62,25 @@
     return ((w.location && w.location.pathname) || "").replace(/\/+$/, "") || "/app";
   }
 
+  /* migration-019 ticket item 5: /app/academy is a guest page only when the server marked it
+     (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
+  function guestAcademy() {
+    if (currentPath() !== "/app/academy") return false;
+    try {
+      var m = w.document.querySelector('meta[name="welora-guest-academy"]');
+      return !!(m && m.getAttribute("content") === "1");
+    } catch (_eMeta) {
+      return false;
+    }
+  }
+
   function onStoredTokenRejected(code) {
     storedRejected = true;
     cachedUid = "";
     try {
       localStorage.removeItem(TOKEN_KEY);
     } catch (_eRm) {}
-    if (GUEST_OK[currentPath()]) return;
+    if (GUEST_OK[currentPath()] || guestAcademy()) return;
     try {
       sessionStorage.setItem("welora_auth_notice", code === "TOKEN_EXPIRED" ? "expired" : "relogin");
     } catch (_eSs) {}

@@ -711,6 +711,7 @@ PASS_RULE_VI = "Đạt khi đúng từ 70% số câu trở lên và đúng mọi
 def reset_academy_store() -> None:
     _PROFILES.clear()
     _REVS.clear()
+    _BACKFILL_CHECKED.clear()
 
 
 def _now() -> str:
@@ -766,8 +767,108 @@ def _sync_from_db(user_id: str) -> None:
 
 def _profile(user_id: str) -> dict[str, Any]:
     _sync_from_db(user_id)
-    p = _PROFILES.setdefault(user_id, {})
-    return _normalise(p)
+    p = _normalise(_PROFILES.setdefault(user_id, {}))
+    if user_id not in _BACKFILL_CHECKED:
+        p = _backfill_from_mastery(user_id, p)
+    return p
+
+
+# --- migration-019 ticket items 4 + 6: Academy progress consistent with the gate mastery ----------
+# The gate mastery (user_flags.mastery_no_efund_invest ≥ apply) is earned by passing N02-02, which
+# needs N02-01 passed first. Users who passed before migration 017 (progress was in memory only) and
+# the seeded demo personas have the mastery but an empty Academy profile (xp 0, N02-01 not_started).
+# Read-time backfill (DB store only, once per process per user): a TRUSTED server-written mastery
+# (source academy or seed — never a legacy self-set row) ≥ apply → N02-01 + N02-02 mastered with
+# their XP and badges, as a pass would have done. It only ever ADDS progress (never lowers a node,
+# never touches the mastery flag) and writes with an optimistic revision check, so a concurrent
+# save on another instance is never overwritten. Idempotent: a backfilled profile has both nodes
+# mastered and is left alone.
+GATE_PATH_NODES = ("N02-01", "N02-02")
+BACKFILL_SOURCES = ("academy", "seed")
+_BACKFILL_CHECKED: set[str] = set()
+
+
+def _mark_gate_path_mastered(p: dict[str, Any]) -> bool:
+    from welora.mastery import _RANK, GATE_MIN
+
+    changed = False
+    for nid in GATE_PATH_NODES:
+        st = p["nodes"][nid]
+        if st.get("status") != STATUS_MASTERED:
+            st["status"] = STATUS_MASTERED
+            changed = True
+        if _RANK.get(str(st.get("mastery_level") or "not_started"), 0) < _RANK[GATE_MIN]:
+            st["mastery_level"] = GATE_MIN
+            changed = True
+        if nid not in p["awarded_xp"]:
+            p["xp"] = int(p["xp"]) + XP_PER_PASS
+            p["awarded_xp"].append(nid)
+            changed = True
+    _refresh_locks(p)
+    _refresh_badges(p)
+    return changed
+
+
+def _gate_path_mastered(p: dict[str, Any]) -> bool:
+    return all(p["nodes"][nid].get("status") == STATUS_MASTERED for nid in GATE_PATH_NODES)
+
+
+def _trusted_gate_mastery(user_id: str) -> bool:
+    from welora.db.repos import get_user_flags_db
+    from welora.mastery import _RANK, GATE_MIN
+
+    f = get_user_flags_db(user_id)
+    return (f.get("mastery_source") in BACKFILL_SOURCES
+            and _RANK.get(str(f.get("mastery_no_efund_invest") or ""), 0) >= _RANK[GATE_MIN])
+
+
+def _backfill_from_mastery(user_id: str, p: dict[str, Any]) -> dict[str, Any]:
+    from welora import academy_store as store
+
+    if not store.use_db_profiles() or _gate_path_mastered(p):
+        _BACKFILL_CHECKED.add(user_id)
+        return p
+    for _round in range(3):
+        if not _trusted_gate_mastery(user_id):
+            _BACKFILL_CHECKED.add(user_id)
+            return p
+        _mark_gate_path_mastered(p)
+        p["backfilled_at"] = _now()
+        rev = store.save_profile_if_rev(user_id, p, _REVS.get(user_id))
+        if rev is not None:
+            _REVS[user_id] = rev
+            _BACKFILL_CHECKED.add(user_id)
+            return p
+        # another request / instance saved first → reload its profile and re-apply on top of it
+        _PROFILES.pop(user_id, None)
+        _REVS.pop(user_id, None)
+        _sync_from_db(user_id)
+        p = _normalise(_PROFILES.setdefault(user_id, {}))
+        if _gate_path_mastered(p):
+            _BACKFILL_CHECKED.add(user_id)
+            return p
+    return p  # still racing: retried on the next request (not marked checked)
+
+
+def seed_profile(user_id: str, *, gate_passed: bool) -> dict[str, Any]:
+    """Demo seed (item 4): a fresh Academy profile that matches the persona's seeded mastery —
+    N02-01 + N02-02 mastered (XP + badges) when the persona has passed the gate (mastery apply),
+    else an empty one. Written in the caller's transaction (demo seed: ambient transaction +
+    advisory lock); calling it again yields the same profile (idempotent)."""
+    from welora import academy_store as store
+
+    p = _normalise({})
+    if gate_passed:
+        _mark_gate_path_mastered(p)
+    else:
+        _refresh_locks(p)
+    _PROFILES[user_id] = p
+    _BACKFILL_CHECKED.discard(user_id)
+    if store.use_db_profiles():
+        _REVS[user_id] = store.save_profile(user_id, p)
+    else:
+        _REVS.pop(user_id, None)
+    return p
 
 
 def _save(user_id: str) -> None:
@@ -941,7 +1042,8 @@ def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
     return fb
 
 
-def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None) -> dict[str, Any] | None:
+def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None,
+             session: Optional[str] = None) -> dict[str, Any] | None:
     """Lesson + (when the node is open and the learner is not cooling down) the learner's server-held
     KUAT attempt — the OPEN one if still valid (same questions / option order in every tab), a new one
     only when none is open: ``kuat.attempt_id`` and the shuffled ``questions`` (no answers, no verdicts)."""
@@ -958,7 +1060,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
     questions: list[dict[str, Any]] = []
     if st["status"] != STATUS_LOCKED and issue_attempt and QUESTIONS.get(node_id):
         try:
-            att = start_attempt(user_id, node_id, ip=ip)
+            att = start_attempt(user_id, node_id, ip=ip, session=session)
             questions = att["questions"]
             kuat.update({"attempt_id": att["attempt_id"], "expires_at": att["expires_at"]})
         except store.KuatCooldown as e:
@@ -1104,13 +1206,16 @@ def submit_kuat(user_id: str, node_id: str, answers: list[dict[str, Any]]) -> di
     return _apply_result(user_id, node_id, passed)
 
 
-def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None) -> dict[str, Any]:
+def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None,
+                  session: Optional[str] = None) -> dict[str, Any]:
     """The learner's KUAT attempt for this node: the open one if still valid, else a new draw
-    (raises academy_store.KuatCooldown while cooling down / too many new attempts)."""
+    (raises academy_store.KuatCooldown while cooling down / too many new attempts). ``session`` =
+    the request's bearer token: demo personas keep one open attempt per login session (019)."""
     from welora import academy_store as store
 
     store.check_kuat_allowed(user_id, node_id, ip)
-    att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id), ip=ip)
+    scope = store.attempt_scope(user_id, session=session, ip=ip)
+    att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id), ip=ip, scope=scope)
     return {**kuat_info(node_id), "attempt_id": att["attempt_id"], "expires_at": att["expires_at"],
             "node_id": node_id, "questions": _served_public(node_id, att["served"])}
 
@@ -1119,7 +1224,7 @@ _SLOT_RE = re.compile(r"^k([1-9][0-9]?)$")
 
 
 def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], answers: list[dict[str, Any]],
-                        *, ip: Optional[str] = None) -> dict[str, Any]:
+                        *, ip: Optional[str] = None, session: Optional[str] = None) -> dict[str, Any]:
     """Grade one server-held attempt. Order (round 2): validate (old tab → "reload", nothing
     counted) → consume the attempt atomically (only one concurrent submit continues) → RESERVE a
     failed-KUAT slot in every limit bucket BEFORE grading (429 if any is full; the attempt is
@@ -1140,19 +1245,20 @@ def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], a
         return {"error": "reload"}  # a tab from before the attempt format (canonical question ids)
     # Clients that post without attempt_id get the open attempt the server issued with the lesson —
     # still server-held, still single-use.
-    aid = (attempt_id or "").strip() or store.latest_open_attempt_id(user_id, node_id)
-    served = store.peek_attempt(aid, user_id, node_id) if aid else None
+    scope = store.attempt_scope(user_id, session=session, ip=ip)  # demo persona: this login session only
+    aid = (attempt_id or "").strip() or store.latest_open_attempt_id(user_id, node_id, scope=scope)
+    served = store.peek_attempt(aid, user_id, node_id, scope=scope) if aid else None
     if not served:
         return {"error": "attempt_invalid"}
     if any(int(_SLOT_RE.match(i).group(1)) > len(served) for i in ids):
         return {"error": "reload"}  # answers for questions this attempt never showed
-    served = store.consume_attempt(aid, user_id, node_id)  # atomic: one concurrent submit wins
+    served = store.consume_attempt(aid, user_id, node_id, scope=scope)  # atomic: one concurrent submit wins
     if not served:
         return {"error": "attempt_invalid"}
     try:
         reservation = store.reserve_kuat_fail(user_id, node_id, ip)
     except store.KuatCooldown:
-        store.reopen_attempt(aid, user_id, node_id)  # not graded → the learner keeps the attempt
+        store.reopen_attempt(aid, user_id, node_id, scope=scope)  # not graded → the learner keeps the attempt
         raise
     try:
         _score, passed = _grade_served(node_id, served, answers)
@@ -1176,7 +1282,8 @@ def _wait_vi(seconds: int) -> str:
 # Round 4: every message carries the retry time in Vietnam time ({at}, UTC+7 — no DST) next to the
 # duration; the payload also has retry_at (ISO, UTC) and a link back to the lesson. The network
 # messages never ask for an OTP / verification: a password-registered account has no way to verify
-# today (e-mail OTP is admin-listed only, phone OTP creates a separate account).
+# today (e-mail OTP is admin-listed only, phone OTP creates a separate account) — and (migration-019
+# ticket item 2) never ask to log in either: a password login does not lift a gate-node limit.
 _RETRY = "sau khoảng {wait} (từ {at}, giờ Việt Nam)"
 _REVIEW = " Trong lúc chờ, mời bạn ôn lại bài «{lesson}» — nắm vững nội dung bài là cách chắc chắn nhất để đạt."
 COOLDOWN_MSG_VI = {
@@ -1190,9 +1297,15 @@ COOLDOWN_MSG_VI = {
                           + _RETRY + "." + _REVIEW),
     "demo_ip": ("Bài KUAT này tạm dừng cho tài khoản demo trên mạng bạn đang dùng vì đã có nhiều lượt chưa đạt từ "
                 "mạng này trong 24 giờ qua. Bạn có thể làm lại " + _RETRY + "." + _REVIEW),
-    "guest_ip": "Có quá nhiều lượt KUAT chưa đạt từ mạng này. Hãy đăng nhập tài khoản của bạn hoặc thử lại " + _RETRY + ".",
-    "device": "Thiết bị này đã làm bài KUAT chưa đạt nhiều lần. Hãy ôn lại bài, đăng nhập tài khoản của bạn hoặc thử lại " + _RETRY + ".",
+    # migration-019 ticket item 2: no login / OTP nudge — logging in does not lift a gate-node limit
+    "guest_ip": ("Bài KUAT này tạm dừng trên mạng bạn đang dùng vì đã có nhiều lượt chưa đạt từ mạng này "
+                 "trong 24 giờ qua. Bạn có thể làm lại " + _RETRY + "." + _REVIEW),
+    "device": ("Thiết bị này đã làm bài KUAT này chưa đạt nhiều lần trong 24 giờ qua. Bạn có thể làm lại "
+               + _RETRY + "." + _REVIEW),
     "starts": "Bạn đã mở bài KUAT này quá nhiều lần. Vui lòng thử lại " + _RETRY + ".",
+    # item 3: too many NEW attempts on non-gate nodes from one network
+    "ip_starts": ("Mạng bạn đang dùng đã mở quá nhiều lượt bài KUAT trong thời gian ngắn. Bạn có thể mở bài "
+                  "mới " + _RETRY + "." + _REVIEW),
 }
 VN_TZ = timezone(timedelta(hours=7), "ICT")
 ATTEMPT_INVALID_MSG_VI = "Lượt KUAT này đã hết hạn hoặc đã được nộp. Hãy tải lại bài để làm lượt mới."
@@ -1231,10 +1344,11 @@ def service_get_tree(user_id: str) -> tuple[int, dict]:
     return 200, get_tree(user_id)
 
 
-def service_get_node(user_id: str, node_id: str, *, ip: Optional[str] = None) -> tuple[int, dict]:
+def service_get_node(user_id: str, node_id: str, *, ip: Optional[str] = None,
+                     session: Optional[str] = None) -> tuple[int, dict]:
     if not user_id:
         return 400, {"error": "user_id is required"}
-    n = get_node(user_id, node_id, ip=ip)
+    n = get_node(user_id, node_id, ip=ip, session=session)
     if not n:
         return 404, {"error": "unknown node"}
     return 200, n
@@ -1251,7 +1365,7 @@ def service_mark_read(body: dict) -> tuple[int, dict]:
     return 200, out
 
 
-def service_start_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, dict]:
+def service_start_kuat(body: dict, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:
     from welora import academy_store as store
 
     user_id = (body or {}).get("user_id") or ""
@@ -1265,12 +1379,12 @@ def service_start_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, di
     if p["nodes"][node_id]["status"] == STATUS_LOCKED:
         return 403, {"error": "locked"}
     try:
-        return 200, start_attempt(user_id, node_id, ip=ip)
+        return 200, start_attempt(user_id, node_id, ip=ip, session=session)
     except store.KuatCooldown as e:
         return 429, cooldown_payload(e, node_id)
 
 
-def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, dict]:
+def service_submit_kuat(body: dict, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:
     from welora import academy_store as store
 
     user_id = (body or {}).get("user_id") or ""
@@ -1279,7 +1393,7 @@ def service_submit_kuat(body: dict, *, ip: Optional[str] = None) -> tuple[int, d
     if not user_id or not node_id:
         return 400, {"error": "user_id and node_id required"}
     try:
-        out = submit_kuat_attempt(user_id, node_id, (body or {}).get("attempt_id"), answers, ip=ip)
+        out = submit_kuat_attempt(user_id, node_id, (body or {}).get("attempt_id"), answers, ip=ip, session=session)
     except store.KuatCooldown as e:
         return 429, cooldown_payload(e, node_id)
     if out.get("error") == "locked":

@@ -22,7 +22,16 @@
     "/app/onboarding": 1,
     "/app/onboarding/result": 1
   };
-  if (!_authAllow[path]) {
+  /* migration-019 ticket item 5: /app/academy for guests only when the server marked the page
+     (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
+  var _guestAcademy = false;
+  if (path === "/app/academy") {
+    try {
+      var _gm = document.querySelector('meta[name="welora-guest-academy"]');
+      _guestAcademy = !!(_gm && _gm.getAttribute("content") === "1");
+    } catch (_eGm) {}
+  }
+  if (!_authAllow[path] && !_guestAcademy) {
     var _tok = "";
     try {
       _tok = localStorage.getItem("welora_token") || "";
@@ -141,7 +150,7 @@
     try {
       _guestTok = localStorage.getItem("welora_token") || "";
     } catch (_eGuest) {}
-    if (!_guestTok && (path === "/app/onboarding" || path === "/app/onboarding/result")) {
+    if (!_guestTok && (path === "/app/onboarding" || path === "/app/onboarding/result" || _guestAcademy)) {
       btn.textContent = "Đăng nhập";
       btn.setAttribute("aria-label", "Đăng nhập");
       btn.addEventListener("click", function () {

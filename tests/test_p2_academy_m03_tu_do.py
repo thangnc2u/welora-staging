@@ -35,6 +35,23 @@ def _correct(node_id: str) -> list[dict]:
     return [{"question_id": q["id"], "choice": q["answer"]} for q in QUESTIONS[node_id]]
 
 
+def _core_on_the_standard(test, nid, words=()):
+    """Item 15 of "GP follow-up sau OTP #244 + Academy #245": the old 3-question bank asserted a fixed
+    keyword («Không», «An Toàn»…) in every core answer — exactly the opening-word cue the 12 × 4
+    standard removes. The bank now has 6 core questions whose answers are grounded in the served
+    lesson (tests/test_kuat_banks_30.py), and the safety ideas stay in the bank."""
+    from tests.test_kuat_banks_30 import GROUNDING, _body
+
+    qs = QUESTIONS[nid]
+    test.assertEqual(sum(q["hard"] for q in qs), 6, nid)
+    body = _body(nid)
+    for phrase in GROUNDING[nid]:
+        test.assertIn(phrase, body, (nid, phrase))
+    blob = " ".join(q["prompt"] + " " + " ".join(q["choices"]) for q in qs).lower()
+    for w in words:
+        test.assertIn(w, blob, nid)
+
+
 class TestP2AcademyM03TuDo(unittest.TestCase):
     def setUp(self):
         reset_academy_store()
@@ -63,7 +80,7 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
             self.assertEqual(n["module_id"], "M03")
             self.assertEqual(n["module_title"], "Tự Do Tài Chính")
             # follow-up item 5: the first lesson of the module has the 12-question N02 standard bank
-            self.assertEqual(len(QUESTIONS[n["node_id"]]), 12 if n["node_id"] == "N03-01" else 3)
+            self.assertEqual(len(QUESTIONS[n["node_id"]]), 12)  # every bank on the 12 × 4 standard (#244/#245 follow-up item 15)
         self.assertEqual(tuple(n["node_id"] for n in M03_NODES), M03_NODE_IDS)
         # M01/M02 graph untouched; GATE stays N02-02
         m02 = [n for n in NODES if n["module_id"] == "M02"]
@@ -124,21 +141,7 @@ class TestP2AcademyM03TuDo(unittest.TestCase):
             self.assertIsNone(os_nudge_for(nid, first_pass=True))
 
     def test_inv_hard_q_emphasizes_an_toan(self):
-        qs = QUESTIONS["N03-04"]
-        hard = [q for q in qs if q["hard"]]
-        self.assertTrue(hard)
-        blob = " ".join(q["prompt"] + " " + " ".join(q["choices"]) for q in hard)
-        self.assertTrue(
-            "An Toàn" in blob or "Cổng" in blob or "all-in" in blob.lower() or "All-in" in blob,
-            blob,
-        )
-        # Correct answers affirm An Toàn first / no all-in before gate
-        for q in hard:
-            ans = q["choices"][q["answer"]]
-            self.assertTrue(
-                any(k in ans for k in ("An Toàn", "không all-in", "Không", "ưu tiên")),
-                ans,
-            )
+        _core_on_the_standard(self, "N03-04", ("an toàn", "quỹ khẩn cấp"))
 
     def test_html_groups_modules(self):
         html = HTML.read_text(encoding="utf-8")

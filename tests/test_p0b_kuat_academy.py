@@ -746,7 +746,7 @@ class TestQuestionBank(unittest.TestCase):
             perms.update(tuple(s["perm"]) for s in served)
         self.assertGreater(len(subsets), 5)
         self.assertTrue(any(list(p) != sorted(p) for p in perms))
-        self.assertEqual(len(academy._draw("N02-03")), 3)  # small banks: all questions, shuffled
+        self.assertEqual(len(academy._draw("N02-03")), academy.KUAT_DRAW)  # no small bank left (#244/#245 follow-up item 15)
 
 
 class TestGuessingStrategiesMonteCarlo(unittest.TestCase):

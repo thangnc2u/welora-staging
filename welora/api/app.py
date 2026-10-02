@@ -367,6 +367,27 @@ def _cache_bust_shell_js(html: str) -> str:
     return _SHELL_JS_SRC_RE.sub(_repl, html)
 
 
+_UNSAFE_NEXT = re.compile(r"[\x00-\x20\x7f\\]|%5c|%2f%2f", re.I)
+
+
+def safe_next_path(raw: Optional[str], fallback: str = "/app") -> str:
+    """Server-side twin of /static/safe-next.js: a same-origin /app path, else ``fallback``.
+    Rejects "//…", backslashes (raw or %5C), control chars / whitespace (tab → "//"), absolute
+    URLs (https:, javascript:, data:) and anything outside /app."""
+    from urllib.parse import urlsplit
+
+    v = raw if isinstance(raw, str) else ""
+    if not v or len(v) > 512 or _UNSAFE_NEXT.search(v) or not v.startswith("/") or v.startswith("//"):
+        return fallback
+    parts = urlsplit(v)
+    if parts.scheme or parts.netloc:
+        return fallback
+    path = parts.path
+    if not (path == "/app" or path.startswith("/app/")) or "/../" in path + "/" or path.endswith("/.."):
+        return fallback
+    return v
+
+
 def _serve_app_html(static_dir: Path, name: str) -> HTMLResponse:
     """Serve /app* HTML with consistent shell.js cache-bust query."""
     html = (static_dir / name).read_text(encoding="utf-8")
@@ -786,7 +807,12 @@ def create_app() -> FastAPI:
 
     @app.get("/app/verify", include_in_schema=False)
     @app.get("/app/verify/", include_in_schema=False)
-    def verify_ui() -> FileResponse:
+    def verify_ui(request: Request):
+        # PR #244 round 2 (B1): an unsafe ?next= never reaches the page (the page re-checks it with
+        # /static/safe-next.js before every redirect)
+        raw_next = request.query_params.get("next")
+        if raw_next is not None and safe_next_path(raw_next) != raw_next:
+            return RedirectResponse(url="/app/verify", status_code=302)
         return _serve_app_html(static_dir, "verify.html")
 
     @app.get("/app/register", include_in_schema=False)

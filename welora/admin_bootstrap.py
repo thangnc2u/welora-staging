@@ -102,6 +102,15 @@ def audit(conn: Any, *, user_id: Optional[str], action: str, detail: dict[str, A
     log.info("auth audit action=%s user=%s via=%s", action, (user_id or "")[:8], detail.get("via"))
 
 
+def _admin_otp_proven(conn: Any, uid: str, email: str) -> bool:
+    """The account proved this listed address through the ADMIN e-mail OTP (verify_email_otp sets
+    email_otp_challenges.user_id before calling sync_role)."""
+    return conn.execute(
+        "SELECT 1 FROM email_otp_challenges WHERE user_id=? AND LOWER(email)=? AND consumed=1 LIMIT 1",
+        (uid, (email or "").strip().lower()),
+    ).fetchone() is not None
+
+
 def sync_role(conn: Any, row: Any, *, via: str, keep_token: Optional[str] = None) -> str:
     """Apply WELORA_ADMIN_EMAILS to one user row; returns the resulting role. Caller commits."""
     uid = row["user_id"]
@@ -109,6 +118,10 @@ def sync_role(conn: Any, row: Any, *, via: str, keep_token: Optional[str] = None
     role = (row["role"] or "guest").strip().lower()
     verified = bool(row["email_verified_at"])
     admins = _roles()
+    if verified and is_listed(email) and role not in admins and not _admin_otp_proven(conn, uid, email):
+        # PR #244 round 2 (R1): email_verified_at alone (e.g. set by another flow) never grants admin —
+        # only a consumed admin e-mail OTP challenge of THIS account for THIS address does.
+        return role
     if verified and is_listed(email):
         if role in admins:
             return role

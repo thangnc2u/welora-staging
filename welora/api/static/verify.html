@@ -42,14 +42,15 @@ button.link[disabled]{opacity:.55;cursor:default;text-decoration:none}
   <p class="err" id="err"></p>
   <p class="ok" id="ok"></p>
 </div>
+<script src="/static/safe-next.js"></script>
 <script>
 (function(){
   var TOKEN_KEY='welora_token';
   var tok='';try{tok=localStorage.getItem(TOKEN_KEY)||'';}catch(_e){}
   var H={'Content-Type':'application/json',Authorization:'Bearer '+tok};
   var qs=new URLSearchParams(location.search);
-  var next=qs.get('next')||'/app';
-  if(next.charAt(0)!=='/'||next.charAt(1)==='/') next='/app'; /* same-origin paths only */
+  /* PR #244 round 2 (B1): same-origin /app paths only — shared helper /static/safe-next.js */
+  var next=window.WeloraSafeNext?WeloraSafeNext(qs.get('next'),'/app'):'/app';
   var challenge='';var timer=null;
   var $=function(id){return document.getElementById(id);};
   function err(m){$('err').textContent=m||'';if(m)$('ok').textContent='';}

@@ -62,6 +62,17 @@ MSG_SMS_OFF = (
     "Bạn vẫn sử dụng ứng dụng bình thường và có thể xác minh sau."
 )
 MSG_VERIFIED = "Cảm ơn bạn! Tài khoản đã được xác minh."
+MSG_DAILY = "Bạn đã đạt giới hạn xác minh trong 24 giờ. Vui lòng thử lại sau {h} giờ."
+ADMIN_NOTICE_SUBJECT = "Welora · Thông báo bảo mật tài khoản"
+ADMIN_NOTICE_BODY = (
+    "Xin chào,\n\n"
+    "Có người vừa đăng ký một tài khoản khách Welora bằng địa chỉ email này. Vì đây là email quản trị, "
+    "Welora không gửi mã xác minh cho tài khoản khách đó và tài khoản này sẽ không bao giờ được xác minh "
+    "hay cấp quyền quản trị qua luồng đăng ký.\n\n"
+    "Bạn vẫn đăng nhập quản trị như bình thường (mã OTP email quản trị + TOTP). Nếu không phải bạn đăng ký, "
+    "xin vui lòng báo cho đội vận hành Welora.\n\n"
+    "Trân trọng,\nWelora\n"
+)
 MAIL_SUBJECT = "Welora · Mã xác minh tài khoản"
 MAIL_BODY = (
     "Xin chào,\n\n"
@@ -108,6 +119,19 @@ def resend_cooldown_s() -> int:
     return _env_int("WELORA_VERIFY_RESEND_COOLDOWN_S", 60, 0, 900)
 
 
+DAY_S = 24 * 3600
+
+
+def daily_send_max() -> int:
+    """Codes per user per rolling 24 h (register-issued included). 0 disables."""
+    return _env_int("WELORA_VERIFY_DAILY_SEND_MAX", 10, 0, 1000)
+
+
+def daily_fail_max() -> int:
+    """Wrong code checks per user per rolling 24 h, across all its codes. 0 disables."""
+    return _env_int("WELORA_VERIFY_DAILY_FAIL_MAX", 30, 0, 10000)
+
+
 # --------------------------------------------------------------------------- migration 020 (SQLite)
 
 def _has_column(conn: Any, dialect: str, table: str, column: str) -> bool:
@@ -119,6 +143,20 @@ def _has_column(conn: Any, dialect: str, table: str, column: str) -> bool:
         (table, column),
     ).fetchone()
     return row is not None
+
+
+# Round 2 (R2): at most ONE open code per user + channel. Older duplicates (if any) are superseded
+# first so the unique index can always be created; both statements are idempotent.
+_DEDUP_OPEN_SQL = (
+    "UPDATE contact_verifications SET consumed=2 WHERE consumed=0 AND EXISTS ("
+    "SELECT 1 FROM contact_verifications n WHERE n.user_id=contact_verifications.user_id "
+    "AND n.channel=contact_verifications.channel AND n.consumed=0 AND (n.created_at>contact_verifications.created_at "
+    "OR (n.created_at=contact_verifications.created_at AND n.challenge_id>contact_verifications.challenge_id)))"
+)
+_OPEN_UNIQUE_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_contact_verif_open ON contact_verifications(user_id, channel) "
+    "WHERE consumed=0"
+)
 
 
 def apply_contact_verification_schema(conn: Any, dialect: str = "sqlite") -> dict[str, Any]:
@@ -141,6 +179,8 @@ def apply_contact_verification_schema(conn: Any, dialect: str = "sqlite") -> dic
         " expires_at TEXT NOT NULL)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_contact_verif_user ON contact_verifications(user_id, created_at)")
+    conn.execute(_DEDUP_OPEN_SQL)
+    conn.execute(_OPEN_UNIQUE_SQL)
     conn.commit()
     return {"phone_verified_at_added": added}
 
@@ -218,6 +258,54 @@ def _unverified_channels(row) -> list[str]:
     if c["phone"] and not _set(row["phone_verified_at"]):
         out.append("phone")
     return out
+
+
+def _admin_listed(channel: str, target: str) -> bool:
+    """PR #244 round 2 (R1): an e-mail in WELORA_ADMIN_EMAILS is NEVER verified by this flow —
+    admin stays e-mail OTP (admin_bootstrap) + TOTP only. Otherwise registering a not-yet-existing
+    admin address and guessing the code would let admin_bootstrap.startup_sync promote it."""
+    if channel != "email":
+        return False
+    from welora import admin_bootstrap
+
+    return admin_bootstrap.is_listed(target)
+
+
+def _since(t: float) -> str:
+    return _iso(t - DAY_S)
+
+
+def _daily_sends(conn, uid: str, t: float) -> list:
+    return conn.execute(
+        "SELECT created_at FROM contact_verifications WHERE user_id=? AND created_at>=? ORDER BY created_at",
+        (uid, _since(t)),
+    ).fetchall()
+
+
+def _daily_fails(conn, uid: str, t: float) -> tuple[int, float]:
+    """(wrong checks in the last 24 h, retry-after seconds). Every check reserves one attempt; the
+    successful check of a used code is the only non-wrong one. Codes live ≤ 1 h, so every attempt of
+    a row happened within ~1 h of its created_at — counting rows created in the window is exact up
+    to that hour."""
+    rows = conn.execute(
+        "SELECT created_at, attempts, consumed FROM contact_verifications WHERE user_id=? AND created_at>=? "
+        "ORDER BY created_at",
+        (uid, _since(t)),
+    ).fetchall()
+    wrong = sum(int(r["attempts"] or 0) - (1 if int(r["consumed"] or 0) == USED else 0) for r in rows)
+    oldest = next((_ts(r["created_at"]) for r in rows if int(r["attempts"] or 0) > 0), t)
+    return max(0, wrong), max(1.0, oldest + DAY_S - t)
+
+
+def _daily_error(retry_after: float) -> "VerifyError":
+    s = int(retry_after) + 1
+    return VerifyError(429, "VERIFY_DAILY_LIMIT", MSG_DAILY.format(h=max(1, (s + 3599) // 3600)), retry_after=s)
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    from welora.auth import _is_unique_violation as uv
+
+    return uv(exc)
 
 
 def _deliverable(channel: str) -> bool:
@@ -320,25 +408,51 @@ def issue(uid: str, channel: Optional[str] = None, *, now: Optional[float] = Non
                         "expires_at": None, "delivery": "none", "sms_enabled": sms.enabled(),
                         "resend_after_s": 0, "max_attempts": max_attempts(), "attempts_left": 0,
                         "message": MSG_SMS_OFF.format(target=_mask("phone", target))}
+        # per-user lock for the rest of this transaction: concurrent sends for one account run one
+        # after another (PG row lock; SQLite write lock), so the cooldown / daily checks below see
+        # the code a parallel request just created. The unique index is the backstop.
+        conn.execute("UPDATE users SET updated_at=updated_at WHERE user_id=?", (uid,))
         prev = _latest_open(conn, uid, ch)
         if enforce_cooldown and prev is not None:
             wait = int(round(_ts(prev["created_at"]) + resend_cooldown_s() - t))
             if wait > 0:
                 raise VerifyError(429, "VERIFY_RESEND_COOLDOWN", MSG_COOLDOWN.format(s=wait), retry_after=wait)
+        if daily_send_max() > 0:
+            sends = _daily_sends(conn, uid, t)
+            if len(sends) >= daily_send_max():
+                raise _daily_error(_ts(sends[0]["created_at"]) + DAY_S - t)
         cid = str(uuid.uuid4())
         code = f"{secrets.randbelow(1_000_000):06d}"
         conn.execute("UPDATE contact_verifications SET consumed=? WHERE user_id=? AND channel=? AND consumed=0",
                      (SUPERSEDED, uid, ch))
-        conn.execute(
-            "INSERT INTO contact_verifications(challenge_id, user_id, channel, target, code_hash, attempts, consumed, "
-            "created_at, expires_at) VALUES (?,?,?,?,?,0,0,?,?)",
-            (cid, uid, ch, target, _code_hash(cid, code), _iso(t), _iso(t + ttl_s())),
-        )
-        conn.commit()
+        try:
+            # uq_contact_verif_open (user_id, channel) WHERE consumed=0 — of two parallel resends only
+            # one INSERT succeeds; the other is refused like a cooldown (no second code, no mail)
+            conn.execute(
+                "INSERT INTO contact_verifications(challenge_id, user_id, channel, target, code_hash, attempts, "
+                "consumed, created_at, expires_at) VALUES (?,?,?,?,?,0,0,?,?)",
+                (cid, uid, ch, target, _code_hash(cid, code), _iso(t), _iso(t + ttl_s())),
+            )
+            conn.commit()
+        except Exception as e:
+            if not _is_unique_violation(e):
+                raise
+            conn.rollback()
+            wait = max(1, resend_cooldown_s())
+            raise VerifyError(429, "VERIFY_RESEND_COOLDOWN", MSG_COOLDOWN.format(s=wait), retry_after=wait)
         created = conn.execute("SELECT * FROM contact_verifications WHERE challenge_id=?", (cid,)).fetchone()
     finally:
         conn.close()
-    delivery = _deliver(ch, target, code)
+    if _admin_listed(ch, target):
+        # same response shape / status as any e-mail (no enumeration of the admin list), but the code
+        # is never sent and can never verify (confirm refuses it); the mailbox owner gets a notice
+        from welora import mailer
+
+        mailer.enqueue(target, ADMIN_NOTICE_SUBJECT, ADMIN_NOTICE_BODY)
+        delivery = "email"
+        log.warning("verification refused for an admin-listed e-mail user=%s", uid[:8])
+    else:
+        delivery = _deliver(ch, target, code)
     log.info("verification code issued user=%s channel=%s to=%s", uid[:8], ch, _mask(ch, target))
     msg = (MSG_SENT_EMAIL if ch == "email" else MSG_SENT_SMS).format(target=_mask(ch, target))
     return _public(created, now=t, delivery=delivery, message=msg)
@@ -393,6 +507,10 @@ def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Opt
         if ch is None or not c:
             raise bad
         cid = ch["challenge_id"]
+        if daily_fail_max() > 0:
+            wrong, retry = _daily_fails(conn, uid, t)
+            if wrong >= daily_fail_max():
+                raise _daily_error(retry)
         # reserve one attempt atomically: the limit holds even for a concurrent burst
         cur = conn.execute(
             "UPDATE contact_verifications SET attempts=attempts+1 "
@@ -407,7 +525,8 @@ def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Opt
                     and int(again["attempts"] or 0) >= max_attempts():
                 raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)
             raise bad
-        if not hmac.compare_digest(str(ch["code_hash"] or ""), _code_hash(cid, c)):
+        listed = _admin_listed(str(ch["channel"]), str(ch["target"]))  # R1: never verifiable
+        if listed or not hmac.compare_digest(str(ch["code_hash"] or ""), _code_hash(cid, c)):
             left = max(0, max_attempts() - int(ch["attempts"] or 0) - 1)
             if left == 0:
                 raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)
@@ -419,6 +538,9 @@ def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Opt
             raise bad  # a concurrent request with the same code won
         stamp = _iso(t)
         if ch["channel"] == "email":
+            if _admin_listed("email", str(ch["target"])):  # belt and braces (R1)
+                conn.rollback()
+                raise bad
             cur = conn.execute(
                 "UPDATE users SET email_verified_at=COALESCE(NULLIF(email_verified_at,''), ?) "
                 "WHERE user_id=? AND LOWER(email)=?",

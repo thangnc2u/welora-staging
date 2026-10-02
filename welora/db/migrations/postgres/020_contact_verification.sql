@@ -24,3 +24,13 @@ CREATE TABLE IF NOT EXISTS contact_verifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_contact_verif_user ON contact_verifications(user_id, created_at);
+
+-- PR #244 round 2 (R2): at most ONE open code per user + channel (parallel resends cannot create two
+-- open codes / two mails). Older open duplicates, if any, are superseded first (idempotent).
+UPDATE contact_verifications SET consumed=2 WHERE consumed=0 AND EXISTS (
+    SELECT 1 FROM contact_verifications n WHERE n.user_id=contact_verifications.user_id
+    AND n.channel=contact_verifications.channel AND n.consumed=0
+    AND (n.created_at>contact_verifications.created_at
+         OR (n.created_at=contact_verifications.created_at AND n.challenge_id>contact_verifications.challenge_id)));
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_contact_verif_open ON contact_verifications(user_id, channel) WHERE consumed=0;

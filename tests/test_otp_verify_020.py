@@ -53,6 +53,7 @@ ENV_KEYS = (
     "WELORA_RL_VERIFY_SEND_IP_MAX", "WELORA_RL_VERIFY_CONFIRM_USER_MAX", "WELORA_RL_VERIFY_CONFIRM_IP_MAX",
     "WELORA_VERIFY_OTP_TTL_S", "WELORA_VERIFY_MAX_ATTEMPTS", "WELORA_VERIFY_RESEND_COOLDOWN_S",
     "WELORA_SMS_PROVIDER", "WELORA_MAIL_PROVIDER", "WELORA_DEMO_AUTOSEED", "WELORA_CHECKOUT_ENABLED",
+    "WELORA_VERIFY_DAILY_SEND_MAX", "WELORA_VERIFY_DAILY_FAIL_MAX",
 )
 CODE_RE = re.compile(r"\b(\d{6})\b")
 
@@ -849,7 +850,8 @@ class TestFrontend(_Base):
 
     def test_next_param_same_origin_only(self):
         html = (STATIC / "verify.html").read_text(encoding="utf-8")
-        self.assertIn("next.charAt(0)!=='/'||next.charAt(1)==='/'", html)
+        self.assertIn('<script src="/static/safe-next.js"></script>', html)
+        self.assertIn("WeloraSafeNext(qs.get('next'),'/app')", html)  # behaviour: test_otp_verify_020_r2
 
     def test_copy_is_vietnamese(self):
         vi = re.compile(r"[ạảãáàâầấậẩẫăằắặẳẵđêềếệểễôồốộổỗơờớợởỡưừứựửữìíịỉĩòóọỏõùúụủũỳýỵỷỹ]", re.I)

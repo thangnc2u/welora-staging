@@ -1,6 +1,7 @@
-# Welora Academy — 7 bài placeholder (bản soạn v1.1)
+# Welora Academy — 7 bài placeholder (bản soạn v1.2)
 
 Founder chốt 2026-10-02:
+Sửa v1.2 (2026-10-03), chỉ hai điểm: cân độ dài phương án KUAT; bỏ mã nguyên tắc khỏi lời bài và đề câu hỏi người học thấy. Metadata principle_key và bài liên kết giữ nguyên. Tên, mục tiêu khóa, ý đáp án đúng, câu trọng tâm giữ nguyên.
 1. Tên N01-06 và N04-05 lấy từ WA-01-06 và WA-04-05.
 2. Mỗi bài có trường mục tiêu một câu, đã khóa.
 3. Tên runtime lấy theo tên WA (bộ WA-02 và hai bài WA-01-06, WA-04-05), không dùng tên ngắn trên cây M02.
@@ -28,7 +29,7 @@ Công thức đủ dùng: đạt được gì + số tiền hoặc trạng thái
 
 Lý do phải gắn đời sống của chính mình hoặc gia đình, không gắn với việc so với đồng nghiệp. Mục tiêu kiểu “có xe như người kia” dễ gãy khi thu nhập chậm một tháng. Mục tiêu gắn việc không phải vay nóng khi con ốm thì còn đứng được lúc mệt.
 
-Khi có nhiều mong muốn, không đuổi năm mục tiêu cùng lúc. Một đến hai mục tiêu trọng tâm thường làm được. Thứ tự Welora đã khóa theo hướng An Toàn trước: quỹ khẩn cấp tối thiểu và nợ nguy hiểm đi trước; việc có hạn cứng như học phí đến hạn đi sau; mục tiêu trung và dài hạn đi sau nữa. Cổng An Toàn của Welora là quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu. Có thể tự đặt Goal cao hơn. Không có cửa Passed dưới 3 tháng.
+Khi có nhiều mong muốn, không đuổi năm mục tiêu cùng lúc. Chỉ giữ một đến hai mục tiêu trọng tâm thường làm được. Thứ tự Welora đã khóa theo hướng An Toàn trước: quỹ khẩn cấp tối thiểu và nợ nguy hiểm đi trước; việc có hạn cứng như học phí đến hạn đi sau; mục tiêu trung và dài hạn đi sau nữa. Cổng An Toàn của Welora là quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu. Có thể tự đặt Goal cao hơn. Không có cửa Passed dưới 3 tháng.
 
 Mốc trung gian giúp sửa đường. Nếu mục tiêu 36 triệu trong 12 tháng, mốc 3 tháng là khoảng 9 triệu. Chưa tới thì giảm một khoản chi không thiết yếu hoặc kéo dài thời hạn có chủ đích, không bỏ cả mục tiêu.
 
@@ -53,98 +54,98 @@ Viết một mục tiêu theo công thức số + hạn + lý do, rồi ghi mố
 ### Câu hỏi
 
 **q1.** Mong muốn “muốn tiết kiệm nhiều hơn” khác mục tiêu tài chính ở điểm nào?  
-A. Mong muốn đã đủ để đo tiến độ từng tháng  
+A. Mong muốn này đã đủ để đo việc phải làm tháng này  
 B. Mục tiêu cần số hoặc trạng thái, thời hạn và lý do  
-C. Hai cách viết là một  
-D. Mục tiêu chỉ cần một từ khóa ngắn  
+C. Hai kiểu câu đó đều đo được tiến độ từng tháng  
+D. Một cụm ngắn cũng đủ để theo dõi việc mỗi tháng  
 Đáp án: B  
 Core: có
 
 **q2.** Công thức đủ dùng trong bài gồm những phần nào?  
-A. Chỉ tên ngân hàng sẽ gửi  
+A. Chỉ cần tên nơi gửi tiền là đủ để theo dõi tháng này  
 B. Số hoặc trạng thái, thời hạn, lý do, mốc kiểm tra  
-C. Chỉ so với mức sống của đồng nghiệp  
-D. Chỉ cảm giác yên tâm cuối năm  
+C. Chỉ cần so với mức sống của người cùng cơ quan  
+D. Chỉ cần cảm giác yên tâm khi năm vừa khép lại  
 Đáp án: B  
 Core: có
 
 **q3.** Vì sao mục tiêu “có xe như đồng nghiệp” dễ gãy?  
-A. Vì xe luôn là khoản chi bắt buộc  
+A. Vì mua xe bị xem là khoản phải chi mỗi tháng trong nhà  
 B. Vì lý do đến từ so sánh, không từ việc nhà mình cần  
-C. Vì Welora cấm mua xe  
-D. Vì mục tiêu có số luôn sai  
+C. Vì bài này cấm mọi khoản mua xe trong năm nay  
+D. Vì mục tiêu có con số cụ thể thì luôn là mục tiêu sai  
 Đáp án: B  
 Core: có
 
 **q4.** Khi có nhiều mong muốn, bài khuyên giữ bao nhiêu mục tiêu trọng tâm?  
-A. Năm mục tiêu để không bỏ sót  
-B. Một đến hai mục tiêu trọng tâm  
-C. Không viết mục tiêu nào  
-D. Mọi khoản chi trong nhà thành mục tiêu  
+A. Giữ năm mục tiêu cùng lúc để khỏi bỏ sót  
+B. Chỉ giữ một đến hai mục tiêu trọng tâm  
+C. Không viết một mục tiêu nào trong năm  
+D. Biến mọi khoản chi thành mục tiêu riêng  
 Đáp án: B  
 Core: có
 
 **q5.** Thứ tự ưu tiên Welora khi nhiều mục tiêu cùng lúc là gì?  
-A. Mục tiêu tăng trưởng trước, quỹ để sau  
-B. Việc nào thấy hào hứng thì làm trước  
+A. Mục tiêu tăng trưởng làm trước, quỹ để lại sau  
+B. Việc nào đang hào hứng thì ưu tiên làm trước  
 C. An Toàn trước, rồi hạn cứng, rồi mục tiêu dài hơn  
-D. Chỉ làm mục tiêu nào bạn bè đang làm  
+D. Chỉ làm mục tiêu mà bạn bè đang theo đuổi  
 Đáp án: C  
 Core: có
 
 **q6.** Cổng An Toàn Welora về quỹ khẩn cấp là mức nào?  
-A. Có Goal là đủ, không cần số tháng  
-B. Ít nhất 3 tháng chi tiêu thiết yếu, không Passed dưới mức đó  
-C. Một tháng chi tiêu tùy ý  
-D. Bằng toàn bộ thu nhập một năm  
+A. Chỉ cần đã ghi Goal, không cần đếm đủ tháng chi tiêu  
+B. Ít nhất 3 tháng chi tiêu thiết yếu, không dưới mức đó  
+C. Một tháng chi tiêu thiết yếu, nhà tự chọn mức Passed  
+D. Bằng toàn bộ thu nhập hộ kiếm được trong một năm  
 Đáp án: B  
 Core: có
 
 **q7.** Mốc trung gian dùng để làm gì?  
-A. Thay cho lý do của mục tiêu  
+A. Dùng mốc này để thay hẳn lý do của mục tiêu  
 B. Biết sớm mình lệch để sửa, khỏi chờ ngày cuối  
-C. Xóa mục tiêu nếu tháng đầu chưa đủ  
-D. So điểm với người khác  
+C. Xóa mục tiêu nếu tháng đầu chưa tới mốc đã ghi  
+D. Mang mốc ra so với tiến độ của người khác  
 Đáp án: B  
 Core: không
 
 **q8.** Chị Mai nên biến câu “tiết kiệm nhiều hơn” thành dạng nào?  
-A. Giữ nguyên vì có gửi là được  
-B. Quỹ 36 triệu trong 12 tháng, mốc 3 tháng khoảng 9 triệu, vì không muốn vay khi đột xuất  
-C. Đợi cuối năm rồi tính một lần  
-D. Chọn năm mục tiêu cùng lúc cho đủ việc  
+A. Giữ câu cũ, vì tháng nào gửi được là mục tiêu đã rõ  
+B. Quỹ 36 triệu trong 12 tháng, mốc 9 triệu, để khỏi vay đột xuất  
+C. Khoan đến cuối năm rồi mới chốt một lần cho cả nhà xong  
+D. Chọn năm mục tiêu cùng lúc để tháng này có đủ việc phải làm hơn  
 Đáp án: B  
 Core: không
 
 **q9.** Nếu mốc 3 tháng chưa tới, hướng trong bài là gì?  
-A. Bỏ mục tiêu  
-B. Giảm một khoản chi không thiết yếu hoặc kéo hạn có chủ đích  
-C. Vay thêm để đủ số  
-D. Đổi mục tiêu theo người khác mỗi tuần  
+A. Dừng mục tiêu đang làm rồi để sang năm sau tính tiếp  
+B. Giảm chi không thiết yếu, hoặc kéo hạn có chủ đích  
+C. Vay thêm một khoản để đủ số mốc cho kịp hạn này  
+D. Đổi mục tiêu theo việc người khác đang làm mỗi tuần  
 Đáp án: B  
 Core: không
 
 **q10.** “Vì sao” của mục tiêu nên gắn với điều gì?  
 A. Đời sống của mình hoặc gia đình  
-B. Bảng xếp hạng thu nhập  
-C. Tên một sản phẩm đang quảng cáo  
-D. Số tiền người khác đang khoe  
+B. Bảng xếp hạng thu nhập quanh mình  
+C. Tên sản phẩm đang được quảng cáo  
+D. Số tiền người khác đang khoe tuần này  
 Đáp án: A  
 Core: không
 
 **q11.** Mục tiêu “trả hết 18 triệu dư nợ thẻ trong 8 tháng” thiếu gì nếu chưa có lý do?  
-A. Không thiếu gì  
+A. Câu này đã đủ, không thiếu phần nào nữa  
 B. Thiếu phần vì sao việc này quan trọng với mình  
-C. Thiếu tên cửa hàng đã quẹt thẻ  
-D. Thiếu dự báo lợi nhuận  
+C. Thiếu tên cửa hàng và ngày thẻ đã quẹt món thêm  
+D. Thiếu một mức lợi nhuận dự kiến để theo  
 Đáp án: B  
 Core: không
 
 **q12.** Được phép tự đặt Goal quỹ cao hơn 3 tháng không?  
-A. Không, chỉ được đúng 3 tháng  
+A. Không được, nhà chỉ được đặt đúng 3 tháng  
 B. Có, mức Passed tối thiểu vẫn là 3 tháng  
-C. Chỉ được đặt dưới 3 tháng  
-D. Goal quỹ không liên quan Cổng An Toàn  
+C. Chỉ được phép đặt Goal thấp hơn 3 tháng  
+D. Goal quỹ đứng riêng, không dính Cổng An Toàn  
 Đáp án: B  
 Core: không
 
@@ -161,7 +162,7 @@ Core: không
 
 ### Nội dung
 
-Quỹ khẩn cấp là tiền để dùng khi việc bất ngờ thật sự xảy ra: mất việc, nằm viện, sửa chỗ ở không trì hoãn được. SAFE-03 khóa một việc: quỹ phải thanh khoản cao và tách khỏi tài khoản chi tiêu hàng ngày. SAFE-01 nói rõ quỹ là lớp bảo vệ, không phải công cụ sinh lời.
+Quỹ khẩn cấp là tiền để dùng khi việc bất ngờ thật sự xảy ra: mất việc, nằm viện, sửa chỗ ở không trì hoãn được. Bài này khóa một việc: quỹ phải thanh khoản cao và tách khỏi tài khoản chi tiêu hàng ngày. Quỹ là lớp bảo vệ, không phải công cụ sinh lời.
 
 Thanh khoản cao nghĩa là rút được trong ít ngày, không phải chờ đáo hạn dài hay chờ người mua. Tách biệt nghĩa là không nằm chung ví tiêu hằng ngày. Tiền nằm chung rất dễ bị tiêu dần cho ăn uống, giảm giá, sinh nhật. Sang tháng mới thấy quỹ mỏng đi mà không có sự cố nào.
 
@@ -191,99 +192,99 @@ Tách số dư quỹ khỏi tài khoản tiêu và ghi một câu: chỗ này r�
 
 ### Câu hỏi
 
-**q1.** SAFE-03 yêu cầu quỹ khẩn cấp thế nào?  
-A. Khóa càng lâu càng tốt để khỏi tiêu  
+**q1.** Bài này yêu cầu quỹ khẩn cấp được giữ thế nào?  
+A. Khóa càng lâu càng tốt để khỏi tiêu vào việc vặt  
 B. Thanh khoản cao và tách khỏi tiền tiêu hằng ngày  
-C. Để chung lương cho tiện chuyển khoản  
-D. Ưu tiên nơi lãi cao nhất tuần này  
+C. Để chung với lương cho tiện lúc chuyển khoản  
+D. Ưu tiên nơi lãi nhìn cao nhất trong tuần này  
 Đáp án: B  
 Core: có
 
-**q2.** Vai trò của quỹ khẩn cấp theo SAFE-01 là gì?  
-A. Công cụ sinh lời chính của hộ  
-B. Lớp bảo vệ khi có sự cố thật  
-C. Khoản thay cho mọi mục tiêu dài hạn  
-D. Tiền chờ cơ hội góp vốn  
+**q2.** Vai trò của quỹ khẩn cấp trong bài này là gì?  
+A. Là công cụ sinh lời chính của cả hộ  
+B. Là lớp bảo vệ khi có sự cố thật  
+C. Là khoản thay mọi mục tiêu dài hạn  
+D. Là tiền chờ một chỗ góp vốn mở ra  
 Đáp án: B  
 Core: có
 
 **q3.** Vì sao không để quỹ chung tài khoản lương?  
-A. Vì lương không được gửi ngân hàng  
+A. Vì lương không được phép gửi ở ngân hàng  
 B. Vì dễ tiêu dần cho việc đã biết trước  
-C. Vì tách quỹ là trái luật  
-D. Vì tiền mặt trong ví an toàn hơn mọi chỗ khác  
+C. Vì tách quỹ là việc trái quy định nhà  
+D. Vì tiền mặt trong ví an toàn hơn mọi chỗ  
 Đáp án: B  
 Core: có
 
 **q4.** Chỗ nào không hợp vai trò quỹ khẩn cấp?  
-A. Chỗ rút được trong ít ngày, tách khỏi tiền tiêu  
-B. Cổ phiếu hoặc góp vốn, giá lên xuống và không chắc rút được lúc cần  
+A. Chỗ rút được trong ít ngày và tách khỏi tiền tiêu  
+B. Cổ phiếu hoặc góp vốn, giá nhảy, không chắc rút lúc cần  
 C. Một sổ tách riêng, rút được khi có việc đột xuất  
-D. Tài khoản không dùng để quẹt chi tiêu ngày  
+D. Tài khoản không dùng để quẹt chi tiêu hằng ngày  
 Đáp án: B  
 Core: có
 
 **q5.** Đuổi lãi cao hơn một chút cho quỹ khẩn cấp là đổi vai vì sao?  
-A. Vì mọi khoản lãi đều bị cấm  
+A. Vì mọi khoản lãi trên quỹ đều bị cấm hết  
 B. Vì lúc cần tiền có thể không lấy ra được  
 C. Vì quỹ phải bằng đúng một tháng chi tiêu  
-D. Vì chỉ vàng mới được giữ quỹ  
+D. Vì chỉ vàng mới được dùng để giữ quỹ này  
 Đáp án: B  
 Core: có
 
 **q6.** Mức quỹ tối thiểu để qua Cổng An Toàn là gì?  
-A. Một tuần chi tiêu  
+A. Một tuần chi tiêu thiết yếu của hộ  
 B. Ít nhất 3 tháng chi tiêu thiết yếu  
-C. Bằng số nợ thẻ  
-D. Không cần mức tháng  
+C. Bằng đúng số dư nợ thẻ đang quay  
+D. Không cần gắn với số tháng chi tiêu  
 Đáp án: B  
 Core: có
 
 **q7.** Anh Khoa nên làm gì với 30 triệu quỹ?  
-A. Để chung lương cho dễ tiêu  
-B. Chuyển hết sang góp vốn vì lời hứa rút linh hoạt  
-C. Để chỗ rút được trong ít ngày, tách khỏi chi tiêu, không đem đi đầu tư  
-D. Tiêu bớt 6 triệu rồi tính lại  
+A. Để nguyên trong lương cho dễ tiêu dần mỗi tháng  
+B. Chuyển hết sang góp vốn vì có lời hứa rút linh hoạt  
+C. Để chỗ rút trong ít ngày, tách tiền tiêu, không đầu tư  
+D. Tiêu bớt một phần rồi tính lại chỗ giữ sau đó  
 Đáp án: C  
 Core: không
 
 **q8.** Vàng để lâu năm hợp mục tiêu nào hơn?  
-A. Quỹ cần rút trong ít ngày  
+A. Chỗ cần rút ra trong ít ngày tới  
 B. Mục tiêu khác, không phải quỹ khẩn cấp  
-C. Thay cho toàn bộ chi tiêu thiết yếu  
-D. Khoản bắt buộc của mọi hộ  
+C. Khoản thay toàn bộ chi tiêu thiết yếu  
+D. Khoản bắt buộc phải có của mọi hộ  
 Đáp án: B  
 Core: không
 
 **q9.** “Rút được trong ít ngày” nhằm tránh điều gì?  
-A. Tránh có tiền mặt  
-B. Tránh đúng lúc sự cố thì tiền đang bị khóa  
-C. Tránh tách tài khoản  
-D. Tránh ghi chép số dư  
+A. Tránh việc nhà còn giữ tiền mặt ở nhà  
+B. Tránh lúc sự cố thì tiền đang bị khóa  
+C. Tránh việc tách quỹ sang một chỗ khác  
+D. Tránh việc ghi lại số dư mỗi tháng  
 Đáp án: B  
 Core: không
 
 **q10.** Được dùng quỹ khẩn cấp để đầu tư rồi gửi lại không?  
-A. Được, nếu thấy cơ hội đẹp  
+A. Được, nếu cơ hội tuần này nhìn khá đẹp hơn  
 B. Không, vì đang tháo lớp đệm trước khi biết sự cố  
-C. Được với một nửa số quỹ  
-D. Được nếu bạn bè cùng làm  
+C. Được nếu mang một nửa số đang nằm trong quỹ  
+D. Được nếu vài người quen cùng làm việc đó thêm này  
 Đáp án: B  
 Core: không
 
 **q11.** Bài này có chỉ tên một ngân hàng hoặc sản phẩm không?  
-A. Có, kèm lãi suất cam kết  
+A. Có, kèm một mức lãi được cam kết sẵn  
 B. Không, chỉ đưa tiêu chí rút được và tách được  
-C. Có, nhưng chỉ sản phẩm khóa dài hạn  
-D. Có, theo bảng xếp hạng tuần  
+C. Có, nhưng chỉ với sản phẩm khóa dài hạn thêm này  
+D. Có, theo bảng xếp hạng ngay trong tuần  
 Đáp án: B  
 Core: không
 
 **q12.** Muốn quỹ dày hơn 3 tháng thì xử lý ra sao?  
-A. Không được để dày hơn  
-B. Được đặt Goal cao hơn, mức Passed tối thiểu vẫn là 3 tháng  
-C. Phải mang phần dư đi đầu tư  
-D. Phải nhập lại vào tiền tiêu  
+A. Không được phép để quỹ dày hơn mức tối thiểu  
+B. Được Goal cao hơn, Passed vẫn là 3 tháng  
+C. Phải mang phần dư đi vào một khoản đầu tư  
+D. Phải nhập phần dư lại vào tiền tiêu hằng ngày  
 Đáp án: B  
 Core: không
 
@@ -300,7 +301,7 @@ Core: không
 
 ### Nội dung
 
-Trả nợ không có một công thức thắng mọi người. DEBT-02 nói phương pháp phải hợp hành vi: chọn cách mình làm được đến cuối, không chọn cách chỉ đẹp trên giấy.
+Trả nợ không có một công thức thắng mọi người. Nguyên tắc ở đây là phương pháp phải hợp hành vi: chọn cách mình làm được đến cuối, không chọn cách chỉ đẹp trên giấy.
 
 Hai cách phổ biến trong bài Welorapedia về trả nợ:
 
@@ -335,98 +336,98 @@ Ghi một câu: tháng này khoản được dồn thêm là khoản nào, theo 
 ### Câu hỏi
 
 **q1.** Avalanche ưu tiên khoản nào khi dồn tiền trả thêm?  
-A. Khoản mới vay gần nhất  
-B. Khoản lãi suất cao nhất  
-C. Khoản của người thân  
-D. Khoản nào cũng trả thêm bằng nhau  
+A. Khoản mới vay gần ngày nhất  
+B. Khoản đang chịu lãi suất cao nhất  
+C. Khoản đang đứng tên người thân  
+D. Khoản nào cũng được cộng thêm như nhau  
 Đáp án: B  
 Core: có
 
 **q2.** Snowball ưu tiên khoản nào?  
 A. Khoản dư nợ nhỏ nhất để có lần xong sớm  
-B. Khoản lãi thấp nhất  
-C. Khoản đứng tên người khác  
-D. Khoản chưa tới hạn  
+B. Khoản có lãi thấp nhất trong danh sách  
+C. Khoản đang đứng tên người khác trong nhà  
+D. Khoản chưa tới ngày phải trả trong tháng  
 Đáp án: A  
 Core: có
 
 **q3.** Cả hai phương pháp đều cần việc gì với các khoản không được ưu tiên?  
-A. Ngừng trả  
+A. Ngừng trả để dồn hết sang một khoản  
 B. Trả tối thiểu để không bỏ các khoản đó  
-C. Gộp hết vào một ứng dụng  
-D. Đảo sang khoản mới  
+C. Gộp hết vào một ứng dụng cho gọn bảng  
+D. Đảo sang một khoản mới cho dễ nhìn hơn  
 Đáp án: B  
 Core: có
 
 **q4.** Vì sao không cứ chọn Avalanche dù nó giảm lãi trên lý thuyết?  
-A. Vì Avalanche bị cấm  
-B. Vì cách bỏ giữa chừng không bằng cách mình làm đến hết  
-C. Vì Snowball luôn tiết kiệm hơn  
-D. Vì chỉ được trả một khoản  
+A. Vì cách giảm lãi trên giấy đang bị cấm dùng  
+B. Vì bỏ giữa chừng không bằng cách mình làm đến hết  
+C. Vì cách dư nợ nhỏ luôn tiết kiệm nhiều hơn  
+D. Vì mỗi nhà chỉ được trả duy nhất một khoản  
 Đáp án: B  
 Core: có
 
 **q5.** Chỉ trả tối thiểu mọi khoản, không dồn thêm khoản nào, dẫn tới gì?  
-A. Hết nợ rất nhanh  
+A. Mọi khoản sẽ hết rất nhanh trong năm nay  
 B. Không có khoản nào giảm thật ngoài mức tối thiểu  
-C. Đương nhiên qua Cổng An Toàn  
-D. Không cần danh sách nợ  
+C. Nhà đương nhiên được cho qua Cổng An Toàn  
+D. Nhà không cần phải viết danh sách nợ nữa  
 Đáp án: B  
 Core: có
 
 **q6.** Có nên rút quỹ tối thiểu 3 tháng để tất toán nợ lãi thấp không?  
-A. Luôn nên  
-B. Không, lớp đệm quỹ vẫn giữ  
-C. Chỉ khi bạn bè khuyên  
-D. Có, nếu muốn đầu tư ngay  
+A. Luôn nên rút quỹ để đóng cho xong  
+B. Không nên, lớp đệm quỹ vẫn phải giữ  
+C. Chỉ khi người quen khuyên nên rút  
+D. Có, nếu muốn chuyển sang đầu tư ngay  
 Đáp án: B  
 Core: có
 
 **q7.** Người hay bỏ cuộc vì mục tiêu dài nên nghiêng về cách nào?  
-A. Snowball, vì có mốc xong sớm  
-B. Không trả theo kế hoạch  
-C. Đổi cách mỗi tuần  
-D. Chỉ trả khoản lãi thấp  
+A. Cách dư nợ nhỏ, vì có mốc xong sớm  
+B. Không trả theo một kế hoạch nào cả  
+C. Đổi cách trả mỗi tuần cho đỡ nhàm  
+D. Chỉ trả khoản đang có lãi thấp nhất  
 Đáp án: A  
 Core: không
 
 **q8.** Trong ví dụ ba khoản, khoản nên dồn thêm trước theo Avalanche là khoản nào?  
-A. Vay người thân 40 triệu không lãi  
-B. Thẻ 8 triệu vì lãi cao nhất  
-C. Vay ứng lương, vì đứng giữa  
-D. Cả ba, chia đều  
+A. Vay người thân, khoản không tính lãi  
+B. Thẻ tám triệu, vì đó là lãi cao nhất  
+C. Vay ứng lương, vì nằm giữa danh sách  
+D. Cả ba khoản, chia phần trả thêm đều  
 Đáp án: B  
 Core: không
 
 **q9.** Đổi phương pháp mỗi tháng vì nghe chuyện người khác nghĩa là gì?  
-A. Đang tối ưu tốt  
+A. Đang chọn được cách tối ưu nhất rồi  
 B. Chưa có một phương pháp để theo  
-C. Đúng DEBT-02  
-D. Thay cho việc trả tối thiểu  
+C. Đang đi đúng nguyên tắc của bài này  
+D. Đổi cách còn hơn là giữ mức tối thiểu  
 Đáp án: B  
 Core: không
 
 **q10.** Bài này có hứa một số tiền lãi tiết kiệm cố định không?  
-A. Có, với mọi hộ  
-B. Không, vì phụ thuộc lãi, dư nợ và việc trả thêm đều  
-C. Có, nếu chọn Snowball  
-D. Có, nếu đảo nợ  
+A. Có, và áp dụng được cho mọi hộ như nhau  
+B. Không, vì còn tùy lãi, dư nợ và việc trả thêm  
+C. Có, nếu nhà chọn cách dư nợ nhỏ trước  
+D. Có, nếu nhà đảo hết nợ sang một khoản mới  
 Đáp án: B  
 Core: không
 
 **q11.** Phần trả thêm khác phần tối thiểu ở điểm nào?  
-A. Không khác  
-B. Phần trả thêm mới làm một khoản giảm nhanh hơn mức giữ hạn  
-C. Phần tối thiểu để đầu tư  
-D. Phần trả thêm chỉ dùng cho quỹ  
+A. Hai phần trả đó không khác nhau gì cả đâu rồi  
+B. Phần trả thêm làm khoản giảm nhanh hơn  
+C. Phần trả tối thiểu để dành sang đầu tư  
+D. Phần tiền trả thêm chỉ được chuyển vào quỹ  
 Đáp án: B  
 Core: không
 
 **q12.** Câu ghi sau khi chọn phương pháp nên có gì?  
-A. Tên sản phẩm sẽ mua  
-B. Khoản được dồn thêm, và vì lãi cao nhất hoặc vì dư nợ nhỏ nhất  
-C. Chỉ cảm xúc hôm đó  
-D. Lời hứa lợi nhuận  
+A. Tên sản phẩm nhà định mua trong tháng này  
+B. Khoản dồn thêm vì lãi cao hoặc dư nợ nhỏ  
+C. Chỉ cảm xúc của đúng ngày hôm đó mà thôi à  
+D. Một câu hứa về mức lợi nhuận trong tháng tới  
 Đáp án: B  
 Core: không
 
@@ -443,7 +444,7 @@ Core: không
 
 ### Nội dung
 
-Không phải mọi khoản vay đều giống nhau. DEBT-01: nợ tốt xây năng lực; nợ xấu làm suy yếu. Cách nhận trong bài này không cần công thức lãi. Hỏi ba việc: khoản này còn lại cái gì sau khi tiêu hết tiền vay, việc trả có gắn thu nhập hoặc tài sản tương ứng không, và nếu thu nhập giảm một tháng thì khoản này có đẩy nhà vào vay mới không.
+Không phải mọi khoản vay đều giống nhau. Nợ tốt xây năng lực; nợ xấu làm suy yếu. Cách nhận trong bài này không cần công thức lãi. Hỏi ba việc: khoản này còn lại cái gì sau khi tiêu hết tiền vay, việc trả có gắn thu nhập hoặc tài sản tương ứng không, và nếu thu nhập giảm một tháng thì khoản này có đẩy nhà vào vay mới không.
 
 Nợ làm suy yếu thường là nợ tiêu dùng lãi cao, tiền đã thành đồ dùng hoặc bữa ăn, không còn tài sản bán lại được, và số trả tháng ăn vào phần đáng lẽ để dành. Thẻ quay vòng, vay ứng để tiêu, vay nóng để “đầu tư cho kịp” thuộc nhóm nguy hiểm trong Welora. Vay nóng để đầu tư không phải chiến lược. Đó là chồng rủi ro lên một hộ chưa có đệm.
 
@@ -473,99 +474,99 @@ Liệt kê từng khoản nợ và ghi một nhãn: quá hạn, tiêu dùng lãi
 
 ### Câu hỏi
 
-**q1.** DEBT-01 phân biệt nợ tốt và nợ xấu theo hướng nào?  
-A. Nợ nào cũng xấu  
+**q1.** Bài này phân biệt nợ tốt và nợ xấu theo hướng nào?  
+A. Nợ nào cũng làm hộ yếu đi như nhau  
 B. Nợ xây năng lực khác nợ làm hộ yếu đi  
-C. Nợ lãi thấp luôn tốt  
-D. Chỉ nhìn tên gói vay  
+C. Nợ lãi thấp luôn là nợ tốt với nhà  
+D. Chỉ nhìn tên gói vay là đủ để xếp  
 Đáp án: B  
 Core: có
 
 **q2.** Nhóm nào được bài xếp vào nợ nguy hiểm?  
 A. Thẻ quay vòng, tiền đã tiêu, không còn tài sản  
 B. Khoản đang trả đúng hạn và gắn với đi làm  
-C. Khoản đã tất toán  
-D. Tiền tự để dành  
+C. Khoản đã được trả xong từ tháng trước rồi  
+D. Tiền nhà tự để dành trong một quỹ riêng  
 Đáp án: A  
 Core: có
 
 **q3.** Vay nóng để đầu tư được xem là gì?  
-A. Chiến lược nên làm sớm  
+A. Chiến lược nên làm sớm cho kịp đợt  
 B. Nợ nguy hiểm, chồng rủi ro khi chưa có đệm  
-C. Cách thay quỹ khẩn cấp  
+C. Cách dùng thay cho quỹ khẩn cấp nhà  
 D. Việc bắt buộc trước khi lập ngân sách  
 Đáp án: B  
 Core: có
 
 **q4.** Nợ quá hạn cần xử lý ra sao?  
-A. Bỏ qua nếu số tiền nhỏ  
-B. Đưa về trả đúng hạn trước khi bàn chuyện khác  
-C. Đảo sang gói mới cho hết tên  
-D. Dùng quỹ để đầu tư rồi trả sau  
+A. Bỏ qua nếu số tiền còn lại đang còn nhỏ  
+B. Đưa về đúng hạn trước khi bàn chuyện  
+C. Đảo sang một gói mới cho hết tên cũ đi  
+D. Dùng quỹ khẩn cấp để đầu tư rồi trả sau  
 Đáp án: B  
 Core: có
 
 **q5.** “Có thể chấp nhận” có nghĩa là gì?  
-A. Nên vay thêm ngay  
-B. Còn nghĩa vụ, nhưng gắn tài sản hoặc năng lực và vẫn trả được  
-C. Không cần trả  
-D. Tương đương nợ tiêu dùng lãi cao  
+A. Nên vay thêm ngay để đủ việc trong tháng này  
+B. Còn nghĩa vụ, gắn tài sản hoặc năng lực  
+C. Không cần trả nữa nếu lãi đang ở mức thấp rồi  
+D. Nó tương đương với nợ tiêu dùng lãi cao luôn  
 Đáp án: B  
 Core: có
 
 **q6.** Tên “vay ưu đãi” có đổi bản chất khoản nợ không?  
-A. Có, ưu đãi nghĩa là nợ tốt  
-B. Không, nếu không tạo năng lực và làm dòng tiền yếu thì vẫn là nợ xấu  
-C. Có, nếu bạn bè cùng vay  
-D. Chỉ đổi khi lãi bằng không  
+A. Có, vì cái tên ưu đãi đã nghĩa là khoản tốt  
+B. Không, thiếu năng lực và dòng tiền yếu  
+C. Có, nếu vài người quen cùng vay đúng gói đó  
+D. Chỉ đổi bản chất khi lãi trên giấy bằng không  
 Đáp án: B  
 Core: có
 
 **q7.** Trong ví dụ chị Lan, khoản cần dồn trả thêm trước là khoản nào?  
-A. Vay xe đang đúng hạn  
-B. Thẻ 12 triệu đã tiêu vào đồ và ăn uống  
-C. Cả hai bằng mọi giá trong tuần này  
-D. Không khoản nào  
+A. Khoản vay xe đang được trả đúng hạn rồi  
+B. Thẻ mười hai triệu tiêu vào đồ ăn uống  
+C. Cả hai khoản, đóng sạch trong tuần này  
+D. Không có khoản nào cần được dồn thêm  
 Đáp án: B  
 Core: không
 
 **q8.** Ba câu hỏi nhận diện trong bài gồm những gì?  
-A. Sau khi tiêu còn lại gì, có gắn thu nhập hoặc tài sản không, tháng giảm thu có phải vay mới không  
-B. Chỉ hỏi bạn bè vay chưa  
-C. Chỉ hỏi màu thẻ  
-D. Chỉ hỏi ngày mở khoản  
+A. Sau khi tiêu còn gì, có gắn tài sản không, có phải vay mới không  
+B. Chỉ hỏi người quen đã vay khoản này chưa, không hỏi bản chất của nợ  
+C. Chỉ cần hỏi màu thẻ cùng ngân hàng đang phát hành rồi  
+D. Chỉ cần hỏi ngày mở khoản cùng nơi giấy đã ký rồi này  
 Đáp án: A  
 Core: không
 
 **q9.** Khoản lãi thấp có thể vẫn nguy hiểm khi nào?  
 A. Khi hộ không trả được nếu không cắt chi tiêu thiết yếu  
-B. Khi đang trả đúng hạn và còn tài sản  
-C. Khi đã tất toán  
-D. Khi số tiền dưới 1 triệu  
+B. Khi đang trả đúng hạn và còn tài sản tương ứng thêm này  
+C. Khi khoản đó đã được tất toán sạch từ trước rồi  
+D. Khi số tiền còn lại xuống dưới một triệu đồng  
 Đáp án: A  
 Core: không
 
 **q10.** Thứ tự xử lý trong bài là gì?  
-A. Khoản gắn tài sản tất toán trước bằng cách rút quỹ  
-B. Quá hạn và tiêu dùng lãi cao trước  
-C. Khoản nào cũng để sang năm  
-D. Chỉ xử lý khoản của người thân  
+A. Khoản gắn tài sản phải đóng trước bằng quỹ  
+B. Xử lý quá hạn và tiêu dùng lãi cao trước  
+C. Khoản nào cũng để sang năm sau hết  
+D. Chỉ xử lý khoản đứng tên người thân  
 Đáp án: B  
 Core: không
 
 **q11.** Xe máy đang dùng để đi làm, trả đúng hạn, khác thẻ tiêu dùng ở điểm nào?  
-A. Không khác  
+A. Không khác thẻ tiêu dùng ở điểm nào cả thêm  
 B. Còn gắn việc tạo thu nhập và đang đúng hạn  
-C. Không phải nợ  
-D. Nên dừng trả ngay  
+C. Không còn được tính là một khoản nợ  
+D. Nên dừng trả ngay trong tháng này luôn  
 Đáp án: B  
 Core: không
 
 **q12.** Gọi một khoản là nợ có thể chấp nhận có cho phép vay thêm ngay không?  
-A. Có  
-B. Không, nợ vẫn là nghĩa vụ  
-C. Có nếu lãi bằng không trên giấy  
-D. Có nếu đứng tên người khác  
+A. Được vay thêm vì đã gọi là chấp nhận  
+B. Không được, vì nợ vẫn là nghĩa vụ  
+C. Được nếu lãi ghi trên giấy bằng không  
+D. Được nếu khoản đó đứng tên người khác  
 Đáp án: B  
 Core: không
 
@@ -588,7 +589,7 @@ Bốn cột đủ dùng: tên khoản, dư nợ còn, số trả tối thiểu t
 
 Kế hoạch thực tế nghĩa là số trả thêm lấy từ tiền còn lại sau chi tiêu thiết yếu và sau phần giữ quỹ. Không lấy từ quỹ khẩn cấp đang dưới 3 tháng chi tiêu thiết yếu. Không lấy từ tiền học phí đã hẹn. Nếu tháng này chỉ còn 1 triệu sau các việc đó, kế hoạch là 1 triệu, không phải 5 triệu cho đẹp.
 
-Ngày xem lại nên cố định, ví dụ ngày lĩnh lương. Việc xem: dư nợ giảm chưa, có khoản mới không, tháng sau còn dồn được bao nhiêu. Một tháng hụt thì ghi lý do và giảm số trả thêm, không xóa cả kế hoạch. CORE-06 nghiêng về hệ thống hơn ý chí: chuyển khoản đúng ngày đỡ hơn nhớ lúc mệt.
+Ngày xem lại nên cố định, ví dụ ngày lĩnh lương. Việc xem: dư nợ giảm chưa, có khoản mới không, tháng sau còn dồn được bao nhiêu. Một tháng hụt thì ghi lý do và giảm số trả thêm, không xóa cả kế hoạch. Hệ thống đáng tin hơn ý chí: chuyển khoản đúng ngày đỡ hơn nhớ lúc mệt.
 
 Không đảo nợ chỉ để bảng nhìn gọn nếu chưa hiểu phí và lãi mới. Bài này không hướng dẫn một sản phẩm đảo nợ. Không hứa ngày hết nợ chính xác cho mọi người, vì lãi và thu nhập đổi. Hứa được việc trong tầm mình: tháng này trả đúng khoản đã ghi.
 
@@ -613,98 +614,98 @@ Viết bốn cột cho từng khoản nợ và ghi số trả thêm tháng này 
 ### Câu hỏi
 
 **q1.** Kế hoạch trả nợ đủ dùng cần những gì?  
-A. Chỉ câu “sẽ cố”  
+A. Chỉ một câu hứa sẽ cố gắng trong tháng  
 B. Dư nợ, tối thiểu, trả thêm, khoản được dồn  
-C. Chỉ tên app  
-D. Chỉ cảm xúc cuối tháng  
+C. Chỉ tên ứng dụng đang dùng để trả nợ  
+D. Chỉ cảm xúc của ngày cuối tháng này  
 Đáp án: B  
 Core: có
 
 **q2.** Số trả thêm lấy từ đâu?  
-A. Từ quỹ đang dưới 3 tháng chi tiêu thiết yếu  
+A. Từ quỹ đang nằm dưới 3 tháng chi tiêu thiết yếu  
 B. Từ tiền còn sau chi tiêu thiết yếu và sau phần giữ quỹ  
-C. Từ khoản vay mới  
-D. Từ tiền học phí đã hẹn  
+C. Từ một khoản vay mới vừa mở ra trong tháng này  
+D. Từ khoản học phí đã hẹn phải đóng trong kỳ này  
 Đáp án: B  
 Core: có
 
 **q3.** Quỹ chưa đủ 3 tháng thì có rút để tất toán nợ lãi thấp không?  
-A. Có, cho nhanh  
+A. Có, cứ rút quỹ ra để đóng cho nhanh hơn  
 B. Không, giữ lớp đệm và trả bằng dòng tiền còn lại  
-C. Chỉ rút một nửa  
-D. Rút rồi đầu tư bù  
+C. Chỉ được rút một nửa số đang nằm trong quỹ  
+D. Rút quỹ rồi mang đi đầu tư để bù lại sau  
 Đáp án: B  
 Core: có
 
 **q4.** Một tháng không trả thêm được thì làm gì?  
-A. Xóa kế hoạch  
+A. Xóa hết kế hoạch và chờ sang tháng sau  
 B. Ghi lý do, giảm số trả thêm, giữ ngày xem lại  
-C. Vay mới để đủ chỉ tiêu đẹp  
-D. Đổi phương pháp cho đủ bốn lần trong tháng  
+C. Vay mới để đủ chỉ tiêu đã ghi cho đẹp  
+D. Đổi phương pháp nhiều lần trong cùng tháng này  
 Đáp án: B  
 Core: có
 
 **q5.** Vì sao nên chuyển khoản đúng ngày lĩnh lương?  
 A. Vì hệ thống chạy được lúc mệt, đỡ phụ thuộc nhớ  
-B. Vì ngân hàng yêu cầu một ngày duy nhất trên cả nước  
-C. Vì không cần danh sách nợ nữa  
-D. Vì thay cho quỹ khẩn cấp  
+B. Vì mọi nhà bị buộc trả vào một ngày cả nước thêm  
+C. Vì đến ngày đó thì không cần danh sách nợ  
+D. Vì chuyển đúng ngày là đã thay được quỹ  
 Đáp án: A  
 Core: có
 
 **q6.** Bài có hứa ngày hết nợ chính xác cho mọi hộ không?  
-A. Có  
-B. Không, vì lãi và thu nhập đổi; hứa được việc tháng này đã ghi  
-C. Có nếu chọn Avalanche  
-D. Có nếu đảo nợ  
+A. Có, áp được với mọi hộ và mọi loại nợ đang có  
+B. Không, lãi và thu nhập đổi; chỉ hứa việc ghi  
+C. Có, nếu nhà chọn cách lãi cao để trả trước  
+D. Có, nếu nhà đảo hết nợ sang một khoản mới rồi  
 Đáp án: B  
 Core: có
 
 **q7.** Anh Hùng quỹ hơn 1,5 tháng, muốn rút 10 triệu tất toán thẻ. Hướng trong bài là gì?  
-A. Rút quỹ  
-B. Giữ quỹ, dồn phần còn sau thiết yếu và sau phần giữ quỹ vào thẻ  
-C. Vay mới để trả thẻ  
-D. Ngừng trả tối thiểu  
+A. Rút quỹ ra để đóng sạch thẻ ngay trong tháng này  
+B. Giữ quỹ, dồn phần còn sau thiết yếu vào thẻ  
+C. Vay thêm một khoản mới để trả hết thẻ này đi  
+D. Ngừng trả mức tối thiểu của cả hai khoản nợ đi  
 Đáp án: B  
 Core: không
 
 **q8.** Các khoản không được ưu tiên xử lý ra sao trong tháng?  
-A. Ngừng trả  
-B. Giữ mức tối thiểu  
-C. Dồn hết tiền vào khoản đó  
-D. Nhờ người khác đứng tên  
+A. Ngừng trả khoản đó trong tháng này  
+B. Giữ mức tối thiểu của khoản đó  
+C. Dồn hết tiền tháng vào khoản đó  
+D. Nhờ người khác đứng tên khoản đó  
 Đáp án: B  
 Core: không
 
 **q9.** Ngày xem lại dùng để kiểm việc gì?  
-A. Dư nợ giảm chưa, có khoản mới không, tháng sau dồn được bao nhiêu  
-B. Giá vàng trong ngày  
-C. Bài đăng của người lạ  
-D. Chỉ số điểm tín dụng của bạn bè  
+A. Dư nợ giảm chưa, khoản mới không, tháng sau dồn được  
+B. Chỉ xem giá vàng và tỷ giá ngay trong ngày vừa rồi rồi  
+C. Chỉ xem bài đăng của người lạ về cách trả nợ thôi  
+D. Chỉ xem điểm tín dụng của người quen trong nhóm thôi  
 Đáp án: A  
 Core: không
 
 **q10.** Đảo nợ chỉ để bảng nhìn gọn, khi chưa hiểu phí mới, thì sao?  
-A. Nên làm ngay  
-B. Chưa nên, bài không hướng dẫn sản phẩm đảo nợ  
-C. Là bước bắt buộc  
-D. Thay cho bốn cột  
+A. Nên làm ngay để bảng nợ nhìn gọn hơn  
+B. Chưa nên, bài không hướng dẫn đảo nợ  
+C. Là bước bắt buộc trước khi ghi bốn cột  
+D. Làm vậy là đủ, không cần ghi bốn cột  
 Đáp án: B  
 Core: không
 
 **q11.** Kế hoạch 5 triệu trong khi chỉ còn 1 triệu sau các việc bắt buộc là kế hoạch gì?  
-A. Thực tế  
+A. Là kế hoạch sát với tiền của tháng này  
 B. Số cho đẹp, không làm được trong tháng này  
-C. Đúng CORE-06  
-D. Cách giữ quỹ  
+C. Là cách đúng với nguyên tắc hệ thống nhà thêm  
+D. Là cách giữ quỹ khi chưa đủ số tháng  
 Đáp án: B  
 Core: không
 
 **q12.** Bốn cột trong bài gồm những gì?  
 A. Tên khoản, dư nợ, tối thiểu, trả thêm  
 B. Tên sản phẩm, lãi hứa, điểm thưởng, quà  
-C. Chỉ một ô tổng  
-D. Ảnh chụp thẻ  
+C. Chỉ một ô tổng cộng cho cả tháng này  
+D. Ảnh chụp mặt trước của chiếc thẻ  
 Đáp án: A  
 Core: không
 
@@ -721,7 +722,7 @@ Core: không
 
 ### Nội dung
 
-Câu hay gặp là “vừa trả nợ vừa đầu tư được không”. DEBT-03 khóa hướng trả lời: ưu tiên An Toàn, gồm quỹ và nợ nguy hiểm, trước đầu tư tăng trưởng. Không nhảy cổng. CORE-07: phòng thủ đi trước tăng trưởng, vì một cú sốc có thể xóa việc kiếm lời trước đó.
+Câu hay gặp là “vừa trả nợ vừa đầu tư được không”. Hướng trả lời đã khóa: ưu tiên An Toàn, gồm quỹ và nợ nguy hiểm, trước đầu tư tăng trưởng. Không nhảy cổng. Phòng thủ đi trước tăng trưởng, vì một cú sốc có thể xóa việc kiếm lời trước đó.
 
 Cổng An Toàn Welora đã khóa: quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu thì mới Passed. Không có Passed có điều kiện dưới 3 tháng. Khi cổng chưa đạt, tiền chưa được đưa sang đầu tư tăng trưởng. Quỹ cũng không phải nguồn để mua cổ phiếu, góp vốn hay “giữ chỗ” một cơ hội. Dùng quỹ để đầu tư là tháo lớp bảo vệ.
 
@@ -751,99 +752,99 @@ Ghi thứ tự tháng này: giữ hoặc bổ sung quỹ tới 3 tháng, trả t
 
 ### Câu hỏi
 
-**q1.** DEBT-03 xếp thứ tự nào?  
-A. Đầu tư tăng trưởng trước, quỹ để sau  
+**q1.** Bài này xếp thứ tự trả nợ và đầu tư ra sao?  
+A. Đầu tư tăng trưởng trước, quỹ để lại sau  
 B. Quỹ và nợ nguy hiểm trước đầu tư tăng trưởng  
-C. Làm cùng lúc bằng tiền quỹ  
-D. Chỉ nhìn cơ hội tuần này  
+C. Làm cùng lúc bằng cách lấy tiền từ quỹ  
+D. Chỉ nhìn cơ hội đang mở trong tuần này  
 Đáp án: B  
 Core: có
 
 **q2.** Cổng An Toàn Passed khi quỹ ở mức nào?  
-A. Có Goal là đủ  
-B. Ít nhất 3 tháng chi tiêu thiết yếu, không Passed dưới mức đó  
-C. Một tháng tùy ý  
-D. Bằng số tiền định đầu tư  
+A. Chỉ cần Goal ghi sẵn là đủ để được qua cổng  
+B. Ít nhất 3 tháng chi tiêu thiết yếu, không dưới mức đó  
+C. Một tháng chi tiêu thiết yếu, nhà tự chọn mức  
+D. Bằng đúng số tiền nhà đang định mang đi đầu tư  
 Đáp án: B  
 Core: có
 
 **q3.** Chưa Passed thì tiền quỹ được đưa sang đầu tư tăng trưởng không?  
-A. Được nếu sợ lỡ  
-B. Không  
-C. Được một nửa  
-D. Được khi bạn bè đã góp  
+A. Được nếu sợ lỡ đợt góp trong tuần này  
+B. Không được đưa tiền quỹ sang việc đó  
+C. Được chuyển một nửa số quỹ sang đó  
+D. Được khi người quen đã góp từ trước  
 Đáp án: B  
 Core: có
 
 **q4.** Dùng quỹ khẩn cấp để đầu tư rồi “gửi lại” là việc gì?  
-A. Cách giữ lớp đệm  
+A. Cách giữ lớp đệm vẫn còn nguyên vẹn  
 B. Tháo lớp bảo vệ trước khi biết sự cố  
-C. Đủ điều kiện Passed  
-D. Thay cho trả nợ quá hạn  
+C. Việc làm cho đủ điều kiện được Passed  
+D. Cách dùng thay cho việc trả nợ quá hạn  
 Đáp án: B  
 Core: có
 
 **q5.** Nợ nào phải xử lý trước khi bàn đầu tư tăng trưởng?  
-A. Nợ tiêu dùng lãi cao hoặc quá hạn  
+A. Nợ tiêu dùng lãi cao hoặc đang quá hạn  
 B. Mọi khoản đã trả đúng hạn và gắn tài sản  
-C. Khoản đã tất toán  
-D. Tiền mừng đã nhận  
+C. Khoản đã tất toán từ tháng trước rồi  
+D. Tiền mừng nhà vừa nhận trong tháng này  
 Đáp án: A  
 Core: có
 
 **q6.** Công cụ có được hạ ngưỡng 3 tháng hoặc tắt Hard Deny không?  
-A. Được nếu người dùng nài  
-B. Không  
-C. Được trong một tuần  
-D. Được khi đổi tên mục tiêu  
+A. Được nếu người dùng nài xin được hạ  
+B. Không được hạ ngưỡng hay tắt chặn cứng  
+C. Được hạ trong một tuần rồi trả lại sau  
+D. Được nếu đổi tên mục tiêu đang mở ra  
 Đáp án: B  
 Core: có
 
 **q7.** Trong ví dụ quỹ 2 tháng và thẻ 9 triệu, việc tháng này là gì?  
-A. Lấy quỹ đi góp vốn  
+A. Lấy tiền quỹ đi góp vốn cho kịp đợt này đã  
 B. Giữ quỹ, bổ sung tới 3 tháng, dồn trả thêm vào thẻ  
-C. Tất toán thẻ bằng vay mới rồi góp vốn  
-D. Bỏ cả quỹ lẫn thẻ  
+C. Tất toán thẻ bằng vay mới rồi mới góp vốn  
+D. Bỏ cả quỹ lẫn thẻ để chờ sang tháng sau nữa  
 Đáp án: B  
 Core: không
 
 **q8.** Nợ gắn tài sản, đang đúng hạn, phải xử lý ra sao?  
-A. Tất toán ngay bằng quỹ tối thiểu  
-B. Trả theo kế hoạch, không lấy quỹ tối thiểu để đóng sớm  
-C. Coi như không phải nợ  
-D. Đảo sang thẻ  
+A. Tất toán ngay bằng đúng số tiền quỹ tối thiểu  
+B. Trả theo kế hoạch, không lấy quỹ tối thiểu đóng  
+C. Coi như khoản đó không còn là một khoản nợ nữa  
+D. Đảo khoản đó sang thẻ để gom về một chỗ trả hết  
 Đáp án: B  
 Core: không
 
 **q9.** Tiền được bàn cho mục tiêu dài hạn là tiền nào?  
-A. Tiền quỹ khẩn cấp  
-B. Tiền không cần cho thiết yếu, không cần cho quỹ tối thiểu, không cần cho nợ nguy hiểm tháng này  
-C. Tiền học phí đã hẹn  
-D. Tiền vừa vay nóng  
+A. Tiền đang nằm sẵn trong quỹ khẩn cấp, chưa phải tiền mục tiêu dài  
+B. Tiền không cần cho chi thiết yếu, quỹ tối thiểu, nợ nguy hiểm  
+C. Tiền học phí đã được hẹn đóng ngay trong tháng này  
+D. Tiền vừa vay nóng để kịp tham gia một đợt góp vốn  
 Đáp án: B  
 Core: không
 
 **q10.** Cảm xúc sợ lỡ cơ hội được dùng thế nào?  
-A. Là người cầm lái  
-B. Là dữ liệu cần quản, không phải lệnh bỏ cổng  
-C. Là lý do hạ ngưỡng  
-D. Thay cho danh sách nợ  
+A. Là người được quyền cầm lái tháng này  
+B. Là dữ liệu cần quản, không phải lệnh  
+C. Là lý do đủ để xin hạ ngưỡng số tháng  
+D. Thay được cho danh sách nợ trong tháng  
 Đáp án: B  
 Core: không
 
 **q11.** Bài này có chỉ một sản phẩm để mua không?  
-A. Có, kèm lợi nhuận  
-B. Không  
-C. Có, nếu cổng chưa Passed  
-D. Có, để thay quỹ  
+A. Có, kèm một mức lợi nhuận được hứa  
+B. Không chỉ tên sản phẩm nào để mua  
+C. Có, kể cả khi cổng chưa được Passed  
+D. Có, để dùng sản phẩm đó thay cho quỹ  
 Đáp án: B  
 Core: không
 
 **q12.** Quyết định cuối thuộc về ai?  
-A. Người dùng, trong ngưỡng đã khóa  
-B. Bài đăng trên mạng  
-C. Công cụ, được quyền tắt cổng  
-D. Người rủ góp vốn  
+A. Người dùng, trong ngưỡng đã được khóa  
+B. Bài đăng đang lan trên mạng tuần này thêm  
+C. Công cụ, và được quyền tắt cổng đi  
+D. Người đang rủ tham gia khoản góp vốn  
 Đáp án: A  
 Core: không
 
@@ -860,7 +861,7 @@ Core: không
 
 ### Nội dung
 
-LEG-01: di sản và thừa kế cần được thiết kế, không để mặc định. Im lặng không làm việc biến mất. Nó đẩy việc sang người ở lại, đúng lúc họ đang lo tang và không đủ tỉnh để đoán ý mình.
+Di sản và thừa kế cần được thiết kế, không để mặc định. Im lặng không làm việc biến mất. Nó đẩy việc sang người ở lại, đúng lúc họ đang lo tang và không đủ tỉnh để đoán ý mình.
 
 Di sản ở mức bài này không phải “chia hết tiền cho xong”. Ba việc: rõ tài sản nào và nghĩa vụ nào còn gắn, rõ ý muốn ai được chăm sóc và ai được nhận trong khuôn khổ pháp luật, rõ giấy tờ phải làm đúng thủ tục thì ý đó mới đứng được. Ẩn dụ trong Welorapedia là hộp đồ quý: nếu không ai biết hộp ở đâu, chìa ở đâu, ai được mở, người ở lại dễ tranh, dễ mất.
 
@@ -892,99 +893,99 @@ Liệt kê tài sản chính và nghĩa vụ kèm theo, rồi hẹn một buổi
 
 ### Câu hỏi
 
-**q1.** LEG-01 nói di sản và thừa kế nên được xử lý thế nào?  
-A. Để mặc định khi có việc rồi tính  
+**q1.** Bài này nói di sản và thừa kế nên được xử lý thế nào?  
+A. Để mặc định, khi có việc rồi hãy tính  
 B. Thiết kế có ý, không để mặc định  
-C. Chỉ bàn khi đã có tranh chấp  
-D. Chỉ để người khác quyết  
+C. Chỉ bàn khi tranh chấp đã nổ ra rồi  
+D. Chỉ để người khác quyết thay cho mình  
 Đáp án: B  
 Core: có
 
 **q2.** Im lặng về ý nguyện thường dẫn tới gì?  
-A. Việc tự biến mất  
+A. Việc thừa kế sau đó rồi sẽ tự biến mất  
 B. Người ở lại phải đoán trong lúc đang lo  
-C. Giấy tờ tự có hiệu lực  
-D. Nợ tự hết  
+C. Giấy tờ rồi sẽ tự có hiệu lực đủ  
+D. Nợ gắn với tài sản rồi tự được xóa  
 Đáp án: B  
 Core: có
 
 **q3.** Ba việc của di sản trong bài là gì?  
-A. Chỉ chia tiền mặt  
-B. Rõ tài sản và nghĩa vụ, rõ ý nguyện, rõ thủ tục để ý đó đứng được  
-C. Chỉ mua thêm tài sản  
-D. Chỉ đổi tên sổ ngay  
+A. Chỉ việc chia số tiền mặt còn lại trong nhà thôi  
+B. Rõ tài sản, nghĩa vụ, ý nguyện và thủ tục để ý đứng được  
+C. Chỉ việc mua thêm tài sản trước khi nói ra thôi  
+D. Chỉ việc đổi tên sổ sang người khác ngay lập tức  
 Đáp án: B  
 Core: có
 
 **q4.** Bước làm được trước khi có giấy hoàn chỉnh là gì?  
-A. Tự chép mẫu trên mạng và coi là xong  
+A. Tự chép một mẫu trên mạng và coi là xong  
 B. Liệt kê tài sản, nợ, và nói trong nhà về chăm sóc  
-C. Chuyển hết cho một người trong tuần  
-D. Hứa miệng khác nhau với từng con  
+C. Chuyển hết cho một người ngay trong tuần  
+D. Hứa miệng cho mỗi người một kiểu khác nhau  
 Đáp án: B  
 Core: có
 
 **q5.** Vì sao không coi tờ giấy tự viết là đã xong?  
-A. Vì nói chuyện là xui  
-B. Vì giấy không đúng thủ tục có thể không có hiệu lực  
-C. Vì không được liệt kê tài sản  
-D. Vì chỉ ngân hàng được biết  
+A. Vì việc nói trong nhà bị xem là điều xui xẻo  
+B. Vì giấy sai thủ tục có thể không có hiệu lực  
+C. Vì nhà không được phép liệt kê tài sản ra  
+D. Vì chỉ có ngân hàng mới được phép biết ý này  
 Đáp án: B  
 Core: có
 
 **q6.** Bài này có phải tư vấn pháp lý không?  
-A. Phải, và có mẫu di chúc dùng ngay  
-B. Không, giấy có hiệu lực cần người có chuyên môn  
-C. Phải, nếu làm theo đúng một điều luật được trích  
-D. Phải với mọi tỉnh  
+A. Phải, và có sẵn mẫu di chúc để dùng ngay  
+B. Không, giấy hiệu lực cần người chuyên môn  
+C. Phải, nếu làm theo một điều luật được trích  
+D. Phải, và áp dụng được như nhau ở mọi tỉnh  
 Đáp án: B  
 Core: có
 
 **q7.** Anh Nam nên làm gì trước?  
-A. Tiếp tục không nói vì sợ xui  
-B. Nói với vợ về chỗ ở, chăm sóc, nợ; khi cần giấy thì gặp người hành nghề pháp lý  
-C. Viết một tờ chia nhà và cất ngăn kéo  
-D. Chuyển nhà cho một người ngay cho xong  
+A. Cứ tiếp tục không nói với nhà, vì sợ nói ra sẽ xui cho cả nhà  
+B. Nói với vợ về chỗ ở, chăm sóc, nợ, rồi gặp người hành nghề  
+C. Tự viết một tờ chia nhà rồi cất kỹ vào ngăn kéo của nhà  
+D. Chuyển nhà cho một người ngay để cho xong việc này rồi  
 Đáp án: B  
 Core: không
 
 **q8.** Chuyển hết tài sản cho một người ngay có thể tạo gì?  
-A. Hết mọi việc pháp lý  
+A. Coi như hết sạch mọi việc pháp lý còn lại  
 B. Hệ quả sở hữu và quan hệ nếu chưa được tư vấn  
-C. Thay cho danh sách nợ  
-D. Đủ ý nguyện trong mọi trường hợp  
+C. Thay được cho danh sách nợ của cả hộ  
+D. Coi là đủ ý nguyện trong mọi hoàn cảnh nhà này  
 Đáp án: B  
 Core: không
 
 **q9.** Danh sách đầu tiên nên gồm những gì?  
-A. Nhà, sổ, xe, bảo hiểm, nợ ngân hàng, nợ người thân  
-B. Chỉ tiền mặt trong ví  
-C. Chỉ tài sản của hàng xóm  
-D. Chỉ ảnh gia đình  
+A. Nhà, sổ, xe, bảo hiểm, nợ ngân hàng và nợ nhà  
+B. Chỉ gồm số tiền mặt đang để trong ví nhà  
+C. Chỉ gồm tài sản đang đứng tên của hàng xóm  
+D. Chỉ gồm ảnh và giấy tờ không mang giá tiền mặt  
 Đáp án: A  
 Core: không
 
 **q10.** Nhà có nhiều con hoặc hoàn cảnh phức tạp thì dừng ở đâu trước khi làm giấy?  
-A. Tự quyết một mình  
-B. Trao đổi ở mức phù hợp, rồi tìm người hành nghề pháp lý  
-C. Đăng mẫu lên mạng nhờ sửa  
-D. Không nói với ai  
+A. Cứ tự quyết một mình rồi mới nói với nhà sau  
+B. Trao đổi vừa sức, rồi tìm người hành nghề  
+C. Đăng mẫu lên mạng rồi nhờ người lạ sửa giúp hộ  
+D. Cứ không nói với ai cho đến khi có việc xảy ra  
 Đáp án: B  
 Core: không
 
 **q11.** Nói sớm giúp việc gì, theo bài?  
-A. Làm đường đời ngắn hơn  
+A. Làm quãng đường phía trước ngắn hơn  
 B. Giảm khoảng trống hiểu lầm cho người ở lại  
-C. Thay thủ tục pháp lý  
-D. Xóa nợ ngân hàng  
+C. Thay cho thủ tục pháp lý nhà cần làm thêm này  
+D. Xóa khoản nợ ngân hàng còn gắn nhà  
 Đáp án: B  
 Core: không
 
 **q12.** Welora có thay việc soạn giấy thừa kế không?  
-A. Có  
-B. Không  
-C. Có nếu quỹ đã đủ 3 tháng  
-D. Có nếu dùng mẫu trong bài  
+A. Có, và soạn thay được giấy thừa kế  
+B. Không, Welora không thay việc soạn giấy  
+C. Có nếu quỹ khẩn cấp đã đủ 3 tháng  
+D. Có nếu dùng đúng mẫu đang nằm trong bài  
 Đáp án: B  
 Core: không
 
@@ -1004,3 +1005,17 @@ Core: không
 3. Cây M02 đang học N02-05 trước N02-04. Bản soạn giữ thứ tự Founder yêu cầu lúc soạn, không đổi cây.
 
 Sẵn sàng gửi CoS.
+
+## Bảng cân phương án v1.2
+
+| Node | Số câu đã sửa phương án | Số câu đáp án đúng là dài nhất |
+|---|---:|---:|
+| N01-06 | 12 | 3/12 |
+| N02-03 | 12 | 3/12 |
+| N02-04 | 12 | 3/12 |
+| N02-05 | 12 | 3/12 |
+| N02-06 | 12 | 3/12 |
+| N02-07 | 12 | 3/12 |
+| N04-05 | 12 | 3/12 |
+
+Ước tính theo số ký tự phương án. Mỗi node giữ đáp án đúng là phương án dài nhất ở tối đa 3/12 câu. Chênh lệch phương án sai so với đáp án đúng không quá 20% số ký tự.

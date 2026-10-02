@@ -21,6 +21,8 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from tests._db_target import db_env
 from welora import academy
 
@@ -30,14 +32,42 @@ FORBIDDEN = r"(?i)^không,\s*trừ khi|chắc lời|cam kết lãi"
 BANKS_30 = tuple([f"N01-0{i}" for i in range(2, 8)] + [f"N02-0{i}" for i in range(3, 8)]
                  + [f"N03-0{i}" for i in range(2, 8)] + [f"N04-0{i}" for i in range(2, 8)]
                  + [f"N05-0{i}" for i in range(1, 8)])
-# Follow-up #246/#247 item 1: these 7 banks are now the Founder-approved v1.1 text, entered verbatim
-# (tests/test_founder_v11_lessons.py checks prompt / options / answer / core against the source and the
-# A–D spread). The authoring bars below that only rewording could meet — length rank 3/3/3/3 without
-# ties, no answer-marking opening word, phrase grounding against the old stub, length / opening-word
-# guessing ≤ 2 % — are NOT applied to them (wording may not be edited; reported to the Founder). Shape,
-# ids, 6 core, draw / served_valid and random guessing ≤ 2 % still apply to all 30.
-FOUNDER_V11 = set(academy.FOUNDER_V11_NODES)
-AUTHORED = tuple(n for n in BANKS_30 if n not in FOUNDER_V11)
+# Follow-up #246/#247 item 1 (round 2): N01-06, N02-03..07 and N04-05 are the Founder-approved v1.2 text,
+# entered verbatim (tests/test_founder_v12_lessons.py). All the quality bars below apply to them again.
+# Where the v1.2 wording still misses a bar, that (check, node) pair is a STRICT xfail — the wording may
+# not be edited (round 2/2, Founder) — so the gap stays visible and the xfail turns red once the text is
+# fixed. The pair is skipped inside the all-banks loop and asserted on its own in TestFounderV12Gaps.
+_TIES = "options of equal length (no-ties rule) and correct-answer rank not 3/3/3/3"
+FOUNDER_XFAIL = {
+    ("length_rank", "N01-06"): _TIES + " — ties q106-06/11/12; ranks 3/4/4/1",
+    ("length_rank", "N02-03"): _TIES + " — ties q203-01/03/05/06/09; ranks 6/3/1/2",
+    ("length_rank", "N02-04"): _TIES + " — ties q204-02/03/04/05/06/07/08/09/11; ranks 5/3/2/2",
+    ("length_rank", "N02-05"): _TIES + " — ties q205-01/02/04/05/06/07/08/12; ranks 3/5/0/4",
+    ("length_rank", "N02-06"): _TIES + " — ties q206-02/06/09/10; ranks 3/6/1/2",
+    ("length_rank", "N02-07"): _TIES + " — ties q207-01/05/06/08/10; ranks 5/4/1/2",
+    ("length_rank", "N04-05"): _TIES + " — ties q405-01/03/04/05/06/10/12; ranks 5/5/0/2",
+    ("opening", "N02-03"): "«vì» opens 2 correct answers (q203-03, q203-05), «không» 2 (q203-10, q203-11)",
+    ("opening", "N02-04"): "«khoản» opens 3 correct answers (q204-01, q204-02, q204-12), «không» 3 (q204-05, q204-06, q204-10)",
+    ("opening", "N02-05"): "«nợ» opens 2 correct answers (q205-01, q205-03), «thẻ» 2 (q205-02, q205-07), "
+                           "«còn» 2 (q205-05, q205-11), «không» 2 (q205-06, q205-12)",
+    ("opening", "N02-06"): "«dư» opens 2 correct answers (q206-01, q206-09), «không» 2 (q206-03, q206-06), "
+                           "«giữ» 2 (q206-07, q206-08)",
+    ("opening", "N02-07"): "«không» opens 3 correct answers (q207-03, q207-06, q207-11)",
+    ("opening", "N04-05"): "«không» opens 2 correct answers (q405-06, q405-12)",
+}
+# Opening-word guessing over the real draw / grader, measured 2026-10-03 (3000 attempts per strategy);
+# "avoid never-right" = never pick an option whose opening word never opens a correct answer in the bank.
+_MC = {
+    "N01-06": "avoid never-right ≈ 4.1 %",
+    "N02-03": "avoid never-right ≈ 3.3 %",
+    "N02-04": "pick «không» ≈ 4.1 %, avoid never-right ≈ 3.8 %",
+    "N02-05": "avoid never-right ≈ 6.1 %, pick «thẻ» ≈ 2.4 %, pick «còn» ≈ 2.2 %",
+    "N02-06": "avoid never-right ≈ 18.4 %, pick «không» ≈ 3.5 %, avoid «chỉ» ≈ 2.5 %, pick «dư» ≈ 2.2 %",
+    "N02-07": "avoid never-right ≈ 9.0 %, pick «không» ≈ 4.5 %, avoid «được» ≈ 4.2 %, pick «không được» ≈ 3.5 %",
+    "N04-05": "avoid never-right ≈ 15.8 %, avoid «chỉ» ≈ 3.1 %, pick «không» ≈ 2.3 %",
+}
+for _n, _why in _MC.items():
+    FOUNDER_XFAIL[("mc_opening", _n)] = "opening-word guessing passes KUAT > 2 %: " + _why
 
 
 def run(name: str, env: dict, timeout: int = 600) -> dict:
@@ -387,6 +417,105 @@ GROUNDING = {
         "làm giảm, không tăng, khả năng quay lại",
         "hỗ trợ chuyên môn phù hợp",
     ],
+    # Founder v1.2 lessons (follow-up #246/#247 item 1): passage of the served lesson per question.
+    "N01-06": [
+        "những câu đó là mong muốn, chưa phải mục tiêu",
+        "đạt được gì + số tiền hoặc trạng thái + trong bao lâu + vì lý do gì",
+        "không gắn với việc so với đồng nghiệp",
+        "chỉ giữ một đến hai mục tiêu trọng tâm",
+        "theo hướng an toàn trước",
+        "quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu",
+        "để không chờ đến ngày cuối mới biết mình lệch",
+        "quỹ khẩn cấp 36 triệu (3 tháng chi tiêu thiết yếu) trong 12 tháng",
+        "giảm một khoản chi không thiết yếu hoặc kéo dài thời hạn có chủ đích",
+        "lý do phải gắn đời sống của chính mình hoặc gia đình",
+        "ba câu hỏi tối thiểu: đạt cái gì, khi nào, vì sao",
+        "có thể tự đặt goal cao hơn. không có cửa passed dưới 3 tháng",
+    ],
+    "N02-03": [
+        "quỹ phải thanh khoản cao và tách khỏi tài khoản chi tiêu hàng ngày",
+        "quỹ là lớp bảo vệ, không phải công cụ sinh lời",
+        "tiền nằm chung rất dễ bị tiêu dần",
+        "chỗ giá lên xuống mạnh",
+        "đúng lúc cần tiền thì có thể không lấy ra được",
+        "ít nhất 3 tháng chi tiêu thiết yếu",
+        "chuyển 30 triệu sang một chỗ rút được trong ít ngày",
+        "đều có thể hợp mục tiêu khác",
+        "rút được trong ít ngày, không phải chờ đáo hạn dài",
+        "tháo lớp đệm trước khi biết sự cố nào sẽ đến",
+        "bài này không chỉ tên ngân hàng, không chỉ tên sản phẩm",
+        "có thể để dày hơn",
+    ],
+    "N02-04": [
+        "avalanche: ưu tiên khoản lãi suất cao nhất",
+        "snowball: ưu tiên khoản dư nợ nhỏ nhất",
+        "vẫn trả tối thiểu các khoản còn lại",
+        "chọn cách mình làm được đến cuối",
+        "chỉ trả tối thiểu mọi khoản rồi không có khoản nào được dồn thêm",
+        "quỹ tối thiểu 3 tháng chi tiêu thiết yếu vẫn là lớp đệm",
+        "hợp người từng bỏ cuộc vì mục tiêu quá dài",
+        "avalanche cũng chọn thẻ 8 triệu trước vì lãi cao nhất",
+        "đổi phương pháp mỗi tháng vì nghe chuyện người khác là chưa có phương pháp",
+        "số tiết kiệm phụ thuộc lãi thực, dư nợ và việc có trả thêm đều hay không",
+        "phần trả thêm mới làm dư nợ giảm thật",
+        "khoản tôi dồn thêm tiền vào là khoản này, vì lãi cao nhất",
+    ],
+    "N02-05": [
+        "nợ tốt xây năng lực; nợ xấu làm suy yếu",
+        "thẻ quay vòng, vay ứng để tiêu",
+        "vay nóng để đầu tư không phải chiến lược",
+        "đưa về trả đúng hạn trước khi bàn chuyện khác",
+        "gắn với tài sản hoặc năng lực",
+        "vẫn là nợ xấu nếu không tạo năng lực",
+        "dồn trả thêm vào khoản a",
+        "khoản này còn lại cái gì sau khi tiêu hết tiền vay",
+        "một khoản lãi thấp vẫn nguy hiểm nếu hộ không trả được mà không cắt chi tiêu thiết yếu",
+        "nợ quá hạn và nợ tiêu dùng lãi cao trước",
+        "khoản b còn gắn với việc tạo thu nhập và đang đúng hạn",
+        "nợ vẫn là nghĩa vụ",
+    ],
+    "N02-06": [
+        "kế hoạch cần dư nợ, số tối thiểu, số trả thêm, khoản được dồn",
+        "tiền còn lại sau chi tiêu thiết yếu và sau phần giữ quỹ",
+        "không lấy từ quỹ khẩn cấp đang dưới 3 tháng chi tiêu thiết yếu",
+        "một tháng hụt thì ghi lý do và giảm số trả thêm",
+        "chuyển khoản đúng ngày đỡ hơn nhớ lúc mệt",
+        "không hứa ngày hết nợ chính xác cho mọi người, vì lãi và thu nhập đổi",
+        "giữ quỹ, không rút",
+        "các khoản khác giữ tối thiểu",
+        "dư nợ giảm chưa, có khoản mới không, tháng sau còn dồn được bao nhiêu",
+        "bài này không hướng dẫn một sản phẩm đảo nợ",
+        "không phải 5 triệu cho đẹp",
+        "tên khoản, dư nợ còn, số trả tối thiểu tháng này, số trả thêm",
+    ],
+    "N02-07": [
+        "ưu tiên an toàn, gồm quỹ và nợ nguy hiểm, trước đầu tư tăng trưởng",
+        "quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu thì mới passed",
+        "khi cổng chưa đạt, tiền chưa được đưa sang đầu tư tăng trưởng",
+        "dùng quỹ để đầu tư là tháo lớp bảo vệ",
+        "nợ tiêu dùng lãi cao, nợ quá hạn",
+        "công cụ không hạ ngưỡng 3 tháng, không tắt hard deny",
+        "giữ quỹ, đưa quỹ lên đủ 3 tháng chi tiêu thiết yếu, dồn trả thêm vào thẻ",
+        "vẫn không được lấy quỹ tối thiểu để tất toán khoản đó",
+        "tiền đầu tư là tiền không cần cho chi tiêu thiết yếu",
+        "là dữ liệu, không phải người cầm lái",
+        "không có sản phẩm để chỉ mua",
+        "quyết định cuối là của người dùng",
+    ],
+    "N04-05": [
+        "di sản và thừa kế cần được thiết kế, không để mặc định",
+        "nó đẩy việc sang người ở lại",
+        "rõ tài sản nào và nghĩa vụ nào còn gắn",
+        "không cần văn bản hoàn chỉnh ngay",
+        "giấy không đúng thủ tục có thể không có hiệu lực",
+        "hỏi người có chuyên môn pháp lý",
+        "một buổi nói với vợ về chỗ ở, chăm sóc bố mẹ, và nợ còn lại",
+        "chưa hiểu hệ quả sở hữu và quan hệ",
+        "liệt kê nhà, sổ, xe, bảo hiểm, nợ ngân hàng, nợ người thân",
+        "dừng ở mức trao đổi rồi tìm người hành nghề pháp lý",
+        "nó giảm khoảng trống hiểu lầm",
+        "welora không thay việc đó",
+    ],
 }
 
 
@@ -422,28 +551,17 @@ class TestBanksShape(unittest.TestCase):
         self.assertFalse({i for i in ids if re.fullmatch(r"q\d{3}[a-z]", i)})
 
     def test_answer_length_rank_balanced(self):
-        for nid in AUTHORED:
-            ranks = []
-            for q in academy.QUESTIONS[nid]:
-                lens = [len(c) for c in q["choices"]]
-                self.assertEqual(len(set(lens)), 4, q["id"])  # no ties
-                ranks.append(sorted(lens, reverse=True).index(lens[q["answer"]]))
-            self.assertEqual([ranks.count(r) for r in range(4)], [3, 3, 3, 3], nid)
+        for nid in _checked("length_rank"):
+            check_length_rank(self, nid)
 
     def test_no_opening_marks_the_answer(self):
-        for nid in AUTHORED:
-            right = Counter(sorted(_openings(q["choices"][q["answer"]]), key=len)[0] for q in academy.QUESTIONS[nid])
-            self.assertLessEqual(max(right.values()), 1, (nid, right.most_common(3)))
+        for nid in _checked("opening"):
+            check_opening(self, nid)
 
     def test_answers_grounded_in_the_served_lesson(self):
-        self.assertEqual(set(GROUNDING), set(AUTHORED))
-        for nid in BANKS_30:
-            self.assertGreater(len(_body(nid)), 1500, nid)  # the 7 former stubs now serve full lessons
-        for nid in AUTHORED:
-            body = _body(nid)
-            self.assertEqual(len(GROUNDING[nid]), 12, nid)
-            for phrase in GROUNDING[nid]:
-                self.assertIn(phrase, body, (nid, phrase))
+        self.assertEqual(set(GROUNDING), set(BANKS_30))
+        for nid in _checked("grounding"):
+            check_grounding(self, nid)
 
     def test_draw_five_with_two_core_shuffled(self):
         for nid in BANKS_30:
@@ -469,59 +587,113 @@ class TestBanksShape(unittest.TestCase):
 
 class TestBanksMonteCarlo(unittest.TestCase):
     """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % over the real
-    draw / shuffle / grader, for every authored bank; random guessing for all 30 (FOUNDER_V11 above)."""
-
-    TRIALS = 3000
-
-    def _rate(self, node, choose, rng):
-        by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
-        passed = 0
-        for _ in range(self.TRIALS):
-            served = academy._draw(node)
-            answers = []
-            for i, slot in enumerate(served):
-                shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
-                answers.append({"question_id": f"k{i + 1}", "choice": choose(shown, rng)})
-            passed += academy._grade_served(node, served, answers)[1]
-        return passed / self.TRIALS
+    draw / shuffle / grader, for every one of the 30 banks (except the FOUNDER_XFAIL pairs)."""
 
     def test_length_and_random_strategies(self):
-        def by_len(pos):
-            def f(shown, rng):
-                order = sorted(range(len(shown)), key=lambda k: (len(shown[k]), rng.random()))
-                return {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2],
-                        "random": rng.randrange(len(shown))}[pos]
-            return f
-
-        rng = random.Random(2446)
-        for node in BANKS_30:
-            for s in ("longest", "shortest", "middle", "random") if node in AUTHORED else ("random",):
-                rate = self._rate(node, by_len(s), rng)
-                self.assertLessEqual(rate, 0.02, (node, s, rate))
+        for node in _checked("mc_length"):
+            check_mc_length(self, node)
 
     def test_opening_strategies(self):
-        rng = random.Random(24461)
+        for node in _checked("mc_opening"):
+            check_mc_opening(self, node)
 
-        def pick(p):
-            return lambda shown, r: r.choice([i for i, x in enumerate(shown) if p in _openings(x)] or list(range(4)))
 
-        def avoid(ps):
-            return lambda shown, r: r.choice([i for i, x in enumerate(shown) if not (_openings(x) & ps)] or list(range(4)))
+def _checked(check: str) -> list[str]:
+    return [n for n in BANKS_30 if (check, n) not in FOUNDER_XFAIL]
 
-        for node in AUTHORED:
-            total, wrong = Counter(), Counter()
-            for q in academy.QUESTIONS[node]:
-                for i, c in enumerate(q["choices"]):
-                    for p in _openings(c):
-                        total[p] += 1
-                        wrong[p] += i != q["answer"]
-            repeated = [p for p, n in total.items() if n >= 2]
-            never_right = {p for p in repeated if wrong[p] == total[p]}
-            strategies = [(f"pick {p}", pick(p)) for p in repeated] + [(f"avoid {p}", avoid({p})) for p in repeated]
-            strategies.append(("avoid never-right", avoid(never_right)))
-            for name, fn in strategies:
-                rate = self._rate(node, fn, rng)
-                self.assertLessEqual(rate, 0.02, (node, name, rate))
+
+def check_length_rank(tc: unittest.TestCase, nid: str) -> None:
+    ranks = []
+    for q in academy.QUESTIONS[nid]:
+        lens = [len(c) for c in q["choices"]]
+        tc.assertEqual(len(set(lens)), 4, q["id"])  # no ties
+        ranks.append(sorted(lens, reverse=True).index(lens[q["answer"]]))
+    tc.assertEqual([ranks.count(r) for r in range(4)], [3, 3, 3, 3], nid)
+
+
+def check_opening(tc: unittest.TestCase, nid: str) -> None:
+    right = Counter(sorted(_openings(q["choices"][q["answer"]]), key=len)[0] for q in academy.QUESTIONS[nid])
+    tc.assertLessEqual(max(right.values()), 1, (nid, right.most_common(3)))
+
+
+def check_grounding(tc: unittest.TestCase, nid: str) -> None:
+    body = _body(nid)
+    tc.assertGreater(len(body), 1500, nid)  # a full lesson, not a stub
+    tc.assertEqual(len(GROUNDING[nid]), 12, nid)
+    for phrase in GROUNDING[nid]:
+        tc.assertIn(phrase, body, (nid, phrase))
+
+
+MC_TRIALS = 3000
+
+
+def _mc_rate(node, choose, rng):
+    by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
+    passed = 0
+    for _ in range(MC_TRIALS):
+        served = academy._draw(node)
+        answers = []
+        for i, slot in enumerate(served):
+            shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
+            answers.append({"question_id": f"k{i + 1}", "choice": choose(shown, rng)})
+        passed += academy._grade_served(node, served, answers)[1]
+    return passed / MC_TRIALS
+
+
+def check_mc_length(tc: unittest.TestCase, node: str) -> None:
+    def by_len(pos):
+        def f(shown, rng):
+            order = sorted(range(len(shown)), key=lambda k: (len(shown[k]), rng.random()))
+            return {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2],
+                    "random": rng.randrange(len(shown))}[pos]
+        return f
+
+    rng = random.Random(2446)
+    for s in ("longest", "shortest", "middle", "random"):
+        rate = _mc_rate(node, by_len(s), rng)
+        tc.assertLessEqual(rate, 0.02, (node, s, rate))
+
+
+def check_mc_opening(tc: unittest.TestCase, node: str) -> None:
+    rng = random.Random(24461)
+
+    def pick(p):
+        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if p in _openings(x)] or list(range(4)))
+
+    def avoid(ps):
+        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if not (_openings(x) & ps)] or list(range(4)))
+
+    total, wrong = Counter(), Counter()
+    for q in academy.QUESTIONS[node]:
+        for i, c in enumerate(q["choices"]):
+            for p in _openings(c):
+                total[p] += 1
+                wrong[p] += i != q["answer"]
+    repeated = [p for p, n in total.items() if n >= 2]
+    never_right = {p for p in repeated if wrong[p] == total[p]}
+    strategies = [(f"pick {p}", pick(p)) for p in repeated] + [(f"avoid {p}", avoid({p})) for p in repeated]
+    strategies.append(("avoid never-right", avoid(never_right)))
+    for name, fn in strategies:
+        rate = _mc_rate(node, fn, rng)
+        tc.assertLessEqual(rate, 0.02, (node, name, rate))
+
+
+_CHECKS = {"length_rank": check_length_rank, "opening": check_opening, "grounding": check_grounding,
+           "mc_length": check_mc_length, "mc_opening": check_mc_opening}
+
+
+class TestFounderV12Gaps(unittest.TestCase):
+    """One strict xfail per (check, node) the Founder v1.2 wording still misses (FOUNDER_XFAIL)."""
+
+
+def _gap_test(check, node):
+    def t(self):
+        _CHECKS[check](self, node)
+    return pytest.mark.xfail(strict=True, reason=f"Founder v1.2 {node} {check}: {FOUNDER_XFAIL[(check, node)]}")(t)
+
+
+for (_check, _node) in FOUNDER_XFAIL:
+    setattr(TestFounderV12Gaps, f"test_{_check}_{_node.replace('-', '_')}", _gap_test(_check, _node))
 
 
 class TestBanksDb(unittest.TestCase):

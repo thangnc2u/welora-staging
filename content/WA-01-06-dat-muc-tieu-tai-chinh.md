@@ -14,7 +14,7 @@ Công thức đủ dùng: đạt được gì + số tiền hoặc trạng thái
 
 Lý do phải gắn đời sống của chính mình hoặc gia đình, không gắn với việc so với đồng nghiệp. Mục tiêu kiểu “có xe như người kia” dễ gãy khi thu nhập chậm một tháng. Mục tiêu gắn việc không phải vay nóng khi con ốm thì còn đứng được lúc mệt.
 
-Khi có nhiều mong muốn, không đuổi năm mục tiêu cùng lúc. Một đến hai mục tiêu trọng tâm thường làm được. Thứ tự Welora đã khóa theo hướng An Toàn trước: quỹ khẩn cấp tối thiểu và nợ nguy hiểm đi trước; việc có hạn cứng như học phí đến hạn đi sau; mục tiêu trung và dài hạn đi sau nữa. Cổng An Toàn của Welora là quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu. Có thể tự đặt Goal cao hơn. Không có cửa Passed dưới 3 tháng.
+Khi có nhiều mong muốn, không đuổi năm mục tiêu cùng lúc. Chỉ giữ một đến hai mục tiêu trọng tâm thường làm được. Thứ tự Welora đã khóa theo hướng An Toàn trước: quỹ khẩn cấp tối thiểu và nợ nguy hiểm đi trước; việc có hạn cứng như học phí đến hạn đi sau; mục tiêu trung và dài hạn đi sau nữa. Cổng An Toàn của Welora là quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu. Có thể tự đặt Goal cao hơn. Không có cửa Passed dưới 3 tháng.
 
 Mốc trung gian giúp sửa đường. Nếu mục tiêu 36 triệu trong 12 tháng, mốc 3 tháng là khoảng 9 triệu. Chưa tới thì giảm một khoản chi không thiết yếu hoặc kéo dài thời hạn có chủ đích, không bỏ cả mục tiêu.
 

@@ -6,7 +6,7 @@
 
 ## Nội dung
 
-Trả nợ không có một công thức thắng mọi người. DEBT-02 nói phương pháp phải hợp hành vi: chọn cách mình làm được đến cuối, không chọn cách chỉ đẹp trên giấy.
+Trả nợ không có một công thức thắng mọi người. Nguyên tắc ở đây là phương pháp phải hợp hành vi: chọn cách mình làm được đến cuối, không chọn cách chỉ đẹp trên giấy.
 
 Hai cách phổ biến trong bài Welorapedia về trả nợ:
 

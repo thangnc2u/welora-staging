@@ -6,7 +6,7 @@
 
 ## Nội dung
 
-Câu hay gặp là “vừa trả nợ vừa đầu tư được không”. DEBT-03 khóa hướng trả lời: ưu tiên An Toàn, gồm quỹ và nợ nguy hiểm, trước đầu tư tăng trưởng. Không nhảy cổng. CORE-07: phòng thủ đi trước tăng trưởng, vì một cú sốc có thể xóa việc kiếm lời trước đó.
+Câu hay gặp là “vừa trả nợ vừa đầu tư được không”. Hướng trả lời đã khóa: ưu tiên An Toàn, gồm quỹ và nợ nguy hiểm, trước đầu tư tăng trưởng. Không nhảy cổng. Phòng thủ đi trước tăng trưởng, vì một cú sốc có thể xóa việc kiếm lời trước đó.
 
 Cổng An Toàn Welora đã khóa: quỹ khẩn cấp ít nhất 3 tháng chi tiêu thiết yếu thì mới Passed. Không có Passed có điều kiện dưới 3 tháng. Khi cổng chưa đạt, tiền chưa được đưa sang đầu tư tăng trưởng. Quỹ cũng không phải nguồn để mua cổ phiếu, góp vốn hay “giữ chỗ” một cơ hội. Dùng quỹ để đầu tư là tháo lớp bảo vệ.
 

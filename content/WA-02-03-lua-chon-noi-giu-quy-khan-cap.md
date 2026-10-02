@@ -6,7 +6,7 @@
 
 ## Nội dung
 
-Quỹ khẩn cấp là tiền để dùng khi việc bất ngờ thật sự xảy ra: mất việc, nằm viện, sửa chỗ ở không trì hoãn được. SAFE-03 khóa một việc: quỹ phải thanh khoản cao và tách khỏi tài khoản chi tiêu hàng ngày. SAFE-01 nói rõ quỹ là lớp bảo vệ, không phải công cụ sinh lời.
+Quỹ khẩn cấp là tiền để dùng khi việc bất ngờ thật sự xảy ra: mất việc, nằm viện, sửa chỗ ở không trì hoãn được. Bài này khóa một việc: quỹ phải thanh khoản cao và tách khỏi tài khoản chi tiêu hàng ngày. Quỹ là lớp bảo vệ, không phải công cụ sinh lời.
 
 Thanh khoản cao nghĩa là rút được trong ít ngày, không phải chờ đáo hạn dài hay chờ người mua. Tách biệt nghĩa là không nằm chung ví tiêu hằng ngày. Tiền nằm chung rất dễ bị tiêu dần cho ăn uống, giảm giá, sinh nhật. Sang tháng mới thấy quỹ mỏng đi mà không có sự cố nào.
 

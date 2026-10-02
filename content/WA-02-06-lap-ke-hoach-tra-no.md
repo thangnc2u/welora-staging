@@ -12,7 +12,7 @@ Bốn cột đủ dùng: tên khoản, dư nợ còn, số trả tối thiểu t
 
 Kế hoạch thực tế nghĩa là số trả thêm lấy từ tiền còn lại sau chi tiêu thiết yếu và sau phần giữ quỹ. Không lấy từ quỹ khẩn cấp đang dưới 3 tháng chi tiêu thiết yếu. Không lấy từ tiền học phí đã hẹn. Nếu tháng này chỉ còn 1 triệu sau các việc đó, kế hoạch là 1 triệu, không phải 5 triệu cho đẹp.
 
-Ngày xem lại nên cố định, ví dụ ngày lĩnh lương. Việc xem: dư nợ giảm chưa, có khoản mới không, tháng sau còn dồn được bao nhiêu. Một tháng hụt thì ghi lý do và giảm số trả thêm, không xóa cả kế hoạch. CORE-06 nghiêng về hệ thống hơn ý chí: chuyển khoản đúng ngày đỡ hơn nhớ lúc mệt.
+Ngày xem lại nên cố định, ví dụ ngày lĩnh lương. Việc xem: dư nợ giảm chưa, có khoản mới không, tháng sau còn dồn được bao nhiêu. Một tháng hụt thì ghi lý do và giảm số trả thêm, không xóa cả kế hoạch. Hệ thống đáng tin hơn ý chí: chuyển khoản đúng ngày đỡ hơn nhớ lúc mệt.
 
 Không đảo nợ chỉ để bảng nhìn gọn nếu chưa hiểu phí và lãi mới. Bài này không hướng dẫn một sản phẩm đảo nợ. Không hứa ngày hết nợ chính xác cho mọi người, vì lãi và thu nhập đổi. Hứa được việc trong tầm mình: tháng này trả đúng khoản đã ghi.
 

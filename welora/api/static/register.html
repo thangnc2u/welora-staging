@@ -71,8 +71,11 @@ document.getElementById('btnRegister').addEventListener('click', async()=>{
     /* Follow-up 2: move this browser's guest onboarding result into the new account. */
     const cl=window.WeloraGuestClaim?await WeloraGuestClaim.run(tok):null;
     const note=window.WeloraGuestClaim?WeloraGuestClaim.summary(cl):'';
-    showOk((note?note+' ':'')+'Tài khoản sẵn sàng · vào ứng dụng…');
-    setTimeout(()=>{location.href='/app';},note?1200:400);
+    /* migration 020: verification step right after register (skippable on that screen) */
+    const v=d.verification||null;
+    if(v){try{sessionStorage.setItem('welora_verification',JSON.stringify({challenge_id:v.challenge_id||null,message:v.message||''}));}catch(_e){}}
+    showOk((note?note+' ':'')+'Tài khoản sẵn sàng · '+(v?'xác minh tài khoản…':'vào ứng dụng…'));
+    setTimeout(()=>{location.href=v?'/app/verify?next=%2Fapp':'/app';},note?1200:400);
   }catch(e){showErr('Không kết nối được');}
 });
 </script>

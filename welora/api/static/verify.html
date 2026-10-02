@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<script src="/static/auth-gate.js"></script>
+<title>Welora · Xác minh tài khoản</title>
+<link rel="stylesheet" href="/static/welora-tokens.css"/>
+<link rel="stylesheet" href="/static/shell.css"/>
+<style>
+body{font-family:system-ui;background:var(--bg-app,#121A28);color:var(--text-primary,#F4F1E8);margin:0;padding:16px 16px 88px;max-width:480px;margin-inline:auto}
+h1{font-size:1.25rem;margin:4px 0 8px}
+.muted{color:var(--text-secondary,#A8B0C0);font-size:13px}
+.card{background:var(--bg-surface,#1A2536);border:1px solid var(--border-default,#2F3D54);border-radius:14px;padding:16px;margin:12px 0;color:var(--text-primary,#F4F1E8)}
+label{display:block;margin-top:10px;font-size:13px;color:var(--text-secondary)}
+input{width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-subtle,#0B1220);color:var(--text-primary);font-size:18px;letter-spacing:4px;text-align:center}
+button{cursor:pointer}
+button.welora-btn-primary{width:100%;margin-top:14px;padding:12px;font-size:15px;background:var(--cta-primary,#D4AF37);color:var(--cta-primary-text,#121A28)}
+button.link{background:none;border:0;color:var(--text-secondary,#A8B0C0);text-decoration:underline;font-size:14px;margin-top:12px;padding:6px}
+button.link[disabled]{opacity:.55;cursor:default;text-decoration:none}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.err{color:var(--danger-text,#F5B4B4);font-size:13px;margin-top:10px;min-height:1.2em}
+.ok{color:var(--color-success,#3DB88A);font-size:13px;margin-top:10px;font-weight:600}
+.hide{display:none}
+</style>
+</head>
+<body class="welora-shell">
+<p><a id="navHome" class="welora-link" href="/app">← Welora</a></p>
+<h1>Xác minh tài khoản</h1>
+<p class="muted">Xác minh email hoặc số điện thoại giúp bảo vệ tài khoản của bạn và mở đủ lượt làm bài KUAT dành cho tài khoản đã xác minh. Bước này không bắt buộc — bạn có thể bỏ qua và xác minh sau.</p>
+<div class="card" id="cardCode">
+  <p id="sentMsg" class="muted">Đang tải…</p>
+  <div id="codeWrap" class="hide">
+    <label for="code">Mã xác minh (6 chữ số)</label>
+    <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"/>
+    <button type="button" id="btnConfirm" class="welora-btn-primary">Xác minh</button>
+  </div>
+  <div class="row">
+    <button type="button" id="btnResend" class="link hide">Gửi lại mã</button>
+    <button type="button" id="btnSkip" class="link">Để sau</button>
+  </div>
+  <p class="err" id="err"></p>
+  <p class="ok" id="ok"></p>
+</div>
+<script src="/static/safe-next.js"></script>
+<script>
+(function(){
+  var TOKEN_KEY='welora_token';
+  var tok='';try{tok=localStorage.getItem(TOKEN_KEY)||'';}catch(_e){}
+  var H={'Content-Type':'application/json',Authorization:'Bearer '+tok};
+  var qs=new URLSearchParams(location.search);
+  /* PR #244 round 2 (B1): same-origin /app paths only — shared helper /static/safe-next.js */
+  var next=window.WeloraSafeNext?WeloraSafeNext(qs.get('next'),'/app'):'/app';
+  var challenge='';var timer=null;
+  var $=function(id){return document.getElementById(id);};
+  function err(m){$('err').textContent=m||'';if(m)$('ok').textContent='';}
+  function ok(m){$('ok').textContent=m||'';if(m)$('err').textContent='';}
+  function msgOf(d,fallback){return (d&&d.detail&&(d.detail.message||d.detail.error))||fallback;}
+  function cooldown(s){
+    var b=$('btnResend');b.classList.remove('hide');
+    if(timer){clearInterval(timer);timer=null;}
+    var left=Math.max(0,parseInt(s||0,10));
+    function tick(){
+      if(left>0){b.disabled=true;b.textContent='Gửi lại mã ('+left+' giây)';left--;}
+      else{b.disabled=false;b.textContent='Gửi lại mã';if(timer){clearInterval(timer);timer=null;}}
+    }
+    tick();timer=setInterval(tick,1000);
+  }
+  function showChallenge(v){
+    if(!v){return;}
+    $('sentMsg').textContent=v.message||'';
+    if(v.challenge_id){
+      challenge=v.challenge_id;
+      $('codeWrap').classList.remove('hide');
+      cooldown(v.resend_after_s||0);
+      try{$('code').focus();}catch(_e){}
+    }else{
+      $('codeWrap').classList.add('hide');
+    }
+  }
+  function done(m){
+    $('codeWrap').classList.add('hide');$('btnResend').classList.add('hide');
+    $('sentMsg').textContent='';ok(m||'Cảm ơn bạn! Tài khoản đã được xác minh.');
+    $('btnSkip').textContent='Vào ứng dụng';
+    try{localStorage.removeItem('welora_verify_banner_until');}catch(_e){}
+    setTimeout(function(){location.href=next;},1200);
+  }
+  async function load(){
+    var stash=null;
+    try{stash=JSON.parse(sessionStorage.getItem('welora_verification')||'null');sessionStorage.removeItem('welora_verification');}catch(_e){}
+    try{
+      var r=await fetch('/auth/verify/status',{headers:H});
+      if(r.status===401){location.replace('/app/login');return;}
+      var s=await r.json().catch(function(){return {};});
+      if(s.verified&&!(s.verify_channels||[]).length){done('Tài khoản của bạn đã được xác minh.');return;}
+      if(!s.verify_eligible){$('sentMsg').textContent='Tài khoản này không cần xác minh.';return;}
+      if(s.pending){
+        var p=s.pending;
+        p.message=(stash&&stash.challenge_id===p.challenge_id&&stash.message)||('Nhập mã xác minh đã gửi tới '+p.target_masked+'.');
+        showChallenge(p);return;
+      }
+      if(stash&&stash.message&&!stash.challenge_id){$('sentMsg').textContent=stash.message;}
+      else if(s.can_verify_now){$('sentMsg').textContent='Bấm «Gửi mã xác minh» để nhận mã gồm 6 chữ số.';}
+      else{$('sentMsg').textContent='Kênh SMS hiện chưa được bật nên Welora chưa thể gửi mã tới số điện thoại '+(s.phone_masked||'')+'. Bạn vẫn sử dụng ứng dụng bình thường và có thể xác minh sau.';}
+      if(s.can_verify_now){var b=$('btnResend');b.classList.remove('hide');b.disabled=false;b.textContent=challenge?'Gửi lại mã':'Gửi mã xác minh';}
+    }catch(_e){err('Không kết nối được. Vui lòng thử lại.');}
+  }
+  $('btnResend').addEventListener('click',async function(){
+    err('');
+    try{
+      var r=await fetch('/auth/verify/request',{method:'POST',headers:H,body:JSON.stringify({})});
+      var d=await r.json().catch(function(){return {};});
+      if(!r.ok){
+        if(d&&d.detail&&d.detail.retry_after_s)cooldown(d.detail.retry_after_s);
+        if(d&&d.detail&&d.detail.error_code==='ALREADY_VERIFIED'){done(d.detail.message);return;}
+        err(msgOf(d,'Chưa gửi được mã. Vui lòng thử lại sau.'));return;
+      }
+      showChallenge(d);
+    }catch(_e){err('Không kết nối được. Vui lòng thử lại.');}
+  });
+  $('btnConfirm').addEventListener('click',async function(){
+    err('');
+    var code=($('code').value||'').replace(/\D/g,'');
+    if(code.length!==6){err('Vui lòng nhập đủ 6 chữ số của mã xác minh.');return;}
+    try{
+      var r=await fetch('/auth/verify/confirm',{method:'POST',headers:H,body:JSON.stringify({code:code,challenge_id:challenge||null})});
+      var d=await r.json().catch(function(){return {};});
+      if(!r.ok){err(msgOf(d,'Mã xác minh không đúng hoặc đã hết hạn.'));return;}
+      done(d.message);
+    }catch(_e){err('Không kết nối được. Vui lòng thử lại.');}
+  });
+  $('code').addEventListener('keydown',function(e){if(e.key==='Enter')$('btnConfirm').click();});
+  $('btnSkip').addEventListener('click',function(){
+    /* skippable: hide the reminder banner for a day, never blocks the app */
+    try{localStorage.setItem('welora_verify_banner_until',String(Date.now()+24*3600*1000));}catch(_e){}
+    location.href=next;
+  });
+  load();
+})();
+</script>
+</body>
+</html>

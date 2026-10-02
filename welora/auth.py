@@ -25,6 +25,18 @@ from welora.phone import try_normalize as try_normalize_phone
 OTP_TTL_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
 FIXED_OTP = "123456"
+SMS_LOGIN_BODY = "Welora: ma dang nhap cua ban la {code}. Hieu luc {minutes} phut. Vui long khong chia se ma nay."
+PHONE_UNVERIFIED_MSG = (
+    "Số điện thoại này đang gắn với một tài khoản đăng ký bằng mật khẩu nhưng số chưa được xác minh, "
+    "nên chưa thể đăng nhập bằng mã OTP. Nếu đây là tài khoản của bạn, vui lòng đăng nhập bằng mật khẩu "
+    "rồi xác minh số điện thoại trong mục «Xác minh tài khoản». Nếu không phải tài khoản của bạn, "
+    "vui lòng liên hệ hỗ trợ Welora."
+)
+
+
+class PhoneAccountUnverified(PermissionError):
+    """Phone-OTP login refused: the number belongs to a password account whose phone was never
+    verified (takeover guard, migration 020) — no session, no new account."""
 
 
 def _now() -> datetime:
@@ -214,12 +226,24 @@ def _is_pure_device_guest(conn, row) -> bool:
 
 def has_verified_contact(conn, row) -> bool:
     """The account PROVED it owns a contact (CoS review #239 definition, minus the password rule):
-    an e-mail verified by e-mail OTP (``users.email`` + ``users.email_verified_at``), or a consumed
-    phone-OTP challenge owned by the account (``otp_challenges.user_id`` + ``consumed=1``).
+    an e-mail verified by OTP (``users.email`` + ``users.email_verified_at`` — admin e-mail OTP or the
+    post-register verification of migration 020), a verified phone (``users.phone`` +
+    ``users.phone_verified_at``, migration 020), or a consumed phone-OTP challenge owned by the
+    account (``otp_challenges.user_id`` + ``consumed=1``).
     Registering with password + e-mail/phone proves nothing (nobody checked the address), so such
     an account is NOT verified until it completes an OTP. Used by guest_claim (claim targets) and
     the KUAT budgets (GP P0b round 3)."""
     if str(row["email"] or "").strip() and str(row["email_verified_at"] or "").strip():
+        return True
+    # migration 020: a phone proved by the post-register verification OTP or by a phone-OTP login
+    # that attached to this account (users.phone + users.phone_verified_at)
+    keys = row.keys()
+    if "phone_verified_at" in keys and "phone" in keys:
+        ph, pv = row["phone"], row["phone_verified_at"]
+    else:
+        r2 = conn.execute("SELECT phone, phone_verified_at FROM users WHERE user_id=?", (row["user_id"],)).fetchone()
+        ph, pv = (r2["phone"], r2["phone_verified_at"]) if r2 else (None, None)
+    if str(ph or "").strip() and str(pv or "").strip():
         return True
     return bool(conn.execute(
         "SELECT 1 FROM otp_challenges WHERE user_id=? AND consumed=1 LIMIT 1", (row["user_id"],)
@@ -325,18 +349,50 @@ def otp_challenge_phone(challenge_id: str, *, url: str | None = None) -> Optiona
         conn.close()
 
 
-def otp_echo_enabled() -> bool:
-    """P0: the phone-OTP code is echoed in the API response ONLY when WELORA_OTP_ECHO=1
-    (staging demo). Unset / any other value → never echoed. Production must not set it."""
+def is_production() -> bool:
+    """WELORA_ENV=production|prod (same rule as demo_seed_runner.is_production)."""
     import os
 
-    return (os.environ.get("WELORA_OTP_ECHO") or "").strip() == "1"
+    return (os.environ.get("WELORA_ENV") or "").strip().lower() in ("production", "prod")
+
+
+# Test/staging-demo auth shortcuts. Production refuses them in code (fail-closed: the env is ignored
+# and the API reports them off), not only by a render.yaml comment — ticket "Xác minh OTP sau đăng ký".
+UNSAFE_AUTH_FLAGS = ("WELORA_OTP_ECHO", "WELORA_OTP_FIXED", "WELORA_RESET_ECHO")
+
+
+def _flag_on(name: str) -> bool:
+    import os
+
+    return (os.environ.get(name) or "").strip() == "1"
+
+
+def unsafe_auth_flags_ignored() -> list[str]:
+    """Names of the test-only auth flags that are SET but ignored because this is production."""
+    if not is_production():
+        return []
+    return [n for n in UNSAFE_AUTH_FLAGS if _flag_on(n)]
+
+
+def otp_echo_enabled() -> bool:
+    """P0: the phone-OTP code is echoed in the API response ONLY when WELORA_OTP_ECHO=1
+    (staging demo / tests). Unset / any other value → never echoed. Production: always off,
+    whatever the env says. The post-register verification code is never echoed at all."""
+    return _flag_on("WELORA_OTP_ECHO") and not is_production()
+
+
+def otp_fixed_enabled() -> bool:
+    """WELORA_OTP_FIXED=1 → phone-OTP code 123456 (tests only). Production: always off."""
+    return _flag_on("WELORA_OTP_FIXED") and not is_production()
 
 
 def sms_provider_configured() -> bool:
-    """No SMS delivery integration exists in this codebase (see renewal/push: no SMS / Zalo).
-    Kept explicit so the UI can say 'Kênh SMS chưa bật' instead of pretending a code was sent."""
-    return False
+    """SMS channel on? Only when ``welora.sms`` has a real provider configured (none exists in this
+    release → False) or a test installed a capture sender. Kept explicit so the UI can say
+    'Kênh SMS chưa bật' instead of pretending a code was sent."""
+    from welora import sms
+
+    return sms.enabled()
 
 
 def request_otp(
@@ -351,11 +407,10 @@ def request_otp(
     phone = normalize_phone_e164(raw)  # stored E.164 (item 9) — ValueError (VI) when invalid
 
     ensure_auth_schema(url)
-    import os
 
     if fixed_code:
         code = fixed_code
-    elif os.environ.get("WELORA_OTP_FIXED") == "1":
+    elif otp_fixed_enabled():
         code = FIXED_OTP
     else:
         code = f"{secrets.randbelow(1_000_000):06d}"
@@ -369,9 +424,15 @@ def request_otp(
             (challenge_id, phone, _otp_code_hash(challenge_id, code), _iso(expires)),
         )
         conn.commit()
+        sent = False
+        if sms_provider_configured():  # never true today (no SMS provider) — tests use sms.set_sender
+            from welora import sms
+
+            sent = sms.enqueue(phone, SMS_LOGIN_BODY.format(code=code, minutes=OTP_TTL_MINUTES))
         out = {
             "challenge_id": challenge_id,
             "phone_masked": _mask_phone(phone),
+            "sms_sent": bool(sent),
             "expires_at": _iso(expires),
             "sms_enabled": sms_provider_configured(),
             "otp_echo": otp_echo_enabled(),
@@ -424,6 +485,37 @@ def verify_otp(
         if _otp_e164 and phone_conflicted(conn, _otp_e164):
             raise PhoneConflictError(PHONE_CONFLICT_MSG)
 
+        phone = row["phone"]
+        user_id = row["user_id"]
+        e164 = _otp_e164 or phone
+        attach: Optional[str] = None  # existing account matched by users.phone (E.164 / legacy form)
+        legacy_uid: Optional[str] = None
+        if not user_id:
+            # Returning phone-OTP user = owner of an earlier consumed challenge for this phone
+            # (challenge.user_id is only ever set here). No lookup by a derived device_id.
+            # phone forms: E.164 + legacy local rows not yet migrated (item 9)
+            cands = phone_lookup_candidates(e164) if e164.startswith("+") else [phone]
+            existing = conn.execute(
+                "SELECT c.user_id FROM otp_challenges c JOIN users u ON u.user_id = c.user_id "
+                "WHERE c.phone IN (" + ",".join("?" * len(cands)) + ") AND c.consumed=1 "
+                "AND c.user_id IS NOT NULL ORDER BY c.created_at, c.challenge_id LIMIT 1",
+                tuple(cands),
+            ).fetchone()
+            legacy_uid = existing["user_id"] if existing else None
+            # Founder 02/10: phone-OTP login attaches to the EXISTING account whose users.phone is
+            # this number (E.164 match, legacy '0…' rows included) instead of a separate account —
+            # but ONLY when that account's phone is verified (phone_verified_at) or the account
+            # already owns this number's OTP history. A password account whose phone was never
+            # verified is refused (takeover guard: the number may have been typed by someone else).
+            acc = find_user_by_phone(conn, e164, "user_id, phone, phone_verified_at") if e164.startswith("+") else None
+            if acc is not None:
+                if str(acc["phone_verified_at"] or "").strip() or acc["user_id"] == legacy_uid:
+                    attach = acc["user_id"]
+                elif not legacy_uid:
+                    raise PhoneAccountUnverified(PHONE_UNVERIFIED_MSG)
+                # else: a legacy phone-OTP account owns this number's OTP history → keep signing
+                # into it (existing behaviour); the unverified password account is left untouched.
+
         # P0 follow-up: consume atomically BEFORE issuing anything — of two concurrent verifies
         # with the right code only the one whose conditional UPDATE hits the row (rowcount 1) wins.
         cur = conn.execute(
@@ -434,30 +526,42 @@ def verify_otp(
             conn.rollback()
             raise ValueError("challenge already used")
 
-        phone = row["phone"]
-        user_id = row["user_id"]
+        now_s = _iso(_now())
+        created = False
         if not user_id:
-            user_id = str(uuid4())
-            # Returning phone-OTP user = owner of an earlier consumed challenge for this phone
-            # (challenge.user_id is only ever set here). No lookup by a derived device_id.
-            # phone forms: E.164 + legacy local rows not yet migrated (item 9)
-            e164 = try_normalize_phone(phone) or phone
-            cands = phone_lookup_candidates(e164) if e164.startswith("+") else [phone]
-            existing = conn.execute(
-                "SELECT c.user_id FROM otp_challenges c JOIN users u ON u.user_id = c.user_id "
-                "WHERE c.phone IN (" + ",".join("?" * len(cands)) + ") AND c.consumed=1 "
-                "AND c.user_id IS NOT NULL ORDER BY c.created_at, c.challenge_id LIMIT 1",
-                tuple(cands),
-            ).fetchone()
-            device_key = internal_device_key("phone:")
-            if existing:
-                _admin_login_gate(conn, existing["user_id"], via="phone_otp")
-                user_id = existing["user_id"]
+            target = attach or legacy_uid
+            if target:
+                _admin_login_gate(conn, target, via="phone_otp")
+                user_id = target
+                if attach:
+                    # normalise a legacy '0…' row to E.164 and record the proof of possession
+                    conn.execute(
+                        "UPDATE users SET phone=?, phone_verified_at=COALESCE(NULLIF(phone_verified_at,''), ?) "
+                        "WHERE user_id=?",
+                        (e164, now_s, user_id),
+                    )
+                elif e164.startswith("+") and not phone_taken(conn, e164):
+                    # legacy phone-OTP account (phone only in its challenges) → record it on the row
+                    conn.execute(
+                        "UPDATE users SET phone=?, phone_verified_at=COALESCE(NULLIF(phone_verified_at,''), ?) "
+                        "WHERE user_id=? AND (phone IS NULL OR phone='')",
+                        (e164, now_s, user_id),
+                    )
             else:
-                conn.execute(
-                    "INSERT INTO users(user_id, display_name, device_id) VALUES (?,?,?)",
-                    (user_id, phone, device_key),
-                )
+                user_id = str(uuid4())
+                try:
+                    conn.execute(
+                        "INSERT INTO users(user_id, display_name, device_id, phone, phone_verified_at) "
+                        "VALUES (?,?,?,?,?)",
+                        (user_id, phone, internal_device_key("phone:"),
+                         e164 if e164.startswith("+") else None, now_s),
+                    )
+                except Exception as e:  # concurrent first login / register of the same number
+                    if not _is_unique_violation(e):
+                        raise
+                    conn.rollback()
+                    raise ValueError("vui lòng thử lại")
+                created = True
 
         conn.execute(
             "UPDATE otp_challenges SET user_id=? WHERE challenge_id=?",
@@ -466,7 +570,8 @@ def verify_otp(
         token = _insert_token(conn, user_id, kind="otp")
         expires_at = token_expiry(conn, token)
         conn.commit()
-        return {"user_id": user_id, "token": token, "expires_at": expires_at, "kind": "otp", "created": False}
+        return {"user_id": user_id, "token": token, "expires_at": expires_at, "kind": "otp", "created": created,
+                "attached": bool(attach)}
     finally:
         conn.close()
 
@@ -589,6 +694,8 @@ def service_otp_verify(body: dict) -> tuple[int, dict]:
         return 200, out
     except PhoneConflictError as e:
         return 409, {"error_code": "PHONE_CONFLICT_USE_EMAIL", "message": str(e)}
+    except PhoneAccountUnverified as e:
+        return 409, {"error_code": "PHONE_NOT_VERIFIED_USE_PASSWORD", "message": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e), "error_code": "ADMIN_EMAIL_OTP_ONLY"}
     except KeyError:
@@ -867,9 +974,7 @@ PHONE_RESET_HINT = (
 def reset_echo_enabled() -> bool:
     """P0: reset_token is echoed in the API response ONLY when WELORA_RESET_ECHO=1
     (staging demo; there is no reset e-mail/SMS delivery yet). Production must not set it."""
-    import os
-
-    return (os.environ.get("WELORA_RESET_ECHO") or "").strip() == "1"
+    return _flag_on("WELORA_RESET_ECHO") and not is_production()  # production: always off
 
 
 def request_password_reset(
@@ -1081,11 +1186,15 @@ def service_register(body: dict) -> tuple[int, dict]:
             display_name=body.get("display_name"),
             role="guest",
         )
-        return 201, out
     except ValueError as e:
         return 400, {"error": str(e)}
     except PermissionError as e:
         return 403, {"error": str(e)}
+    # migration 020: verification code for THIS account right away (never blocks / fails register)
+    from welora import contact_verify
+
+    out["verification"] = contact_verify.issue_after_register(out["user_id"])
+    return 201, out
 
 
 LOGIN_ONE_IDENTIFIER_MSG = "Chỉ nhập email hoặc số điện thoại để đăng nhập, không nhập cả hai."
@@ -1230,7 +1339,24 @@ def service_me(token: str) -> tuple[int, dict]:  # type: ignore[no-redef]
     user = get_user_for_token(token)
     if not user:
         return 401, _unauthorized_body(token)
-    return 200, {**user, "expires_at": token_expiry_of(token)}
+    out = {**user, "expires_at": token_expiry_of(token)}
+    try:  # migration 020: verification booleans for the FE banner (never breaks /auth/me)
+        from welora import contact_verify
+
+        conn = get_connection()
+        try:
+            row = conn.execute("SELECT * FROM users WHERE user_id=?", (user["user_id"],)).fetchone()
+            if row is not None:
+                fl = contact_verify.flags(conn, row)
+                out.update({k: fl[k] for k in ("verified", "email_verified", "phone_verified",
+                                                "verify_eligible", "can_verify_now")})
+        finally:
+            conn.close()
+    except Exception as e:  # pragma: no cover
+        import logging
+
+        logging.getLogger("welora.auth").warning("verification flags failed: %s", type(e).__name__)
+    return 200, out
 
 
 # ---------------------------------------------------------------------------

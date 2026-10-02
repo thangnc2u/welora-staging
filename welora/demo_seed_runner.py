@@ -132,11 +132,15 @@ def _demo_user_ids() -> list[str]:
 def _drop_memory_caches() -> None:
     """After a rolled-back seed, forget in-process copies so readers fall back to the DB."""
     try:
+        from welora import academy
         from welora import goals_api
         from welora import mastery
         from welora import onboarding as ob
 
         for uid in _demo_user_ids():
+            academy._PROFILES.pop(uid, None)
+            academy._REVS.pop(uid, None)
+            academy._BACKFILL_CHECKED.discard(uid)
             goals_api.USER_FLAGS.pop(uid, None)
             ob.DNA_BY_USER.pop(uid, None)
             ob.CONSTITUTION_BY_USER.pop(uid, None)

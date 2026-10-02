@@ -154,10 +154,14 @@ def _record_version(conn: Any, dialect: str, ver: str) -> None:
 def _data_steps() -> list[tuple[str, Any]]:
     """Python data migrations, run once after the SQL files (recorded in schema_migrations under
     their own version). Each step must be idempotent (safe to re-run if a crash hits before the
-    version row is written) and may use only tables created by the SQL files."""
+    version row is written) and may use only tables created by the SQL files.
+    A step whose version equals a SQL file of the dialect (019 on PostgreSQL) is skipped there —
+    the SQL file applied the same change."""
+    from welora.academy_migration import apply_kuat_open_scope
     from welora.phone_migration import normalize_existing_phones
 
-    return [("014_phone_e164_data", normalize_existing_phones)]
+    return [("014_phone_e164_data", normalize_existing_phones),
+            ("019_kuat_open_scope", apply_kuat_open_scope)]
 
 
 def main() -> None:

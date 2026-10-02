@@ -3,10 +3,15 @@
 * ``academy_profiles`` (migration 017): one JSON profile per user + ``rev`` (bumped on every save)
   so another instance / a fresh process reloads it. Written only in DB-store mode
   (WELORA_STORE=sqlite|postgres or a postgres URL — same switch as goals / flags).
-* ``academy_kuat_attempts`` (017 + 018): every KUAT is an attempt the server issued — which questions
-  (drawn from the node's bank) and which option order it showed. At most ONE open attempt per
-  user + node (unique partial index, migration 018): starting again — another tab, a reload, a
-  parallel burst — returns the same open attempt. Submitting consumes it atomically
+* ``academy_kuat_attempts`` (017 + 018 + 019): every KUAT is an attempt the server issued — which
+  questions (drawn from the node's bank) and which option order it showed. At most ONE open attempt
+  per user + node + ``scope_key`` (unique partial index ``uq_academy_kuat_open_scope``, migration
+  019; it replaced 018's per user + node index): starting again — another tab, a reload, a parallel
+  burst — returns the same open attempt. ``scope_key`` is '' for every regular account (so exactly
+  one open attempt per user + node, as before); for the shared demo personas P1–P6 it is the login
+  session (a hash of the bearer token, never the token) — or, without one, the client network — so
+  two testers on one persona each get their own attempt and never see / consume / overwrite the
+  other's (``attempt_scope``). Every read / consume / re-open of an attempt is filtered by it. Submitting consumes it atomically
   (``UPDATE … WHERE used_at IS NULL … RETURNING``; single-use) before it expires. Only the outcome
   (passed / failed / expired / superseded) is recorded — no score, no per-question correctness.
 * KUAT limits reuse ``auth_rate_events`` (migration 013, same hashing / pruning as the auth limits).
@@ -20,7 +25,10 @@
       across both gate nodes together;
     - gate nodes, accounts that are not "verified" (device guests, register-only accounts, demo
       personas): per client IP and per gate node over 24 h (shared by all of them), plus per guest
-      device id and gate node.
+      device id and gate node;
+    - non-gate nodes (migration 019 ticket, item 3): NEW attempts per client network over
+      WELORA_KUAT_NONGATE_IP_START_WINDOW_S, all accounts together — so throwaway accounts cannot
+      bloat the attempt table. Gate nodes never count against it (their budgets are unchanged).
   "Guest" for these budgets (round 3) = every account WITHOUT a verified contact — device-only
   visitors AND registered accounts that never completed an OTP (see ``_identity`` /
   ``auth.has_verified_contact``). Demo personas P1–P6 (round 4: public password) are identified by
@@ -42,6 +50,8 @@ Env (all optional; a value ≤ 0 disables that limit):
   WELORA_KUAT_GUEST_WINDOW_S (86400) window of the two guest limits
   WELORA_KUAT_IP6_DAY_PREFIX (56) IPv6 prefix length of the 24 h network buckets (48–64; 64 = as the short windows)
   WELORA_KUAT_MAX_STARTS (30) NEW attempts issued per user+node per WELORA_KUAT_COOLDOWN_S
+  WELORA_KUAT_NONGATE_IP_MAX_STARTS (300) NEW attempts on non-gate nodes per client network (IPv4
+      address / IPv6 /WELORA_KUAT_IP6_DAY_PREFIX), any account, per WELORA_KUAT_NONGATE_IP_START_WINDOW_S (3600 s)
   WELORA_KUAT_ATTEMPT_TTL_S (1800) lifetime of an issued attempt
 """
 
@@ -131,6 +141,14 @@ def max_starts() -> int:
     return _env_int("WELORA_KUAT_MAX_STARTS", 30)
 
 
+def nongate_ip_max_starts() -> int:
+    return _env_int("WELORA_KUAT_NONGATE_IP_MAX_STARTS", 300)
+
+
+def nongate_ip_start_window_s() -> int:
+    return max(60, _env_int("WELORA_KUAT_NONGATE_IP_START_WINDOW_S", 3600))
+
+
 def attempt_ttl_s() -> int:
     return max(60, _env_int("WELORA_KUAT_ATTEMPT_TTL_S", 1800))
 
@@ -145,7 +163,7 @@ class KuatCooldown(Exception):
     def __init__(self, retry_after: float, reason: str):
         super().__init__(reason)
         self.retry_after = max(1, int(retry_after + 0.999))
-        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | demo_ip | device | unverified_device | starts
+        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | demo_ip | device | unverified_device | starts | ip_starts
 
 
 def _ts(iso: str) -> float:
@@ -189,6 +207,34 @@ def save_profile(user_id: str, profile: dict) -> int:
             "rev=academy_profiles.rev+1, updated_at=excluded.updated_at",
             (user_id, body, now),
         )
+        r = conn.execute("SELECT rev FROM academy_profiles WHERE user_id=?", (user_id,)).fetchone()
+        conn.commit()
+        return int(r["rev"])
+    finally:
+        conn.close()
+
+
+def save_profile_if_rev(user_id: str, profile: dict, expected_rev: Optional[int]) -> Optional[int]:
+    """Optimistic write: insert when there is no row (``expected_rev`` None) or update only when the
+    row still has ``expected_rev``. Returns the new rev, or None when someone else saved first."""
+    body = json.dumps(profile, ensure_ascii=False, sort_keys=True)
+    now = _iso(time.time())
+    conn = _conn()
+    try:
+        if expected_rev is None:
+            cur = conn.execute(
+                "INSERT INTO academy_profiles(user_id, profile_json, rev, updated_at) VALUES (?,?,1,?) "
+                "ON CONFLICT(user_id) DO NOTHING",
+                (user_id, body, now),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE academy_profiles SET profile_json=?, rev=rev+1, updated_at=? WHERE user_id=? AND rev=?",
+                (body, now, user_id, int(expected_rev)),
+            )
+        if not int(cur.rowcount or 0):
+            conn.commit()
+            return None
         r = conn.execute("SELECT rev FROM academy_profiles WHERE user_id=?", (user_id,)).fetchone()
         conn.commit()
         return int(r["rev"])
@@ -277,7 +323,8 @@ def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> tuple[list[tup
 
 
 _REASON = {"kuat_user_node": "fails", "kuat_user_node_day": "daily", "kuat_ip": "ip", "kuat_ip_day": "ip_day",
-           "kuat_guest_ip": "guest_ip", "kuat_guest_device": "device", "kuat_start": "starts"}
+           "kuat_guest_ip": "guest_ip", "kuat_guest_device": "device", "kuat_start": "starts",
+           "kuat_nongate_ip_start": "ip_starts"}
 _KIND_REASON = {UNVERIFIED: {"guest_ip": "unverified_ip", "device": "unverified_device"},
                 DEMO: {"guest_ip": "demo_ip"}}
 
@@ -413,13 +460,68 @@ def _rollback(conn) -> None:
         conn.rollback()
 
 
+def _session_scope(session: Optional[str]) -> str:
+    """Scope key of a login session: a hash of the bearer token (the token itself is never stored)."""
+    tok = str(session or "").strip()
+    return "s:" + _key_hash("kuat_session", tok)[:32] if tok else ""
+
+
+def attempt_scope(user_id: str, *, session: Optional[str] = None, ip: Optional[str] = None) -> str:
+    """``scope_key`` of the learner's open KUAT attempts (migration 019).
+
+    * every regular account (guest, unverified, verified): '' → ONE open attempt per user + node;
+    * demo personas P1–P6 (one public login shared by many testers): the login session — the hash
+      of the bearer token the request carries — so each tester / browser has its own attempt; with
+      no session (in-process callers) the client network (IPv4 / IPv6 /64), else ''.
+    The start / fail budgets are NOT per scope: they stay per (persona, node, client network) and
+    the gate network buckets (``_keys``), so opening new sessions buys no extra attempts."""
+    conn = _conn()
+    try:
+        kind, _dev = _identity(conn, user_id)
+    finally:
+        conn.close()
+    if kind != DEMO:
+        return ""
+    sc = _session_scope(session)
+    if sc:
+        return sc
+    ipb = _ips(ip)[0]
+    return "n:" + ipb if ipb else ""
+
+
+def is_device_guest(user_id: str) -> bool:
+    """True for a device-only guest (POST /auth/device, no login) or an unknown user id."""
+    conn = _conn()
+    try:
+        return _identity(conn, user_id)[0] == GUEST
+    finally:
+        conn.close()
+
+
+def _start_buckets(conn, user_id: str, node_id: str, ip: Optional[str]) -> list[tuple[str, str, int, int]]:
+    """Buckets a NEW attempt counts against: per (user, node) [per (persona, node, network) for demo
+    personas] and — non-gate nodes only — per client network for all accounts (item 3)."""
+    out = []
+    ipb, ipd = _ips(ip)
+    if max_starts() > 0:
+        kind, _dev = _identity(conn, user_id)
+        out.append(("kuat_start", _key_hash("kuat_start", _user_scope(user_id, node_id, kind, ipb)), max_starts(),
+                    cooldown_s()))
+    if not is_gate_node(node_id) and ipd and nongate_ip_max_starts() > 0:
+        out.append(("kuat_nongate_ip_start", _key_hash("kuat_nongate_ip_start", ipd), nongate_ip_max_starts(),
+                    nongate_ip_start_window_s()))
+    return out
+
+
 def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[float] = None,
-                           ip: Optional[str] = None) -> dict:
-    """The learner's open attempt for this node if one is still valid (same questions, same option
-    order — every tab / reload / parallel request gets the same one); otherwise a NEW attempt from
-    ``draw()`` (counts against the start limit). The unique partial index makes a concurrent second
-    insert fail → we return the attempt that won. Returns {attempt_id, expires_at, served, created}."""
+                           ip: Optional[str] = None, scope: str = "") -> dict:
+    """The learner's open attempt for this node (and ``scope`` — see ``attempt_scope``) if one is
+    still valid (same questions, same option order — every tab / reload / parallel request gets the
+    same one); otherwise a NEW attempt from ``draw()`` (counts against the start limits). The unique
+    partial index makes a concurrent second insert fail → we return the attempt that won.
+    Returns {attempt_id, expires_at, served, created}."""
     t = time.time() if now is None else float(now)
+    scope = str(scope or "")
     conn = _conn()
     try:
         for _round in range(4):
@@ -431,28 +533,29 @@ def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[fl
                 )
                 r = conn.execute(
                     "SELECT attempt_id, served_json, expires_at FROM academy_kuat_attempts "
-                    "WHERE user_id=? AND node_id=? AND used_at IS NULL",
-                    (user_id, node_id),
+                    "WHERE user_id=? AND node_id=? AND scope_key=? AND used_at IS NULL",
+                    (user_id, node_id, scope),
                 ).fetchone()
                 if r:
                     conn.commit()
                     return {"attempt_id": r["attempt_id"], "expires_at": r["expires_at"],
                             "served": json.loads(r["served_json"]), "created": False}
-                if max_starts() > 0:
-                    kind, _dev = _identity(conn, user_id)
-                    kh = _key_hash("kuat_start", _user_scope(user_id, node_id, kind, _ips(ip)[0]))
-                    _check(conn, START_ACTION, [("kuat_start", kh, max_starts(), cooldown_s())], t)
-                    conn.execute(
-                        "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
-                        (str(uuid.uuid4()), START_ACTION, "kuat_start", kh, _iso(t)),
-                    )
+                buckets = _start_buckets(conn, user_id, node_id, ip)
+                if buckets:
+                    _check(conn, START_ACTION, buckets, t)
+                    for scope_name, kh, _mx, _win in buckets:
+                        conn.execute(
+                            "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) "
+                            "VALUES (?,?,?,?,?)",
+                            (str(uuid.uuid4()), START_ACTION, scope_name, kh, _iso(t)),
+                        )
                 served = draw()
                 attempt_id = uuid.uuid4().hex
                 expires = _iso(t + attempt_ttl_s())
                 conn.execute(
-                    "INSERT INTO academy_kuat_attempts(attempt_id, user_id, node_id, served_json, created_at, expires_at) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (attempt_id, user_id, node_id, json.dumps(served), _iso(t), expires),
+                    "INSERT INTO academy_kuat_attempts(attempt_id, user_id, node_id, served_json, created_at, "
+                    "expires_at, scope_key) VALUES (?,?,?,?,?,?,?)",
+                    (attempt_id, user_id, node_id, json.dumps(served), _iso(t), expires, scope),
                 )
                 conn.execute("DELETE FROM academy_kuat_attempts WHERE created_at<?", (_iso(t - 30 * DAY_S),))
                 conn.commit()
@@ -470,46 +573,49 @@ def open_or_create_attempt(user_id: str, node_id: str, draw, *, now: Optional[fl
         conn.close()
 
 
-def latest_open_attempt_id(user_id: str, node_id: str, *, now: Optional[float] = None) -> Optional[str]:
+def latest_open_attempt_id(user_id: str, node_id: str, *, now: Optional[float] = None,
+                           scope: str = "") -> Optional[str]:
     t = time.time() if now is None else float(now)
     conn = _conn()
     try:
         r = conn.execute(
-            "SELECT attempt_id FROM academy_kuat_attempts WHERE user_id=? AND node_id=? AND used_at IS NULL "
-            "AND expires_at>? ORDER BY created_at DESC LIMIT 1",
-            (user_id, node_id, _iso(t)),
+            "SELECT attempt_id FROM academy_kuat_attempts WHERE user_id=? AND node_id=? AND scope_key=? "
+            "AND used_at IS NULL AND expires_at>? ORDER BY created_at DESC LIMIT 1",
+            (user_id, node_id, str(scope or ""), _iso(t)),
         ).fetchone()
         return r["attempt_id"] if r else None
     finally:
         conn.close()
 
 
-def peek_attempt(attempt_id: str, user_id: str, node_id: str, *, now: Optional[float] = None) -> Optional[list]:
-    """What an OPEN, unexpired attempt of this user + node served (read-only), else None."""
+def peek_attempt(attempt_id: str, user_id: str, node_id: str, *, now: Optional[float] = None,
+                 scope: str = "") -> Optional[list]:
+    """What an OPEN, unexpired attempt of this user + node + scope served (read-only), else None."""
     t = time.time() if now is None else float(now)
     conn = _conn()
     try:
         r = conn.execute(
             "SELECT served_json FROM academy_kuat_attempts WHERE attempt_id=? AND user_id=? AND node_id=? "
-            "AND used_at IS NULL AND expires_at>?",
-            (str(attempt_id or ""), user_id, node_id, _iso(t)),
+            "AND scope_key=? AND used_at IS NULL AND expires_at>?",
+            (str(attempt_id or ""), user_id, node_id, str(scope or ""), _iso(t)),
         ).fetchone()
         return json.loads(r["served_json"]) if r else None
     finally:
         conn.close()
 
 
-def consume_attempt(attempt_id: str, user_id: str, node_id: str, *, now: Optional[float] = None) -> Optional[list]:
+def consume_attempt(attempt_id: str, user_id: str, node_id: str, *, now: Optional[float] = None,
+                    scope: str = "") -> Optional[list]:
     """Atomically mark the attempt used (single UPDATE … WHERE used_at IS NULL … RETURNING): exactly
-    one concurrent submit gets what was served; the others (and unknown / someone else's / other
-    node / expired / already used) get None."""
+    one concurrent submit gets what was served; the others (and unknown / someone else's / another
+    demo session's / other node / expired / already used) get None."""
     t = time.time() if now is None else float(now)
     conn = _conn()
     try:
         r = conn.execute(
             "UPDATE academy_kuat_attempts SET used_at=?, outcome='submitted' WHERE attempt_id=? AND user_id=? "
-            "AND node_id=? AND used_at IS NULL AND expires_at>? RETURNING served_json",
-            (_iso(t), str(attempt_id or ""), user_id, node_id, _iso(t)),
+            "AND node_id=? AND scope_key=? AND used_at IS NULL AND expires_at>? RETURNING served_json",
+            (_iso(t), str(attempt_id or ""), user_id, node_id, str(scope or ""), _iso(t)),
         ).fetchone()
         conn.commit()
         return json.loads(r["served_json"]) if r else None
@@ -517,14 +623,15 @@ def consume_attempt(attempt_id: str, user_id: str, node_id: str, *, now: Optiona
         conn.close()
 
 
-def reopen_attempt(attempt_id: str, user_id: str, node_id: str) -> None:
+def reopen_attempt(attempt_id: str, user_id: str, node_id: str, *, scope: str = "") -> None:
     """Undo a consume that was NOT graded (fail slot refused → 429): the learner keeps the attempt.
-    If another open attempt appeared meanwhile, the unique index refuses and it stays consumed."""
+    If another open attempt (same scope) appeared meanwhile, the unique index refuses and it stays consumed."""
     conn = _conn()
     try:
         try:
             conn.execute("UPDATE academy_kuat_attempts SET used_at=NULL, outcome=NULL WHERE attempt_id=? "
-                         "AND user_id=? AND node_id=? AND outcome='submitted'", (attempt_id, user_id, node_id))
+                         "AND user_id=? AND node_id=? AND scope_key=? AND outcome='submitted'",
+                         (attempt_id, user_id, node_id, str(scope or "")))
             conn.commit()
         except Exception as e:
             if not _is_unique_violation(e):

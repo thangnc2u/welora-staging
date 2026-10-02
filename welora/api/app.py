@@ -399,6 +399,17 @@ _AUTH_GATE_TAG = '<script src="/static/auth-gate.js"></script>'
 ACADEMY_LOGIN_REQUIRED_MSG = "Welorademy cần đăng nhập. Vui lòng đăng nhập hoặc đăng ký tài khoản để học tiếp."
 
 
+def _serve_guest_page(static_dir: Path, name: str) -> HTMLResponse:
+    """Follow-up #244/#245 item 12: Welorapedia (/app/content…) — the target of the lesson's
+    «Welorapedia» links — follows the SAME guest rule as the Academy: the marker only while
+    WELORA_GUEST_DEMO is on (production: no marker → login). The /content APIs it reads are public
+    (no per-user data)."""
+    html = _cache_bust_shell_js((static_dir / name).read_text(encoding="utf-8"))
+    if auth_svc.guest_demo_enabled():
+        html = html.replace(_AUTH_GATE_TAG, GUEST_ACADEMY_META + "\n" + _AUTH_GATE_TAG, 1)
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
 def _serve_academy_html(static_dir: Path) -> HTMLResponse:
     """/app/academy (migration-019 ticket item 5). While WELORA_GUEST_DEMO is on, the server marks
     the page open to device guests with ``<meta name="welora-guest-academy" content="1">`` placed
@@ -529,17 +540,19 @@ def _require_login(authorization: Optional[str]) -> str:
     return uid
 
 
-def _auth_rate_limit(request: Request, action: str, target: Optional[str]) -> None:
-    """429 (VI) when the shared-DB limit for this IP or phone/email is exceeded."""
+def _auth_rate_limit(request: Request, action: str, target: Optional[str]) -> dict:
+    """429 (VI) when the shared-DB limit for this IP or phone/email is exceeded. The body carries
+    ``retry_after_s`` (same value as the Retry-After header — follow-up item 1). Returns the
+    {scope: event_id} rows recorded for this request (``auth_ratelimit.release``)."""
     from welora import auth_ratelimit as rl
 
     ip = rl.client_ip(request.client.host if request.client else None, headers=request.headers)
     try:
-        rl.check_and_record(action, ip=ip, target=target)
+        return rl.check_and_record(action, ip=ip, target=target) or {}
     except rl.RateLimited as e:
         raise HTTPException(
             status_code=429,
-            detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG},
+            detail={"error_code": "RATE_LIMITED", "message": rl.RATE_LIMIT_MSG, "retry_after_s": e.retry_after},
             headers={"Retry-After": str(e.retry_after)},
         )
 
@@ -674,6 +687,14 @@ async def _lifespan(_app: FastAPI):
     if _ignored:
         logging.getLogger("welora.auth").critical(
             "production: test-only auth flags are set and IGNORED: %s — remove them from the env", ",".join(_ignored))
+    # follow-up item 3: OTP codes are HMAC'd with WELORA_OTP_HMAC_KEY — missing / short key → logged
+    # (CRITICAL in production; the derived fallback keeps the service up, /health shows the source)
+    try:
+        from welora import otp_hash
+
+        otp_hash.startup_check()
+    except Exception:  # pragma: no cover - never blocks startup
+        pass
     # WELORA_ADMIN_EMAILS: promote verified listed users / demote unlisted admins (audited, never raises)
     admin_bootstrap.startup_sync()
     # P0 follow-up: legacy tokens (expires_at NULL) get a bounded expiry — never raises
@@ -716,6 +737,9 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0", lifespan=_lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(SecurityHeadersMiddleware)
+    from welora.api.session_context import RequestSessionMiddleware
+
+    app.add_middleware(RequestSessionMiddleware)  # follow-up #244/#245 item 14 (demo-session gate)
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -868,15 +892,15 @@ def create_app() -> FastAPI:
 
     @app.get("/app/content/{content_id}", include_in_schema=False)
     def content_ui_id(content_id: str) -> FileResponse:
-        return _serve_app_html(static_dir, "content.html")
+        return _serve_guest_page(static_dir, "content.html")
 
     @app.get("/app/content/module/{module_id}", include_in_schema=False)
     def content_module_ui(module_id: str) -> FileResponse:
-        return _serve_app_html(static_dir, "content.html")
+        return _serve_guest_page(static_dir, "content.html")
 
     @app.get("/app/content", include_in_schema=False)
     def content_ui() -> FileResponse:
-        return _serve_app_html(static_dir, "content.html")
+        return _serve_guest_page(static_dir, "content.html")
 
     @app.get("/app/goal", include_in_schema=False)
     def goal_ui_redirect() -> RedirectResponse:
@@ -938,6 +962,14 @@ def create_app() -> FastAPI:
     def my_plan_ui() -> HTMLResponse:
         return _serve_app_html(static_dir, "my-plan.html")
 
+    def _otp_key_source() -> str:
+        try:
+            from welora import otp_hash
+
+            return otp_hash.key_source()
+        except Exception:  # pragma: no cover
+            return "unknown"
+
     def _mail_provider_name() -> str:
         try:
             from welora.mailer import mail_provider
@@ -969,6 +1001,7 @@ def create_app() -> FastAPI:
             "otp_fixed": auth_svc.otp_fixed_enabled(),
             "auth_test_flags_ignored": auth_svc.unsafe_auth_flags_ignored(),  # names only (production)
             "token_ttl_days": auth_svc.token_ttl_days(),
+            "otp_hmac_key": _otp_key_source(),  # env | derived | dev — never the key
             "demo_seed": _demo_seed_status(),
             "gate_months": 3,
             "hard_deny": True,
@@ -1049,11 +1082,27 @@ def create_app() -> FastAPI:
         from welora import contact_verify
 
         uid = _require_user(authorization)
-        _auth_rate_limit(request, "verify_request", f"user:{uid}")
+        rows = _auth_rate_limit(request, "verify_request", f"user:{uid}")
         try:
             return contact_verify.issue(uid, (body.channel if body else None))
         except contact_verify.VerifyError as e:
+            if e.code == "VERIFY_RESEND_COOLDOWN":
+                # follow-up item 1: a resend refused by the cooldown sent nothing → it does not use up
+                # the per-user send budget (WELORA_RL_VERIFY_SEND_USER_MAX). The per-IP row stays (the
+                # backstop against a client hammering the endpoint). 429 body: retry_after_s.
+                from welora import auth_ratelimit as rl
+
+                rl.release([rows.get("target", "")])
             _verify_error(e)
+
+    @app.post("/auth/verify/snooze", tags=["auth"])
+    def auth_verify_snooze(authorization: Optional[str] = Header(None)) -> dict:
+        """Follow-up item 2: «Để sau» — hide the verification reminder for 24 h for this account
+        (stored server-side: users.verify_snooze_until, migration 021). Bearer session only."""
+        from welora import contact_verify
+
+        uid = _require_user(authorization)
+        return contact_verify.snooze(uid)
 
     @app.post("/auth/verify/confirm", tags=["auth"])
     def auth_verify_confirm(body: VerifyConfirmBody, request: Request,
@@ -1240,6 +1289,14 @@ def create_app() -> FastAPI:
         uid = _academy_owner(authorization, user_id)
         return _respond(*academy_svc.service_get_node(uid, node_id, ip=_kuat_ip(request),
                                                       session=_bearer_token(authorization)))
+
+    @app.post("/academy/demo/reset", tags=["academy"])
+    def academy_demo_reset(request: Request, authorization: Optional[str] = Header(None)) -> dict:
+        """Follow-up #244/#245 item 13: «reset tiến độ demo của tôi» — THIS demo login session back
+        to the persona's seed state. 403 for every other account (and when WELORA_GUEST_DEMO=0)."""
+        uid = _academy_owner(authorization, None)
+        return _respond(*academy_svc.service_reset_demo(uid, ip=_kuat_ip(request),
+                                                        session=_bearer_token(authorization)))
 
     @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
     def academy_read(node_id: str, body: AcademyReadBody, request: Request,

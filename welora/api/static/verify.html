@@ -130,8 +130,10 @@ button.link[disabled]{opacity:.55;cursor:default;text-decoration:none}
     }catch(_e){err('Không kết nối được. Vui lòng thử lại.');}
   });
   $('code').addEventListener('keydown',function(e){if(e.key==='Enter')$('btnConfirm').click();});
-  $('btnSkip').addEventListener('click',function(){
-    /* skippable: hide the reminder banner for a day, never blocks the app */
+  $('btnSkip').addEventListener('click',async function(){
+    /* skippable: hide the reminder banner for a day, never blocks the app. Follow-up item 2: kept
+       per account on the server (POST /auth/verify/snooze, 24 h) — every device / browser */
+    try{await fetch('/auth/verify/snooze',{method:'POST',keepalive:true,headers:H});}catch(_e){}
     try{localStorage.setItem('welora_verify_banner_until',String(Date.now()+24*3600*1000));}catch(_e){}
     location.href=next;
   });

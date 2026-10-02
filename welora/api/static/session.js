@@ -66,7 +66,9 @@
      (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
   function guestAcademy() {
     var cp = currentPath();
-    if (cp !== "/app/academy" && cp !== "/app/learn") return false;  /* follow-up item 3: /app/learn alias */
+    /* follow-up item 3: /app/learn alias; follow-up #244/#245 item 12: Welorapedia (/app/content…) */
+    if (cp !== "/app/academy" && cp !== "/app/learn" && cp !== "/app/content" &&
+        cp.indexOf("/app/content/") !== 0) return false;
     try {
       var m = w.document.querySelector('meta[name="welora-guest-academy"]');
       return !!(m && m.getAttribute("content") === "1");

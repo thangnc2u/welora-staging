@@ -185,7 +185,7 @@ class TestEmailVerification(_Base):
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0]["channel"], rows[0]["target"], rows[0]["consumed"]), ("email", "lan.anh@example.test", 0))
         code = self.last_code("lan.anh@example.test")
-        self.assertTrue(rows[0]["code_hash"].startswith("sha256:"))
+        self.assertTrue(rows[0]["code_hash"].startswith("hmac256:"))
         self.assertNotIn(code, rows[0]["code_hash"])
         self.assertEqual(self.mail[-1][1], cv.MAIL_SUBJECT)
         self.assertIn("bỏ qua email này", self.mail[-1][2])

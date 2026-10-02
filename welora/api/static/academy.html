@@ -35,6 +35,8 @@ label{display:block;margin:4px 0;color:var(--text-primary,#F4F1E8)}
 #lessonBody li{margin:4px 0}
 #lessonBody hr{border:0;border-top:1px solid var(--border-default,#2F3D54);margin:14px 0}
 #lessonBody code{font-size:13px;background:var(--bg-app,#121A28);padding:1px 4px;border-radius:4px}
+#btnDemoReset{background:none;border:1px solid var(--border-default,#2F3D54);color:var(--text-secondary,#A8B0C0);font-weight:600}
+#btnDemoReset[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -44,6 +46,8 @@ label{display:block;margin:4px 0;color:var(--text-primary,#F4F1E8)}
 <p class="muted" id="kuatRule">KUAT: kết quả chỉ là ĐẠT / CHƯA ĐẠT. Đạt khi đúng từ 70% số câu trở lên và đúng mọi câu trọng tâm.</p>
 <p class="muted" id="xpLine">XP —</p>
 <p class="muted" id="focusLine"></p>
+<button type="button" id="btnDemoReset" hidden>Reset tiến độ demo của tôi</button>
+<p class="muted" id="demoResetOut"></p>
 <a id="osNudge" class="btn-primary" href="/app/goals" hidden>Tạo mục tiêu trên WeloraOS</a>
 <div id="tree"></div>
 <div id="lesson" hidden>
@@ -138,8 +142,28 @@ function setRule(data){
     document.getElementById('kuatRule').textContent='KUAT: kết quả chỉ là ĐẠT / CHƯA ĐẠT. '+data.pass_rule;
   }
 }
+/* follow-up #244/#245 item 13: only a demo login session (server: tree.demo_session) gets the button */
+function setDemoReset(data){
+  const b=document.getElementById('btnDemoReset');
+  if(b) b.hidden=!(data&&data.demo_session===true);
+}
+const DEMO_RESET_CONFIRM='Đặt lại tiến độ học của phiên demo này về trạng thái ban đầu? Bài đã đọc, kết quả KUAT, XP và huy hiệu của phiên này sẽ bị xoá. Người dùng thử khác không bị ảnh hưởng.';
+document.getElementById('btnDemoReset').onclick=async()=>{
+  const out=document.getElementById('demoResetOut');
+  if(!window.confirm(DEMO_RESET_CONFIRM)) return;
+  out.textContent='';
+  try{
+    const r=await fetch('/academy/demo/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    let d={};
+    try{ d=await r.json(); }catch(_e){ d={}; }
+    if(!r.ok){ out.textContent=((d.detail&&d.detail.message)||'Không đặt lại được tiến độ. Vui lòng thử lại.'); return; }
+    out.textContent=d.message||'Đã đặt lại tiến độ.';
+    showTree(d.tree||{});
+  }catch(_e){ out.textContent='Không kết nối được. Vui lòng thử lại.'; }
+};
 function showTree(data){
   setRule(data);
+  setDemoReset(data);
   document.getElementById('lesson').hidden=true;
   document.getElementById('tree').hidden=false;
   const box=document.getElementById('tree');
@@ -345,13 +369,20 @@ function showCooldown(out, c){
     const a=document.createElement('a');
     a.href=href;
     a.textContent='Ôn lại bài'+((c&&c.lesson_title)?(': '+c.lesson_title):'');
-    /* item 2: already on this lesson → scroll to its text instead of reloading the page */
+    /* item 2: already on this lesson → scroll to its text instead of reloading the page.
+       Follow-up #244/#245 item 11: the address bar follows (history.pushState → /app/academy?node=…),
+       so reload / share / «Back» land on the same lesson; another lesson opens in place. */
     a.addEventListener('click',function(ev){
-      const m=href.match(/[?&]node=([A-Za-z0-9-]+)/);
-      if(m&&current&&String(current.node_id||'').toUpperCase()===m[1].toUpperCase()){
-        ev.preventDefault();
+      const m=href.match(/^\/app\/(?:academy|learn)\?node=(N0[1-5]-0[1-9])$/i);
+      if(!m) return;  /* not an Academy lesson link → normal navigation */
+      const nid=m[1].toUpperCase();
+      ev.preventDefault();
+      try{ if(window.history&&history.pushState) history.pushState({node:nid},'',href); }catch(_e){}
+      if(current&&String(current.node_id||'').toUpperCase()===nid){
         const b=document.getElementById('lessonBody');
         if(b&&b.scrollIntoView) b.scrollIntoView({behavior:'smooth',block:'start'});
+      }else{
+        openNode(nid);
       }
     });
     out.appendChild(document.createTextNode(' '));
@@ -484,6 +515,11 @@ document.getElementById('btnKuat').onclick=async()=>{
   }
 };
 document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();};
+/* item 11: «Back» after a pushState'd lesson link → the lesson of that address (or the tree) */
+window.addEventListener('popstate',function(){
+  const v=String(new URLSearchParams(location.search).get('node')||'').toUpperCase();
+  if(/^N0[1-5]-0[1-9]$/.test(v)) openNode(v); else loadTree();
+});
 (async()=>{
   if(window.WeloraSession&&WeloraSession.resolveUserId){
     uid=await WeloraSession.resolveUserId();

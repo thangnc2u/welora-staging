@@ -731,6 +731,12 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
 
 _PROFILES: dict[str, dict[str, Any]] = {}
 _REVS: dict[str, int] = {}  # DB revision each cached profile was loaded from / saved as
+# follow-up #244/#245 item 10: the DB row's updated_at next to its rev — (rev, updated_at) is the
+# version a cached copy is checked against on EVERY read. rev alone was not enough: the demo seed
+# (on any worker) deletes / rewrites rows and a re-created row starts again at rev 1, so another
+# worker holding "rev 1" kept its stale copy. A row that disappeared (demo seed / «reset tiến độ
+# demo») drops the cached copy as well.
+_STAMPS: dict[str, Optional[str]] = {}
 ATTEMPT_LOG_MAX = 20
 
 # GP P0b — KUAT draw: each attempt shows KUAT_DRAW questions picked at random from the node's bank
@@ -747,7 +753,30 @@ PASS_RULE_VI = "Đạt khi đúng từ 70% số câu trở lên và đúng mọi
 def reset_academy_store() -> None:
     _PROFILES.clear()
     _REVS.clear()
+    _STAMPS.clear()
     _BACKFILL_CHECKED.clear()
+    _SESSION_LRU.clear()
+
+
+def _forget(key: str) -> None:
+    """Drop every in-process copy of one profile (the next read loads the DB row, if any)."""
+    _PROFILES.pop(key, None)
+    _REVS.pop(key, None)
+    _STAMPS.pop(key, None)
+    _BACKFILL_CHECKED.discard(key)
+    with _LRU_LOCK:
+        _SESSION_LRU.pop(key, None)
+
+
+def _remember_saved(key: str, rev: Optional[int]) -> None:
+    from welora import academy_store as store
+
+    if rev is None:
+        return
+    _REVS[key] = int(rev)
+    ver = store.profile_version(key)
+    # a concurrent save in between → keep no stamp, so the next read reloads the newer row
+    _STAMPS[key] = ver[1] if ver and ver[0] == int(rev) else None
 
 
 def _now() -> str:
@@ -793,12 +822,16 @@ def _sync_from_db(user_id: str) -> None:
 
     if not store.use_db_profiles():
         return
-    rev = store.profile_rev(user_id)
-    if rev is None or (user_id in _PROFILES and _REVS.get(user_id) == rev):
+    ver = store.profile_version(user_id)
+    if ver is None:
+        if user_id in _REVS:  # was persisted, the row is gone (demo seed / reset on any worker)
+            _forget(user_id)
         return
-    loaded = store.load_profile(user_id)
+    if user_id in _PROFILES and _REVS.get(user_id) == ver[0] and _STAMPS.get(user_id) == ver[1]:
+        return
+    loaded = store.load_profile_v(user_id)
     if loaded:
-        _PROFILES[user_id], _REVS[user_id] = loaded[0], loaded[1]
+        _PROFILES[user_id], _REVS[user_id], _STAMPS[user_id] = loaded
 
 
 # --- follow-up ticket item 1: demo persona progress per login session ------------------------------
@@ -849,6 +882,53 @@ def _demo_start_state(user_id: str) -> dict[str, Any]:
     return p
 
 
+# --- follow-up #244/#245 item 9: bounded cache of demo SESSION profiles -----------------------------
+# Every demo login is its own profile key, so the in-process cache would grow with every tester
+# session. Session keys are kept in an LRU of WELORA_ACADEMY_SESSION_CACHE_MAX entries (default 512,
+# min 16); the least recently used one is evicted. Safe because a session's progress is saved to the
+# DB on every change (and a never-saved session is just the persona's seed state, rebuilt on demand);
+# the in-memory store (no DB, local dev only) never evicts. Regular accounts are not affected.
+import threading as _threading
+from collections import OrderedDict as _OrderedDict
+
+_SESSION_LRU: "_OrderedDict[str, None]" = _OrderedDict()
+_LRU_LOCK = _threading.Lock()
+
+
+def session_cache_max() -> int:
+    import os
+
+    try:
+        v = int(str(os.environ.get("WELORA_ACADEMY_SESSION_CACHE_MAX", "")).strip() or 512)
+    except ValueError:
+        v = 512
+    return max(16, v)
+
+
+def _touch_session(key: str) -> None:
+    from welora import academy_store as store
+
+    if not is_session_key(key):
+        return
+    evict: list[str] = []
+    with _LRU_LOCK:
+        _SESSION_LRU[key] = None
+        _SESSION_LRU.move_to_end(key)
+        if store.use_db_profiles():
+            while len(_SESSION_LRU) > session_cache_max():
+                old, _ = _SESSION_LRU.popitem(last=False)
+                evict.append(old)
+    for old in evict:
+        _PROFILES.pop(old, None)
+        _REVS.pop(old, None)
+        _STAMPS.pop(old, None)
+        _BACKFILL_CHECKED.discard(old)
+
+
+def session_cache_size() -> int:
+    return sum(1 for k in list(_PROFILES) if is_session_key(k))
+
+
 def _profile(user_id: str) -> dict[str, Any]:
     _sync_from_db(user_id)
     if is_session_key(user_id) and user_id not in _PROFILES:
@@ -857,6 +937,7 @@ def _profile(user_id: str) -> dict[str, Any]:
     p = _normalise(_PROFILES.setdefault(user_id, {}))
     if user_id not in _BACKFILL_CHECKED:
         p = _backfill_from_mastery(user_id, p)
+    _touch_session(user_id)
     return p
 
 
@@ -923,12 +1004,13 @@ def _backfill_from_mastery(user_id: str, p: dict[str, Any]) -> dict[str, Any]:
         p["backfilled_at"] = _now()
         rev = store.save_profile_if_rev(user_id, p, _REVS.get(user_id))
         if rev is not None:
-            _REVS[user_id] = rev
+            _remember_saved(user_id, rev)
             _BACKFILL_CHECKED.add(user_id)
             return p
         # another request / instance saved first → reload its profile and re-apply on top of it
         _PROFILES.pop(user_id, None)
         _REVS.pop(user_id, None)
+        _STAMPS.pop(user_id, None)
         _sync_from_db(user_id)
         p = _normalise(_PROFILES.setdefault(user_id, {}))
         if _gate_path_mastered(p):
@@ -953,23 +1035,27 @@ def seed_profile(user_id: str, *, gate_passed: bool) -> dict[str, Any]:
     _BACKFILL_CHECKED.discard(user_id)
     # item 1: every tester session of this persona restarts from the new seed state
     prefix = user_id + SESSION_KEY_SEP
-    for k in [k for k in _PROFILES if k.startswith(prefix)]:
-        _PROFILES.pop(k, None)
-        _REVS.pop(k, None)
-        _BACKFILL_CHECKED.discard(k)
+    for k in [k for k in list(_PROFILES) if k.startswith(prefix)]:
+        _forget(k)
     if store.use_db_profiles():
         store.delete_session_profiles(user_id)
-        _REVS[user_id] = store.save_profile(user_id, p)
+        _remember_saved(user_id, store.save_profile(user_id, p))
     else:
         _REVS.pop(user_id, None)
+        _STAMPS.pop(user_id, None)
     return p
 
 
-def _save(user_id: str) -> None:
+def _save(user_id: str, p: Optional[dict[str, Any]] = None) -> None:
+    """Persist one profile. ``p``: the copy the caller changed — saved even if the LRU (item 9)
+    evicted that key from the cache meanwhile (another thread), so no progress is ever lost."""
     from welora import academy_store as store
 
-    if store.use_db_profiles() and user_id in _PROFILES:
-        _REVS[user_id] = store.save_profile(user_id, _PROFILES[user_id])
+    prof = p if p is not None else _PROFILES.get(user_id)
+    if store.use_db_profiles() and prof is not None:
+        if p is not None and user_id not in _PROFILES:
+            _PROFILES[user_id] = p
+        _remember_saved(user_id, store.save_profile(user_id, prof))
 
 
 def profile_snapshot(user_id: str) -> dict[str, Any]:
@@ -1110,6 +1196,8 @@ def get_tree(user_id: str, *, key: Optional[str] = None) -> dict[str, Any]:
         "title": MODULE_TITLE,
         "threshold": KUAT_PASS_THRESHOLD,
         "pass_rule": PASS_RULE_VI,  # item 6: the header copy comes from the real rule
+        # follow-up #244/#245 item 13: «reset tiến độ demo của tôi» is offered only to a demo session
+        "demo_session": is_session_key(key or user_id),
         "xp": p["xp"],
         "badges": list(p["badges"]),
         "nodes": nodes,
@@ -1206,7 +1294,7 @@ def mark_read(user_id: str, node_id: str, *, key: Optional[str] = None) -> dict[
         st["status"] = STATUS_KUAT_PENDING
         if st["mastery_level"] == "not_started":
             st["mastery_level"] = "learning"
-    _save(key)
+    _save(key, p)
     return {"ok": True, "xp": p["xp"], "status": st["status"], "awarded_xp": False}
 
 
@@ -1289,7 +1377,7 @@ def _apply_result(user_id: str, node_id: str, passed: bool, *, key: Optional[str
         st["mastery_level"] = "familiar"
         st["last_kuat"] = attempt
         _refresh_locks(p)
-    _save(key)
+    _save(key, p)
     return {
         "kuat_result": {  # pass / fail only (round 2): no score / count / percent
             "passed": passed,
@@ -1466,9 +1554,84 @@ def cooldown_payload(e: Any, node_id: Optional[str] = None) -> dict[str, Any]:
 def lesson_href(node_id: str) -> str:
     """Follow-up item 2: the «ôn lại bài» link of a KUAT notice opens the lesson IN the Academy
     (/app/academy?node=…), which follows the Academy guest gate (open to device guests only while
-    WELORA_GUEST_DEMO is on; login required otherwise) — not /app/content (Welorapedia), which
-    always needs a login."""
+    WELORA_GUEST_DEMO is on; login required otherwise). The page keeps the address in sync with
+    history.pushState (follow-up #244/#245 item 11)."""
     return "/app/academy?node=" + node_id
+
+
+# --- follow-up #244/#245 item 13: «reset tiến độ demo của tôi» -----------------------------------
+DEMO_RESET_ONLY_MSG_VI = "Chỉ phiên dùng thử tài khoản demo mới đặt lại được tiến độ."
+DEMO_RESET_OK_MSG_VI = "Đã đặt lại tiến độ học của phiên demo này về trạng thái ban đầu."
+
+
+def reset_demo_session(user_id: str, *, ip: Optional[str] = None, session: Optional[str] = None) -> Optional[dict]:
+    """Back to the persona's demo seed for THIS login session only (drops its session profile; other
+    testers, the persona's own profile and its shared gate mastery are untouched; the KUAT start /
+    fail budgets are NOT reset — they are per persona + network). None when the caller is not a
+    demo session (regular account, WELORA_GUEST_DEMO off)."""
+    from welora import academy_store as store
+
+    key = profile_key(user_id, session=session, ip=ip)
+    if not is_session_key(key):
+        return None
+    if store.use_db_profiles():
+        store.delete_profile(key)
+    _forget(key)
+    return get_tree(user_id, key=key)
+
+
+def service_reset_demo(user_id: str, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:
+    if not user_id:
+        return 400, {"error": "user_id is required"}
+    tree = reset_demo_session(user_id, ip=ip, session=session)
+    if tree is None:
+        return 403, {"error_code": "DEMO_RESET_NOT_ALLOWED", "message": DEMO_RESET_ONLY_MSG_VI}
+    return 200, {"ok": True, "message": DEMO_RESET_OK_MSG_VI, "tree": tree}
+
+
+# --- follow-up #244/#245 item 14: Safety Gate + mastery per demo session --------------------------
+# A demo tester's gate follows THEIR session: passing N02-02 in the session opens the mastery part of
+# the Safety Gate (and everything that reads it: /safety-gate, mastery, Health Score, the Pre-Rule
+# context) for that session only. The persona's shared gate mastery (user_flags) is never written by
+# a session (item 1) and every other tester keeps seeing their own state. Only RAISES the shared
+# state (a failed retake never closes a gate, same as for regular accounts). The request's login
+# session comes from REQUEST_SESSION (set per request by the API middleware: bearer token + client
+# IP); regular accounts / WELORA_GUEST_DEMO=0 → no change at all.
+import contextvars as _contextvars
+
+REQUEST_SESSION: "_contextvars.ContextVar[Optional[tuple[str, str]]]" = _contextvars.ContextVar(
+    "welora_academy_request_session", default=None)
+
+
+def session_gate_mastery(user_id: str) -> Optional[str]:
+    """"apply" when the CURRENT request is a demo login session of ``user_id`` whose session profile
+    has the gate node mastered, else None."""
+    from welora.auth import guest_demo_enabled, resolve_token
+
+    ctx = REQUEST_SESSION.get()
+    if not ctx or not user_id or not guest_demo_enabled():
+        return None
+    token, ip = ctx
+    if not token or resolve_token(token) != user_id:
+        return None
+    key = profile_key(user_id, session=token, ip=ip)
+    if not is_session_key(key):
+        return None
+    p = _profile(key)
+    return "apply" if p["nodes"][GATE_NODE].get("status") == STATUS_MASTERED else None
+
+
+def overlay_session_mastery(user_id: str, state: str) -> str:
+    """Shared gate mastery ``state`` → the one this request's demo session sees (item 14)."""
+    from welora.mastery import _RANK
+
+    try:
+        sess = session_gate_mastery(user_id)
+    except Exception:  # never breaks a gate read
+        return state
+    if sess and _RANK.get(sess, 0) > _RANK.get(str(state or "not_started"), 0):
+        return sess
+    return state
 
 
 def service_get_tree(user_id: str, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:

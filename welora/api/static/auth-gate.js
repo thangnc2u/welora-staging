@@ -22,7 +22,10 @@
      is on). Production (WELORA_GUEST_DEMO=0): no marker → login required (and the Academy APIs
      refuse device guests server-side). */
   function guestAcademy() {
-    if (path !== "/app/academy" && path !== "/app/learn") return false;
+    /* follow-up item 3: /app/learn (Academy alias); follow-up #244/#245 item 12: Welorapedia
+       (/app/content, /app/content/…) — the lesson's Welorapedia links — same marker, same rule */
+    if (path !== "/app/academy" && path !== "/app/learn" && path !== "/app/content" &&
+        path.indexOf("/app/content/") !== 0) return false;
     try {
       var m = document.querySelector('meta[name="welora-guest-academy"]');
       return !!(m && m.getAttribute("content") === "1");

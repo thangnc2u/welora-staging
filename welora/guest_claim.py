@@ -45,7 +45,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from welora import auth as auth_svc
-from welora.db.connection import ambient_transaction, get_connection
+from welora.db.connection import ambient_transaction, get_connection, lock_user
 
 log = logging.getLogger("welora.guest_claim")
 
@@ -155,8 +155,10 @@ def claim_guest_data(account_uid: str, guest_token: str) -> dict[str, Any]:
         conn.close()
 
     with ambient_transaction() as tx:
-        # lock order: account row, then guest row (a guest is never an account → no cycles)
-        tx.execute("UPDATE users SET updated_at=updated_at WHERE user_id=?", (account_uid,))
+        # lock order: account (per-user lock — follow-up item 8: PG advisory xact lock / SQLite
+        # BEGIN IMMEDIATE, welora.db.connection.lock_user), then the guest row (a guest is never an
+        # account → no cycles)
+        lock_user(tx, account_uid)
         cur = tx.execute(
             "UPDATE users SET claimed_by_user_id=?, claimed_at=?, device_id=NULL "
             "WHERE user_id=? AND claimed_by_user_id IS NULL",

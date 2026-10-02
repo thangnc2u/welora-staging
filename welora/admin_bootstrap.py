@@ -28,8 +28,6 @@ founder's address first. So admin is granted only on proof of mailbox ownership:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -111,6 +109,11 @@ def _admin_otp_proven(conn: Any, uid: str, email: str) -> bool:
     ).fetchone() is not None
 
 
+def _row_get(conn: Any, uid: str, col: str) -> Any:
+    r = conn.execute(f"SELECT {col} FROM users WHERE user_id=?", (uid,)).fetchone()
+    return r[col] if r else None
+
+
 def sync_role(conn: Any, row: Any, *, via: str, keep_token: Optional[str] = None) -> str:
     """Apply WELORA_ADMIN_EMAILS to one user row; returns the resulting role. Caller commits."""
     uid = row["user_id"]
@@ -125,7 +128,11 @@ def sync_role(conn: Any, row: Any, *, via: str, keep_token: Optional[str] = None
     if verified and is_listed(email):
         if role in admins:
             return role
-        conn.execute("UPDATE users SET role=? WHERE user_id=?", (ADMIN_ROLE, uid))
+        # follow-up item 5: a password set on this row BEFORE the promotion (e.g. someone registered
+        # the listed address first) is cleared — admin signs in by e-mail OTP (+ TOTP) only, and no
+        # old secret of the pre-registered account survives the promotion.
+        had_pw = bool(str(_row_get(conn, uid, "password_hash") or "").strip())
+        conn.execute("UPDATE users SET role=?, password_hash=NULL WHERE user_id=?", (ADMIN_ROLE, uid))
         # any pre-existing session (password / device / phone OTP) must not inherit admin
         if keep_token:
             cur = conn.execute(
@@ -135,6 +142,7 @@ def sync_role(conn: Any, row: Any, *, via: str, keep_token: Optional[str] = None
             cur = conn.execute("UPDATE auth_tokens SET revoked=1 WHERE user_id=? AND revoked=0", (uid,))
         audit(conn, user_id=uid, action="admin_role_granted", detail={
             "via": via, "email": _mask(email), "prev_role": role, "revoked_sessions": int(cur.rowcount or 0),
+            "password_cleared": had_pw,
         })
         return ADMIN_ROLE
     if role in admins:
@@ -186,8 +194,21 @@ def startup_sync(url: Optional[str] = None) -> dict[str, int]:
 # ---------------------------------------------------------------------------
 
 
+_OTP_DOMAIN = "welora-email-otp"
+
+
 def _code_hash(challenge_id: str, code: str) -> str:
-    return hashlib.sha256(f"welora-email-otp:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+    """HMAC with the server key (``hmac256:``, welora.otp_hash — follow-up item 3)."""
+    from welora import otp_hash
+
+    return otp_hash.code_hash(_OTP_DOMAIN, challenge_id, code)
+
+
+def _code_matches(challenge_id: str, stored: str, code: str) -> bool:
+    """Current ``hmac256:`` rows + the bare sha256 hex stored before the HMAC deploy (until expiry)."""
+    from welora import otp_hash
+
+    return otp_hash.matches(_OTP_DOMAIN, challenge_id, stored, code, legacy_bare_hex=True)
 
 
 def request_email_otp(email: str, *, now: Optional[float] = None, url: Optional[str] = None) -> dict[str, Any]:
@@ -242,9 +263,13 @@ def verify_email_otp(challenge_id: str, code: str, *, now: Optional[float] = Non
         ch = conn.execute("SELECT * FROM email_otp_challenges WHERE challenge_id=?", (cid,)).fetchone()
         if not ch or ch["consumed"] or int(ch["attempts"] or 0) >= OTP_MAX_ATTEMPTS or t > _ts(ch["expires_at"]):
             raise bad
-        if len(c) != 6 or not hmac.compare_digest(_code_hash(cid, c), ch["code_hash"]):
-            conn.execute("UPDATE email_otp_challenges SET attempts=attempts+1 WHERE challenge_id=?", (cid,))
-            conn.commit()
+        # reserve one attempt atomically before the check (same pattern as /auth/otp/verify, item 4)
+        cur = conn.execute("UPDATE email_otp_challenges SET attempts=attempts+1 WHERE challenge_id=? "
+                           "AND consumed=0 AND attempts<?", (cid, OTP_MAX_ATTEMPTS))
+        conn.commit()
+        if int(cur.rowcount or 0) != 1:
+            raise bad
+        if len(c) != 6 or not _code_matches(cid, str(ch["code_hash"] or ""), c):
             raise bad
         cur = conn.execute("UPDATE email_otp_challenges SET consumed=1 WHERE challenge_id=? AND consumed=0", (cid,))
         if (cur.rowcount or 0) != 1:

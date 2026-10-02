@@ -87,6 +87,10 @@ services:
       # startup seed (also never runs when WELORA_ENV=production). POST /auth/demo/seed is admin+2FA
       # only and 404 in production; /app/login reads GET /auth/demo/accounts and never seeds.
       # WELORA_DEBUG_PRERULE is no longer read: /app/pre-rule is a regular (login-gated) page.
+      # Academy (optional): WELORA_KUAT_NONGATE_USER_MAX_STARTS (120) new non-gate KUAT attempts per
+      # account per WELORA_KUAT_NONGATE_IP_START_WINDOW_S (3600 s); WELORA_KUAT_NONGATE_IP_MAX_STARTS (300)
+      # per network now counts only accounts without a verified contact (guests, register-only, demo).
+      # While WELORA_GUEST_DEMO is on, demo personas P1–P6 keep Academy progress per login session.
       - key: WELORA_LLM_PROVIDER
         value: xai
       - key: WELORA_CONTENT_ROOT

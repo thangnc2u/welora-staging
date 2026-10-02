@@ -782,6 +782,7 @@ def create_app() -> FastAPI:
     @app.get("/app/academy", include_in_schema=False)
     @app.get("/app/academy/", include_in_schema=False)
     @app.get("/app/learn", include_in_schema=False)
+    @app.get("/app/learn/", include_in_schema=False)
     def academy_ui() -> HTMLResponse:
         return _serve_academy_html(static_dir)
 
@@ -1214,9 +1215,12 @@ def create_app() -> FastAPI:
         return uid
 
     @app.get("/academy/tree", tags=["academy"])
-    def academy_tree(user_id: Optional[str] = Query(None), authorization: Optional[str] = Header(None)) -> dict:
+    def academy_tree(request: Request, user_id: Optional[str] = Query(None),
+                     authorization: Optional[str] = Header(None)) -> dict:
         uid = _academy_owner(authorization, user_id)
-        return _respond(*academy_svc.service_get_tree(uid))
+        # follow-up item 1: a demo persona's progress is per login session (bearer token hash)
+        return _respond(*academy_svc.service_get_tree(uid, ip=_kuat_ip(request),
+                                                      session=_bearer_token(authorization)))
 
     def _kuat_ip(request: Request) -> str:
         from welora import auth_ratelimit as rl
@@ -1238,12 +1242,14 @@ def create_app() -> FastAPI:
                                                       session=_bearer_token(authorization)))
 
     @app.post("/academy/nodes/{node_id}/read", tags=["academy"])
-    def academy_read(node_id: str, body: AcademyReadBody, authorization: Optional[str] = Header(None)) -> dict:
+    def academy_read(node_id: str, body: AcademyReadBody, request: Request,
+                     authorization: Optional[str] = Header(None)) -> dict:
         uid = _academy_owner(authorization, body.user_id)
         payload = body.model_dump()
         payload["user_id"] = uid
         payload["node_id"] = node_id or payload.get("node_id")
-        return _respond(*academy_svc.service_mark_read(payload))
+        return _respond(*academy_svc.service_mark_read(payload, ip=_kuat_ip(request),
+                                                       session=_bearer_token(authorization)))
 
     @app.post("/academy/kuat/start", tags=["academy"])
     def academy_kuat_start(body: AcademyKuatStartBody, request: Request,

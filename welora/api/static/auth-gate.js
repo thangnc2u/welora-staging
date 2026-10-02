@@ -3,7 +3,8 @@
    P0 follow-up (Founder): guests may onboard before logging in — /app/onboarding is exempt and
    runs on the in-memory /auth/device guest token (session.js); no token is written here.
    Follow-up 2: /app/onboarding/result (guest result + "đăng ký để lưu") is exempt as well.
-   Migration-019 ticket: /app/academy is exempt only when the server marks it (WELORA_GUEST_DEMO on). */
+   Migration-019 ticket: /app/academy is exempt only when the server marks it (WELORA_GUEST_DEMO on).
+   Follow-up item 3: /app/learn (the Academy alias, same page) follows the same rule. */
 (function () {
   var path = (location.pathname || "").replace(/\/+$/, "") || "/app";
   var allow = {
@@ -21,7 +22,7 @@
      is on). Production (WELORA_GUEST_DEMO=0): no marker → login required (and the Academy APIs
      refuse device guests server-side). */
   function guestAcademy() {
-    if (path !== "/app/academy") return false;
+    if (path !== "/app/academy" && path !== "/app/learn") return false;
     try {
       var m = document.querySelector('meta[name="welora-guest-academy"]');
       return !!(m && m.getAttribute("content") === "1");

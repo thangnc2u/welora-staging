@@ -25,7 +25,7 @@
   /* migration-019 ticket item 5: /app/academy for guests only when the server marked the page
      (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
   var _guestAcademy = false;
-  if (path === "/app/academy") {
+  if (path === "/app/academy" || path === "/app/learn") {  /* follow-up item 3: /app/learn = Academy alias */
     try {
       var _gm = document.querySelector('meta[name="welora-guest-academy"]');
       _guestAcademy = !!(_gm && _gm.getAttribute("content") === "1");

@@ -40,7 +40,8 @@ label{display:block;margin:4px 0;color:var(--text-primary,#F4F1E8)}
 <body>
 <p><a id="navHome" href="/app">← Welora</a></p>
 <h1>Welorademy</h1>
-<p class="muted">Rễ Cục · An Toàn Tài Chính · Tự Do Tài Chính · Bền Vững & Di Sản · Kết Nối & Thực Hành · KUAT ≥ 70% · Học viện</p>
+<p class="muted">Rễ Cục · An Toàn Tài Chính · Tự Do Tài Chính · Bền Vững & Di Sản · Kết Nối & Thực Hành · Học viện</p>
+<p class="muted" id="kuatRule">KUAT: kết quả chỉ là ĐẠT / CHƯA ĐẠT. Đạt khi đúng từ 70% số câu trở lên và đúng mọi câu trọng tâm.</p>
 <p class="muted" id="xpLine">XP —</p>
 <p class="muted" id="focusLine"></p>
 <a id="osNudge" class="btn-primary" href="/app/goals" hidden>Tạo mục tiêu trên WeloraOS</a>
@@ -69,6 +70,8 @@ let current=null;
 const params=new URLSearchParams(location.search);
 // deep-link support: /app/academy?from=pedia&key=
 const fromPedia=params.get('from')==='pedia';
+// follow-up item 2: /app/academy?node=N02-01 opens that lesson (link of the KUAT 429 notice)
+const deepNode=(function(v){ v=String(v||'').toUpperCase(); return /^N0[1-5]-0[1-9]$/.test(v)?v:''; })(params.get('node'));
 const focusKey=(params.get('key')||params.get('principle_key')||'').toUpperCase();
 function statusVi(s){
   return s==='locked'?'khóa':s==='available'?'học':s==='learning'?'học':s==='kuat_pending'?'KUAT':s==='mastered'?'đã thành thạo':(s||'');
@@ -129,7 +132,14 @@ function renderNodeCard(n, box){
   }
   box.appendChild(el);
 }
+function setRule(data){
+  /* follow-up item 6: the KUAT line follows the server's pass rule (pass / fail only, no percent shown) */
+  if(data&&typeof data.pass_rule==='string'&&data.pass_rule){
+    document.getElementById('kuatRule').textContent='KUAT: kết quả chỉ là ĐẠT / CHƯA ĐẠT. '+data.pass_rule;
+  }
+}
 function showTree(data){
+  setRule(data);
   document.getElementById('lesson').hidden=true;
   document.getElementById('tree').hidden=false;
   const box=document.getElementById('tree');
@@ -172,6 +182,7 @@ async function loadTree(){
   const r=await fetch('/academy/tree?user_id='+encodeURIComponent(uid));
   const d=await r.json();
   showTree(d);
+  return d;
 }
 
 function stripFrontmatter(md){
@@ -330,10 +341,19 @@ function showCooldown(out, c){
   out.className='err';
   out.textContent=cooldownText(c);
   const href=String((c&&c.lesson_href)||'');
-  if(href.indexOf('/app/')===0){  /* same-origin app link only */
+  if(href.indexOf('/app/')===0&&href.charAt(5)!=='/'&&href.indexOf('\\')<0){  /* same-origin app link only */
     const a=document.createElement('a');
     a.href=href;
     a.textContent='Ôn lại bài'+((c&&c.lesson_title)?(': '+c.lesson_title):'');
+    /* item 2: already on this lesson → scroll to its text instead of reloading the page */
+    a.addEventListener('click',function(ev){
+      const m=href.match(/[?&]node=([A-Za-z0-9-]+)/);
+      if(m&&current&&String(current.node_id||'').toUpperCase()===m[1].toUpperCase()){
+        ev.preventDefault();
+        const b=document.getElementById('lessonBody');
+        if(b&&b.scrollIntoView) b.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+    });
     out.appendChild(document.createTextNode(' '));
     out.appendChild(a);
   }
@@ -472,7 +492,11 @@ document.getElementById('backTree').onclick=(e)=>{e.preventDefault();loadTree();
     const a=await auth.json();
     uid=a.user_id||'';
   }
-  await loadTree();
+  const tree=await loadTree();
+  if(deepNode){
+    const hit=((tree&&tree.nodes)||[]).find(function(n){ return n.node_id===deepNode; });
+    if(hit&&hit.status!=='locked') await openNode(deepNode);
+  }
 })();
 </script>
 <script src="/static/shell.js" data-shell-tab="academy"></script>

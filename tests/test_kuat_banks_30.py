@@ -30,8 +30,14 @@ FORBIDDEN = r"(?i)^không,\s*trừ khi|chắc lời|cam kết lãi"
 BANKS_30 = tuple([f"N01-0{i}" for i in range(2, 8)] + [f"N02-0{i}" for i in range(3, 8)]
                  + [f"N03-0{i}" for i in range(2, 8)] + [f"N04-0{i}" for i in range(2, 8)]
                  + [f"N05-0{i}" for i in range(1, 8)])
-# Lessons served as a short stub today (content follow-up): questions apply the stub's rules.
-STUB_LESSONS = {"N01-06", "N02-03", "N02-04", "N02-05", "N02-06", "N02-07", "N04-05"}
+# Follow-up #246/#247 item 1: these 7 banks are now the Founder-approved v1.1 text, entered verbatim
+# (tests/test_founder_v11_lessons.py checks prompt / options / answer / core against the source and the
+# A–D spread). The authoring bars below that only rewording could meet — length rank 3/3/3/3 without
+# ties, no answer-marking opening word, phrase grounding against the old stub, length / opening-word
+# guessing ≤ 2 % — are NOT applied to them (wording may not be edited; reported to the Founder). Shape,
+# ids, 6 core, draw / served_valid and random guessing ≤ 2 % still apply to all 30.
+FOUNDER_V11 = set(academy.FOUNDER_V11_NODES)
+AUTHORED = tuple(n for n in BANKS_30 if n not in FOUNDER_V11)
 
 
 def run(name: str, env: dict, timeout: int = 600) -> dict:
@@ -115,20 +121,6 @@ GROUNDING = {
         "chu kỳ dài",
         "không khuyến nghị một app hay phương pháp duy nhất",
     ],
-    "N01-06": [
-        "mục tiêu cần số tiền, thời hạn, lý do",
-        "thời hạn, lý do",
-        "đủ quỹ 3 tháng chi thiết yếu trong 12 tháng",
-        "quỹ → nợ nguy hiểm → tầng dài hạn",
-        "không đặt mục tiêu theo lời hứa lợi suất cố định",
-        "ưu tiên ít mục tiêu",
-        "đo hàng tháng",
-        "cảm xúc không thay nguyên tắc",
-        "quỹ → nợ nguy hiểm",
-        "nợ nguy hiểm",
-        "tầng dài hạn",
-        "trong 12 tháng",
-    ],
     "N01-07": [
         "tiền lãi phát sinh được cộng dồn vào gốc",
         "có giá trị hơn cùng một khoản tiền đó trong tương lai",
@@ -142,76 +134,6 @@ GROUNDING = {
         "không có khoản đầu tư nào đảm bảo",
         "không đồng nghĩa với việc nên chấp nhận rủi ro cao",
         "nợ lãi suất cao trở nên nặng nhanh chóng",
-    ],
-    "N02-03": [
-        "thanh khoản cao và tách biệt",
-        "tài khoản riêng, dễ rút vài ngày",
-        "không lẫn chi tiêu hàng ngày",
-        "không nằm trong danh mục đầu tư",
-        "ưu tiên an toàn và sẵn sàng dùng",
-        "vàng khó bán",
-        "kỳ hạn dài",
-        "không dùng quỹ để tìm lợi suất",
-        "crypto",
-        "thanh khoản cao",
-        "tách biệt",
-        "sẵn sàng dùng",
-    ],
-    "N02-04": [
-        "trả món nhỏ trước",
-        "giảm chi phí lãi",
-        "dễ giữ thói quen",
-        "không có cách nào đúng mọi người",
-        "theo dõi đều",
-        "không vay mới để đảo nợ nếu chưa rõ khả năng trả",
-        "không phá quỹ 3 tháng để đóng nợ không khẩn",
-        "dễ giữ thói quen",
-        "trả món lãi cao trước",
-        "đảo nợ",
-        "theo dõi đều",
-        "không phá quỹ 3 tháng",
-    ],
-    "N02-05": [
-        "lãi cao, kỳ hạn ngắn",
-        "thẻ quay vòng, vay nóng, vay để đầu tư",
-        "xem khả năng trả, không quyết theo cảm xúc",
-        "không vay thêm để đầu tư khi cổng an toàn chưa đạt",
-        "ưu tiên giảm nợ nguy hiểm",
-        "vay nóng",
-        "thẻ quay vòng",
-        "không quyết theo cảm xúc",
-        "dùng để tiêu dùng hoặc đầu cơ",
-        "lãi cao",
-        "kỳ hạn ngắn",
-        "cổng an toàn chưa đạt",
-    ],
-    "N02-06": [
-        "liệt kê đủ các khoản",
-        "chuyển toàn bộ phần trả thêm sang khoản tiếp theo",
-        "snowball hoặc avalanche",
-        "luôn trả đủ mọi khoản tối thiểu trước",
-        "xác định số tiền trả thêm ngoài mức tối thiểu",
-        "theo dõi và điều chỉnh định kỳ",
-        "không phá quỹ khẩn cấp 3 tháng",
-        "quyết định thuộc về bạn",
-        "agent chỉ giữ hàng rào an toàn",
-        "không vay mới để đảo nợ",
-        "không dùng quỹ để đầu tư",
-        "theo 5 bước",
-    ],
-    "N02-07": [
-        "quỹ 3 tháng → xử nợ nguy hiểm → đầu tư",
-        "đầu tư bằng tiền thừa ngoài quỹ và ngoài trả nợ",
-        "xử nợ nguy hiểm",
-        "không vay để đầu tư",
-        "không cam kết lợi suất cố định",
-        "không phá quỹ khẩn",
-        "quyết định thuộc về bạn",
-        "agent chỉ giữ hàng rào",
-        "quỹ 3 tháng",
-        "xử nợ nguy hiểm",
-        "đầu tư bằng tiền thừa",
-        "không cam kết lợi suất cố định",
     ],
     "N03-02": [
         "bỏ tiền vào túi bạn",
@@ -338,20 +260,6 @@ GROUNDING = {
         "gây lo âu không cần thiết",
         "không có một độ tuổi hay một cách dạy duy nhất đúng",
         "heo đất / lọ tiết kiệm đơn giản cho mục tiêu ngắn",
-    ],
-    "N04-05": [
-        "liệt kê tài sản & nghĩa vụ",
-        "trước khi cần đến",
-        "di chúc / thỏa thuận gia đình",
-        "danh sách tài khoản + giấy tờ quan trọng",
-        "ở nơi người tin cậy biết",
-        "cập nhật khi có thay đổi lớn",
-        "đây không phải tư vấn pháp lý",
-        "gặp luật sư / công chứng",
-        "quyết định thuộc về bạn",
-        "agent chỉ giữ nguyên lý an toàn",
-        "ghi rõ người thụ hưởng",
-        "tài sản & nghĩa vụ",
     ],
     "N04-06": [
         "không nhất thiết đo bằng tiền",
@@ -514,7 +422,7 @@ class TestBanksShape(unittest.TestCase):
         self.assertFalse({i for i in ids if re.fullmatch(r"q\d{3}[a-z]", i)})
 
     def test_answer_length_rank_balanced(self):
-        for nid in BANKS_30:
+        for nid in AUTHORED:
             ranks = []
             for q in academy.QUESTIONS[nid]:
                 lens = [len(c) for c in q["choices"]]
@@ -523,16 +431,16 @@ class TestBanksShape(unittest.TestCase):
             self.assertEqual([ranks.count(r) for r in range(4)], [3, 3, 3, 3], nid)
 
     def test_no_opening_marks_the_answer(self):
-        for nid in BANKS_30:
+        for nid in AUTHORED:
             right = Counter(sorted(_openings(q["choices"][q["answer"]]), key=len)[0] for q in academy.QUESTIONS[nid])
             self.assertLessEqual(max(right.values()), 1, (nid, right.most_common(3)))
 
     def test_answers_grounded_in_the_served_lesson(self):
-        self.assertEqual(set(GROUNDING), set(BANKS_30))
+        self.assertEqual(set(GROUNDING), set(AUTHORED))
         for nid in BANKS_30:
+            self.assertGreater(len(_body(nid)), 1500, nid)  # the 7 former stubs now serve full lessons
+        for nid in AUTHORED:
             body = _body(nid)
-            if nid not in STUB_LESSONS:
-                self.assertGreater(len(body), 1500, nid)
             self.assertEqual(len(GROUNDING[nid]), 12, nid)
             for phrase in GROUNDING[nid]:
                 self.assertIn(phrase, body, (nid, phrase))
@@ -561,7 +469,7 @@ class TestBanksShape(unittest.TestCase):
 
 class TestBanksMonteCarlo(unittest.TestCase):
     """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % over the real
-    draw / shuffle / grader, for every one of the 30 banks."""
+    draw / shuffle / grader, for every authored bank; random guessing for all 30 (FOUNDER_V11 above)."""
 
     TRIALS = 3000
 
@@ -587,7 +495,7 @@ class TestBanksMonteCarlo(unittest.TestCase):
 
         rng = random.Random(2446)
         for node in BANKS_30:
-            for s in ("longest", "shortest", "middle", "random"):
+            for s in ("longest", "shortest", "middle", "random") if node in AUTHORED else ("random",):
                 rate = self._rate(node, by_len(s), rng)
                 self.assertLessEqual(rate, 0.02, (node, s, rate))
 
@@ -600,7 +508,7 @@ class TestBanksMonteCarlo(unittest.TestCase):
         def avoid(ps):
             return lambda shown, r: r.choice([i for i, x in enumerate(shown) if not (_openings(x) & ps)] or list(range(4)))
 
-        for node in BANKS_30:
+        for node in AUTHORED:
             total, wrong = Counter(), Counter()
             for q in academy.QUESTIONS[node]:
                 for i, c in enumerate(q["choices"]):

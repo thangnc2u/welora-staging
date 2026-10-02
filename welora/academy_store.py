@@ -26,9 +26,11 @@
     - gate nodes, accounts that are not "verified" (device guests, register-only accounts, demo
       personas): per client IP and per gate node over 24 h (shared by all of them), plus per guest
       device id and gate node;
-    - non-gate nodes (migration 019 ticket, item 3): NEW attempts per client network over
-      WELORA_KUAT_NONGATE_IP_START_WINDOW_S, all accounts together — so throwaway accounts cannot
-      bloat the attempt table. Gate nodes never count against it (their budgets are unchanged).
+    - non-gate nodes (migration 019 ticket, item 3; follow-up item 4): NEW attempts over
+      WELORA_KUAT_NONGATE_IP_START_WINDOW_S per account (every account) and per client network
+      counting only the accounts without a verified contact — so throwaway accounts cannot bloat the
+      attempt table while verified learners behind one NAT / CGNAT address are never blocked as a
+      whole network. Gate nodes never count against them (their budgets are unchanged).
   "Guest" for these budgets (round 3) = every account WITHOUT a verified contact — device-only
   visitors AND registered accounts that never completed an OTP (see ``_identity`` /
   ``auth.has_verified_contact``). Demo personas P1–P6 (round 4: public password) are identified by
@@ -51,7 +53,10 @@ Env (all optional; a value ≤ 0 disables that limit):
   WELORA_KUAT_IP6_DAY_PREFIX (56) IPv6 prefix length of the 24 h network buckets (48–64; 64 = as the short windows)
   WELORA_KUAT_MAX_STARTS (30) NEW attempts issued per user+node per WELORA_KUAT_COOLDOWN_S
   WELORA_KUAT_NONGATE_IP_MAX_STARTS (300) NEW attempts on non-gate nodes per client network (IPv4
-      address / IPv6 /WELORA_KUAT_IP6_DAY_PREFIX), any account, per WELORA_KUAT_NONGATE_IP_START_WINDOW_S (3600 s)
+      address / IPv6 /WELORA_KUAT_IP6_DAY_PREFIX) by accounts WITHOUT a verified contact (guests,
+      register-only accounts, demo personas), per WELORA_KUAT_NONGATE_IP_START_WINDOW_S (3600 s)
+  WELORA_KUAT_NONGATE_USER_MAX_STARTS (120) NEW attempts on non-gate nodes per account (all non-gate
+      nodes together; demo personas per persona + network) per WELORA_KUAT_NONGATE_IP_START_WINDOW_S
   WELORA_KUAT_ATTEMPT_TTL_S (1800) lifetime of an issued attempt
 """
 
@@ -145,6 +150,10 @@ def nongate_ip_max_starts() -> int:
     return _env_int("WELORA_KUAT_NONGATE_IP_MAX_STARTS", 300)
 
 
+def nongate_user_max_starts() -> int:
+    return _env_int("WELORA_KUAT_NONGATE_USER_MAX_STARTS", 120)
+
+
 def nongate_ip_start_window_s() -> int:
     return max(60, _env_int("WELORA_KUAT_NONGATE_IP_START_WINDOW_S", 3600))
 
@@ -163,7 +172,7 @@ class KuatCooldown(Exception):
     def __init__(self, retry_after: float, reason: str):
         super().__init__(reason)
         self.retry_after = max(1, int(retry_after + 0.999))
-        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | demo_ip | device | unverified_device | starts | ip_starts
+        self.reason = reason  # fails | daily | ip | ip_day | guest_ip | unverified_ip | demo_ip | device | unverified_device | starts | ip_starts | user_starts
 
 
 def _ts(iso: str) -> float:
@@ -238,6 +247,27 @@ def save_profile_if_rev(user_id: str, profile: dict, expected_rev: Optional[int]
         r = conn.execute("SELECT rev FROM academy_profiles WHERE user_id=?", (user_id,)).fetchone()
         conn.commit()
         return int(r["rev"])
+    finally:
+        conn.close()
+
+
+SESSION_PROFILE_TTL_S = 30 * DAY_S
+
+
+def delete_session_profiles(user_id: str, *, now: Optional[float] = None) -> int:
+    """Follow-up item 1: drop the per-login-session Academy profiles of a demo persona (keys
+    ``<user_id>#<scope>``, see academy.profile_key) — every tester restarts from the new seed state —
+    and any session profile left untouched for 30 days. Called by the demo seed (its transaction)."""
+    t = time.time() if now is None else float(now)
+    prefix = f"{user_id}#"
+    conn = _conn()
+    try:
+        cur = conn.execute("DELETE FROM academy_profiles WHERE substr(user_id, 1, ?) = ?", (len(prefix), prefix))
+        n = int(cur.rowcount or 0)
+        conn.execute("DELETE FROM academy_profiles WHERE user_id LIKE ? AND updated_at < ?",
+                     ("%#%", _iso(t - SESSION_PROFILE_TTL_S)))
+        conn.commit()
+        return n
     finally:
         conn.close()
 
@@ -324,7 +354,7 @@ def _keys(conn, user_id: str, node_id: str, ip: Optional[str]) -> tuple[list[tup
 
 _REASON = {"kuat_user_node": "fails", "kuat_user_node_day": "daily", "kuat_ip": "ip", "kuat_ip_day": "ip_day",
            "kuat_guest_ip": "guest_ip", "kuat_guest_device": "device", "kuat_start": "starts",
-           "kuat_nongate_ip_start": "ip_starts"}
+           "kuat_nongate_ip_start": "ip_starts", "kuat_nongate_user_start": "user_starts"}
 _KIND_REASON = {UNVERIFIED: {"guest_ip": "unverified_ip", "device": "unverified_device"},
                 DEMO: {"guest_ip": "demo_ip"}}
 
@@ -499,15 +529,31 @@ def is_device_guest(user_id: str) -> bool:
 
 
 def _start_buckets(conn, user_id: str, node_id: str, ip: Optional[str]) -> list[tuple[str, str, int, int]]:
-    """Buckets a NEW attempt counts against: per (user, node) [per (persona, node, network) for demo
-    personas] and — non-gate nodes only — per client network for all accounts (item 3)."""
+    """Buckets a NEW attempt counts against:
+
+    * every node: per (user, node) [per (persona, node, network) for demo personas];
+    * non-gate nodes (follow-up item 4 — was: per client network for ALL accounts, so one NAT /
+      CGNAT address could block every learner behind it):
+        - per ACCOUNT across all non-gate nodes (WELORA_KUAT_NONGATE_USER_MAX_STARTS; demo personas
+          per (persona, network) like their other per-user budgets) — every account, verified too;
+        - per client network, counting ONLY accounts without a verified contact (device guests,
+          register-only accounts, demo personas) — the backstop against throwaway accounts, which
+          cost nothing to create and would each get a fresh per-account budget. A verified account
+          needs an e-mail / phone OTP per account, so its per-account cap bounds it.
+    Gate nodes keep their budgets unchanged (never counted here beyond the per (user, node) one)."""
     out = []
     ipb, ipd = _ips(ip)
+    kind, _dev = _identity(conn, user_id)
     if max_starts() > 0:
-        kind, _dev = _identity(conn, user_id)
         out.append(("kuat_start", _key_hash("kuat_start", _user_scope(user_id, node_id, kind, ipb)), max_starts(),
                     cooldown_s()))
-    if not is_gate_node(node_id) and ipd and nongate_ip_max_starts() > 0:
+    if is_gate_node(node_id):
+        return out
+    if nongate_user_max_starts() > 0:
+        un = f"user:{user_id}" + (f"|ip:{ipb}" if kind == DEMO and ipb else "")
+        out.append(("kuat_nongate_user_start", _key_hash("kuat_nongate_user_start", un), nongate_user_max_starts(),
+                    nongate_ip_start_window_s()))
+    if kind != VERIFIED and ipd and nongate_ip_max_starts() > 0:
         out.append(("kuat_nongate_ip_start", _key_hash("kuat_nongate_ip_start", ipd), nongate_ip_max_starts(),
                     nongate_ip_start_window_s()))
     return out
@@ -637,6 +683,18 @@ def reopen_attempt(attempt_id: str, user_id: str, node_id: str, *, scope: str = 
             if not _is_unique_violation(e):
                 raise
             _rollback(conn)
+    finally:
+        conn.close()
+
+
+def expire_attempt(attempt_id: str, *, now: Optional[float] = None) -> None:
+    """Retire an OPEN attempt that can no longer be graded (issued from an older question bank)."""
+    t = time.time() if now is None else float(now)
+    conn = _conn()
+    try:
+        conn.execute("UPDATE academy_kuat_attempts SET used_at=?, outcome='expired' WHERE attempt_id=? "
+                     "AND used_at IS NULL", (_iso(t), str(attempt_id or "")))
+        conn.commit()
     finally:
         conn.close()
 

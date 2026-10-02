@@ -309,7 +309,7 @@ class TestGateScopeDb(unittest.TestCase):
         self.assertTrue(u["retry_at"])
         self.assertEqual(u["retry_header"], str(u["retry_after"]))
         self.assertGreater(u["retry_after"], 23 * 3600)
-        self.assertEqual(u["lesson_href"], "/app/content?key=SAFE-01")
+        self.assertEqual(u["lesson_href"], "/app/academy?node=N02-01")  # follow-up item 2 (was /app/content)
         self.assertIn("«" + u["lesson_title"] + "»", u["message"])
         self.assertIn("ôn lại bài", u["message"])
 
@@ -982,7 +982,7 @@ class TestRound4Limits(unittest.TestCase):
             self.assertIn(d["retry_at_vn"], d["message"], reason)
             self.assertIn("giờ Việt Nam", d["message"], reason)
             self.assertIn("1 giờ 30 phút", d["message"], reason)
-            self.assertEqual(d["lesson_href"], "/app/content?key=SAFE-02")
+            self.assertEqual(d["lesson_href"], "/app/academy?node=N02-02")  # follow-up item 2 (was /app/content)
             self.assertNotIn("{", d["message"])
         for reason in ("unverified_ip", "unverified_device", "demo_ip"):
             m = academy.cooldown_payload(academy_store.KuatCooldown(60, reason), "N02-01")["message"]

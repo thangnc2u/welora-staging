@@ -62,7 +62,8 @@ class TestP2AcademyM04BenVung(unittest.TestCase):
             self.assertEqual(n["prereq_node_ids"], exp[5])
             self.assertEqual(n["module_id"], "M04")
             self.assertEqual(n["module_title"], "Bền Vững & Di Sản")
-            self.assertEqual(len(QUESTIONS[n["node_id"]]), 3)
+            # follow-up item 5: the first lesson of the module has the 12-question N02 standard bank
+            self.assertEqual(len(QUESTIONS[n["node_id"]]), 12 if n["node_id"] == "N04-01" else 3)
         self.assertEqual(tuple(n["node_id"] for n in M04_NODES), M04_NODE_IDS)
         m02 = [n for n in NODES if n["module_id"] == "M02"]
         self.assertEqual(

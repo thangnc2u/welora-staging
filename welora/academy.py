@@ -494,9 +494,21 @@ def os_nudge_for(node_id: str, *, first_pass: bool = True) -> dict[str, Any] | N
 
 QUESTIONS: dict[str, list[dict[str, Any]]] = {
     "N01-01": [
-        {"id": "q101a", "prompt": "Bước đầu phù hợp để điều chỉnh tư duy về tiền?", "choices": ["Ép tiêu nhiều hơn", "Nhận diện niềm tin đang chi phối rồi đặt quy tắc", "Rút hết tiết kiệm để đầu tư mạo hiểm"], "answer": 1, "hard": True},
-        {"id": "q101b", "prompt": "Tư duy về tiền giống gì nhất?", "choices": ["Bản đồ trong đầu hướng dẫn quyết định", "Số dư tài khoản", "Lời khuyên trên mạng xã hội"], "answer": 0, "hard": False},
-        {"id": "q101c", "prompt": "Thay đổi tư duy bắt đầu từ đâu?", "choices": ["Ép buộc nghĩ tích cực", "Nhận diện rồi điều chỉnh có chủ đích"], "answer": 1, "hard": False},
+        # Follow-up item 5 — chuẩn N02 (P0b r2/r3): 12 câu × 4 lựa chọn, 6 câu trọng tâm; độ dài cân bằng (đáp án
+        # đúng dài nhất / nhì / ba / ngắn nhất đúng 3 câu mỗi loại), mở đầu đáp án đúng không lặp; mọi câu trả lời
+        # được bằng nội dung bài WA-01-01. Mỗi lượt KUAT bốc 5 câu (≥ 2 câu trọng tâm), xáo thứ tự lựa chọn.
+        {"id": "q101-01", "prompt": "Theo bài học, tư duy về tiền là gì?", "choices": ["Những lời khuyên được chia sẻ nhiều nhất trên mạng xã hội mỗi ngày", "Hệ thống niềm tin và thái độ của bạn đối với tiền bạc", "Số dư hiện có trong tài khoản ngân hàng", "Kỹ năng chọn đúng cổ phiếu sẽ tăng giá mạnh trong năm tới"], "answer": 1, "hard": False},
+        {"id": "q101-02", "prompt": "Vì sao tư duy về tiền ảnh hưởng lớn đến tài chính của gia đình?", "choices": ["Ngân hàng chỉ cho vay khi bạn có tư duy đúng", "Có tư duy tốt thì đầu tư kênh nào cũng chắc chắn có lãi, khỏi cần tìm hiểu thêm", "Nó chi phối hành vi hằng ngày, thường mạnh hơn cả kiến thức kỹ thuật", "Tư duy quyết định mức lương"], "answer": 2, "hard": False},
+        {"id": "q101-03", "prompt": "Trong ví dụ cái búa, cách nhìn tiền lành mạnh là gì?", "choices": ["Càng nhiều tiền càng tốt, dù chưa biết dùng vào việc gì", "Xem tiền là công cụ phục vụ mục tiêu sống", "Coi tiền là mục tiêu cuối cùng của đời người, quan trọng hơn mọi thứ khác", "Tránh đụng đến tiền vì nguy hiểm"], "answer": 1, "hard": True},
+        {"id": "q101-04", "prompt": "Dấu hiệu nào cho thấy một người đang có tư duy khan hiếm?", "choices": ["Lập ngân sách và xem lại mỗi tháng", "Có sẵn quỹ dự phòng", "Phân bổ tiền theo thứ tự ưu tiên đã thống nhất rõ ràng với cả gia đình từ trước", "Luôn thấy không đủ, sợ mất tiền và khó quyết định việc dài hạn"], "answer": 3, "hard": False},
+        {"id": "q101-05", "prompt": "Theo bài học, tư duy về tiền lành mạnh là kiểu tư duy nào?", "choices": ["Tiết kiệm bằng mọi giá, kể cả bỏ qua sức khỏe", "Tiêu thật nhiều để khẳng định bản thân với mọi người xung quanh", "Thực tế và có chủ đích", "Lạc quan tuyệt đối, tin rằng mọi chuyện rồi sẽ ổn"], "answer": 2, "hard": True},
+        {"id": "q101-06", "prompt": "Bài thực hành của bài học yêu cầu bạn làm gì đầu tiên?", "choices": ["Mở ngay một tài khoản chứng khoán", "Hỏi bạn bè lương bao nhiêu", "Viết ra niềm tin về tiền rồi đối chiếu với cách bạn chi, vay, tiết kiệm tháng này", "Đọc thêm mười cuốn sách làm giàu rồi mới bắt đầu"], "answer": 2, "hard": True},
+        {"id": "q101-07", "prompt": "Ai là người quyết định cuối cùng về tiền của bạn?", "choices": ["Người thu nhập cao nhất trong nhóm bạn bè", "Bạn — Agent chỉ hỗ trợ, không quyết thay", "Agent của Welora, vì máy tính toán chính xác hơn con người", "Những chuyên gia nổi tiếng nhất trên mạng xã hội"], "answer": 1, "hard": True},
+        {"id": "q101-08", "prompt": "Trước khi nhận thêm rủi ro, như đầu tư, bài học nhắc bạn cần nhìn rõ điều gì?", "choices": ["Thu nhập, chi tiêu thiết yếu và quỹ 3 tháng", "Mức lãi bạn bè khoe trong nhóm chat", "Giá vàng tuần này", "Kênh đầu tư đang được bàn tán nhiều nhất trên mạng xã hội gần đây"], "answer": 0, "hard": True},
+        {"id": "q101-09", "prompt": "Muốn thay đổi tư duy về tiền, cách nào thực tế nhất?", "choices": ["Ép bản thân nghĩ tích cực mỗi sáng", "Làm theo đúng cách tiêu tiền của một người nổi tiếng", "Đọc một bài viết là đủ", "Dành thời gian thực hành và tự nhìn lại, vì tư duy hình thành qua nhiều năm"], "answer": 3, "hard": False},
+        {"id": "q101-10", "prompt": "Hai cặp vợ chồng cùng thu nhập 40 triệu ₫/tháng. Vì sao sau 5 năm kết quả tài chính thường khác nhau rõ rệt?", "choices": ["Hoàn toàn do may mắn", "Cặp kia sống ở thành phố lớn nên chi phí cao hơn", "Lương của một cặp chắc chắn đã tăng gấp đôi", "Một cặp xem tiền là công cụ xây an toàn, cặp kia tiêu để không thua kém ai"], "answer": 3, "hard": False},
+        {"id": "q101-11", "prompt": "Ngại nói chuyện tiền bạc trong gia đình thường dẫn tới điều gì?", "choices": ["Chẳng ảnh hưởng gì, vì tiền là chuyện riêng của từng người trong nhà", "Con cái học được cách quản lý tiền", "Gia đình tự khắc tiết kiệm được nhiều tiền hơn trước", "Vợ chồng thiếu minh bạch với nhau về tiền"], "answer": 3, "hard": False},
+        {"id": "q101-12", "prompt": "Gắn nhãn «tư duy nghèo» hay «tư duy giàu» cho người khác có vấn đề gì?", "choices": ["Dễ thành phán xét và phản tác dụng", "Giúp người đó thay đổi suy nghĩ nhanh hơn hẳn", "Chẳng có vấn đề gì, nói thẳng mới là tốt", "Đó là cách chẩn đoán tâm lý chính xác, nên dùng thường xuyên"], "answer": 0, "hard": True},
     ],
     "N01-02": [
         {"id": "q102a", "prompt": "Trước khi kiếm thêm thu nhập vì 'hết tiền', nên làm gì?", "choices": ["Ngay lập tức tăng ca", "Liệt kê chi tiêu thực tế rồi so với thu nhập", "Cắt hết giải trí ngay"], "answer": 1, "hard": True},
@@ -586,9 +598,21 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q07c", "prompt": "Ai chịu trách nhiệm quyết định cuối?", "choices": ["User", "Agent quyết thay"], "answer": 0, "hard": False},
     ],
     "N03-01": [
-        {"id": "q301a", "prompt": "Tự do tài chính nên hiểu trước hết là gì?", "choices": ["Chỉ nghỉ hưu sớm và không làm gì nữa", "Tăng dần khả năng lựa chọn nhờ quan hệ lành mạnh giữa chi tiêu và tài sản", "All-in đầu tư để giàu nhanh"], "answer": 1, "hard": True},
-        {"id": "q301b", "prompt": "Mức An toàn cơ bản (biết nổi) thường gồm gì?", "choices": ["Quỹ khẩn cấp, không nợ lãi rất cao, sống trong tầm thu nhập", "Chỉ sở hữu nhiều bất động sản", "Vay nóng để đầu tư"], "answer": 0, "hard": False},
-        {"id": "q301c", "prompt": "Có bắt buộc phải là vận động viên 'bơi marathon' mới gọi là tự do tài chính?", "choices": ["Có — chỉ một định nghĩa đúng", "Không — có nhiều mức tự do"], "answer": 1, "hard": False},
+        # Follow-up item 5 — chuẩn N02 (P0b r2/r3): 12 câu × 4 lựa chọn, 6 câu trọng tâm; độ dài cân bằng (đáp án
+        # đúng dài nhất / nhì / ba / ngắn nhất đúng 3 câu mỗi loại), mở đầu đáp án đúng không lặp; mọi câu trả lời
+        # được bằng nội dung bài WP-03-01 (bài N03-01 hiển thị). Mỗi lượt KUAT bốc 5 câu (≥ 2 câu trọng tâm), xáo thứ tự lựa chọn.
+        {"id": "q301-01", "prompt": "Theo bài học, cốt lõi của tự do tài chính là gì?", "choices": ["Phải nghỉ hưu sớm, không làm gì nữa", "Khả năng lựa chọn", "Đứng tên thật nhiều tài sản, càng nhiều càng tốt bất kể rủi ro", "Giàu có theo chuẩn của xã hội xung quanh"], "answer": 1, "hard": True},
+        {"id": "q301-02", "prompt": "Định nghĩa nào đúng với tự do tài chính?", "choices": ["Có mức lương cao", "Vay được một khoản thật lớn từ ngân hàng để đầu tư cho nhanh giàu hơn người khác", "Thu nhập từ tài sản đủ trang trải mức sống bạn mong muốn", "Không bao giờ phải chi tiêu cho bất cứ việc gì"], "answer": 2, "hard": False},
+        {"id": "q301-03", "prompt": "Trong ẩn dụ chiếc thuyền, thu nhập từ lao động giống điều gì?", "choices": ["Phải chèo liên tục, ngừng là dừng", "Cánh buồm căng gió đẩy thuyền đi xa", "Dòng nước tự đẩy thuyền đi mà bạn chẳng cần làm gì cả", "Động cơ gắn thêm cho thuyền chạy nhanh"], "answer": 0, "hard": False},
+        {"id": "q301-04", "prompt": "Cũng trong ẩn dụ đó, thu nhập từ tài sản giống điều gì?", "choices": ["Cánh buồm hay động cơ giúp thuyền vẫn tiến khi bạn tạm nghỉ chèo", "Một chiếc thuyền khác chạy nhanh hơn rồi bỏ xa bạn", "Mái chèo thứ hai", "Chiếc phao cứu sinh"], "answer": 0, "hard": False},
+        {"id": "q301-05", "prompt": "Ba yếu tố then chốt của tự do tài chính là gì?", "choices": ["Vàng, đất nền và các sổ tiết kiệm gửi ở nhiều ngân hàng khác nhau", "Lương, thưởng và phụ cấp", "Chi tiêu, tài sản sinh lời và khoảng cách giữa hai thứ đó", "May mắn, quen biết và một khoản thừa kế thật lớn từ gia đình"], "answer": 2, "hard": True},
+        {"id": "q301-06", "prompt": "Mức 1 «An toàn cơ bản» gồm những gì?", "choices": ["Sở hữu vài căn nhà cho thuê", "Thu nhập thụ động đủ cho cả gia đình sống thật thoải mái suốt đời", "Có quỹ khẩn cấp, hết nợ lãi cao, chi tiêu trong tầm kiểm soát", "Đã nghỉ việc và sống hoàn toàn bằng tiền lãi từ một khoản đầu tư lớn"], "answer": 2, "hard": True},
+        {"id": "q301-07", "prompt": "Thực tế, phần lớn mọi người tiến tới tự do tài chính như thế nào?", "choices": ["Vay thật nhiều để rút ngắn thời gian", "Đi từng mức một, an toàn trước", "Chờ một tấm vé số trúng độc đắc", "Nhảy thẳng lên nghỉ hưu sớm bằng một khoản đầu tư lớn duy nhất"], "answer": 1, "hard": True},
+        {"id": "q301-08", "prompt": "Chưa có quỹ khẩn cấp, bạn được rủ vay tiền đầu tư «cho nhanh tự do». Bài học cảnh báo gì?", "choices": ["Cứ vay ngay kẻo lỡ mất cơ hội hiếm có trong đời", "Rủi ro quá lớn có thể đi ngược mục tiêu tự do", "Vay để đầu tư là con đường ngắn nhất tới tự do, cứ mạnh dạn làm", "Chỉ cần vay ít"], "answer": 1, "hard": True},
+        {"id": "q301-09", "prompt": "Tự do tài chính có phải là đích đến đạt một lần rồi xong?", "choices": ["Chắc chắn rồi, vì tài sản luôn tăng giá", "Đúng, đạt rồi thì giữ được mãi", "Không, kế hoạch cần xem lại khi chi tiêu, thị trường hay sức khỏe thay đổi", "Phải, chỉ cần một lần chạm mức 4"], "answer": 2, "hard": True},
+        {"id": "q301-10", "prompt": "Có nên lấy mức «đủ» của người khác làm thước đo cho mình?", "choices": ["Có, cứ lấy mức của bạn bè thân làm mục tiêu chung cho cả nhà mình", "Nên, vì chuẩn chung giúp phấn đấu", "Mỗi gia đình hiểu «đủ» khác nhau; so sánh dễ gây áp lực thừa", "Hãy chọn người giàu nhất mình biết để so"], "answer": 2, "hard": False},
+        {"id": "q301-11", "prompt": "Một cặp vợ chồng chi khoảng 25 triệu ₫/tháng. Khi nào họ có nhiều lựa chọn hơn về việc làm toàn thời gian?", "choices": ["Khi có 25 triệu ₫ tiền mặt trong tay", "Khi thu từ tài sản, sau rủi ro và thuế, ổn định khoảng 25 triệu ₫ trở lên", "Khi lương tăng lên 30 triệu ₫", "Khi mua được ô tô"], "answer": 1, "hard": False},
+        {"id": "q301-12", "prompt": "Mức 3 «Độc lập một phần» nghĩa là gì?", "choices": ["Lương đủ trả mọi khoản chi tiêu hằng tháng", "Toàn bộ chi tiêu của cả gia đình do tiền lãi đầu tư chi trả trong suốt nhiều năm", "Tiết kiệm, đầu tư, kinh doanh phụ gánh được một phần đáng kể chi tiêu", "Không cần làm việc nữa"], "answer": 2, "hard": False},
     ],
     "N03-02": [
         {"id": "q302a", "prompt": "Câu hỏi đơn giản để phân loại tài sản vs trách nhiệm?", "choices": ["Giá mua ban đầu cao hay thấp", "Giữ thêm 1 năm thì túi tiền dày hơn hay mỏng hơn", "Bạn bè có thích không"], "answer": 1, "hard": True},
@@ -621,9 +645,21 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q307c", "prompt": "Ai chịu trách nhiệm quyết định cuối trên hành trình tự do tài chính?", "choices": ["User", "Agent quyết thay"], "answer": 0, "hard": False},
     ],
     "N04-01": [
-        {"id": "q401a", "prompt": "Bền vững tài chính khác An Toàn / Tự Do ở điểm nào?", "choices": ["Chỉ là tên gọi khác của tự do sớm", "Nhìn thêm giai đoạn thu nhập giảm, rủi ro lớn và chuyển giao cho thế hệ sau", "Chỉ dành cho người đã giàu"], "answer": 1, "hard": True},
-        {"id": "q401b", "prompt": "Ba trụ cột bền vững đơn giản gồm?", "choices": ["Bảo vệ – duy trì – chuyển giao", "All-in – FOMO – vay nóng", "Chỉ tích lũy tài sản"], "answer": 0, "hard": False},
-        {"id": "q401c", "prompt": "Có thể bắt đầu bền vững khi chưa giàu?", "choices": ["Không — phải chờ giàu", "Có — bảo hiểm phù hợp, để dành nhỏ đều, trao đổi gia đình"], "answer": 1, "hard": False},
+        # Follow-up item 5 — chuẩn N02 (P0b r2/r3): 12 câu × 4 lựa chọn, 6 câu trọng tâm; độ dài cân bằng (đáp án
+        # đúng dài nhất / nhì / ba / ngắn nhất đúng 3 câu mỗi loại), mở đầu đáp án đúng không lặp; mọi câu trả lời
+        # được bằng nội dung bài WP-04-01 (bài N04-01 hiển thị). Mỗi lượt KUAT bốc 5 câu (≥ 2 câu trọng tâm), xáo thứ tự lựa chọn.
+        {"id": "q401-01", "prompt": "Theo bài học, bền vững tài chính là gì?", "choices": ["Việc riêng của người đã giàu", "Đạt tự do tài chính tại một thời điểm rồi dừng mọi kế hoạch về sau", "Gom góp thật nhiều trong vài năm đầu", "Khả năng giữ tài chính ổn định qua nhiều giai đoạn của cuộc đời"], "answer": 3, "hard": False},
+        {"id": "q401-02", "prompt": "Bền vững khác việc chỉ tập trung tích lũy ở điểm nào?", "choices": ["Chỉ quan tâm đến số dư tài khoản vào cuối mỗi năm tài chính", "Nhấn mạnh khả năng chịu đựng và thích ứng lâu dài", "Bỏ qua mọi kế hoạch cho tuổi già để dồn tiền đầu tư ngay hôm nay", "Không khác gì, chỉ là một cách gọi khác cho hay hơn"], "answer": 1, "hard": True},
+        {"id": "q401-03", "prompt": "Ba trụ cột bền vững trong bài học là gì?", "choices": ["Sắm nhà, sắm xe và gửi tiết kiệm thật nhiều trước tuổi bốn mươi", "Lương, thưởng và các khoản phụ cấp", "Tích lũy, đầu tư và tiêu dùng hằng ngày", "Bảo vệ, duy trì và chuyển giao"], "answer": 3, "hard": True},
+        {"id": "q401-04", "prompt": "Trụ cột «Bảo vệ» nhằm làm gì?", "choices": ["Giảm thiệt hại từ rủi ro lớn như ốm đau, tai nạn, mất thu nhập", "Giữ tiền khỏi bị người nhà tiêu", "Tìm ra kênh đầu tư có mức lãi cao nhất thị trường để dồn tiền vào", "Bảo đảm tài sản chỉ tăng giá, không bao giờ giảm trong bất kỳ hoàn cảnh nào"], "answer": 0, "hard": False},
+        {"id": "q401-05", "prompt": "Trụ cột «Duy trì» chuẩn bị cho giai đoạn nào?", "choices": ["Mùa mua sắm giảm giá", "Lúc vừa được tăng lương", "Kỳ nghỉ cuối năm", "Lúc không còn hoặc giảm thu nhập từ lao động"], "answer": 3, "hard": False},
+        {"id": "q401-06", "prompt": "«Chuyển giao» trong bài học gồm những gì?", "choices": ["Kiến thức, giá trị và tài sản, truyền lại có chủ đích", "Tiền mặt để lại sau cùng, không cần trao đổi gì với gia đình", "Số nợ chưa trả", "Riêng phần tài sản đang đứng tên bố mẹ, ngoài ra không có gì khác"], "answer": 0, "hard": True},
+        {"id": "q401-07", "prompt": "Trong ẩn dụ khu vườn, An toàn tài chính (Module 02) giống điều gì?", "choices": ["Hàng rào và hệ thống tưới cơ bản", "Một vụ thu hoạch lớn rồi bỏ đất", "Những cây ăn quả mới trồng", "Người sẽ tiếp quản khu vườn"], "answer": 0, "hard": False},
+        {"id": "q401-08", "prompt": "Vì sao một khu vườn chỉ lo thu hoạch thật nhiều vài năm rồi bỏ mặc đất là không bền?", "choices": ["Vườn cần sống được qua nhiều mùa, cả khi người làm vườn đã già", "Cây ăn quả sẽ chẳng bao giờ ra trái", "Đất tốt thì tự sinh ra tiền mà chẳng cần ai chăm sóc hay để tâm tới", "Thu hoạch nhiều vốn là việc sai"], "answer": 0, "hard": False},
+        {"id": "q401-09", "prompt": "Có cần giàu rồi mới bắt đầu bền vững tài chính?", "choices": ["Phải đợi nghỉ hưu rồi mới bắt đầu tính đến chuyện bền vững", "Cần, vì bền vững là việc của người giàu", "Có, phải có nhà và xe trước đã", "Không, chỉ cần nhìn xa hơn chu kỳ lương tháng này"], "answer": 3, "hard": True},
+        {"id": "q401-10", "prompt": "Gia đình đang nuôi con và lo cho cha mẹ già. Việc nào là một bước bền vững thực tế?", "choices": ["Chờ con lớn", "Có bảo hiểm y tế, bảo hiểm phù hợp với rủi ro lớn nhất của nhà mình", "Dồn hết tiết kiệm vào một kênh lãi cao", "Mua ngay căn nhà thứ hai"], "answer": 1, "hard": True},
+        {"id": "q401-11", "prompt": "Dạy con về tiền theo tinh thần bền vững nghĩa là gì?", "choices": ["Con xin bao nhiêu thì cho bấy nhiêu, miễn là con thấy vui vẻ", "Để con tự xoay xở khi lớn, vì bố mẹ không cần nói gì về chuyện tiền nong cả", "Dạy thói quen tiền bạc cơ bản thay vì chỉ cho tiền khi cần", "Giấu con mọi chuyện tiền bạc"], "answer": 2, "hard": False},
+        {"id": "q401-12", "prompt": "Quyết định về bảo hiểm, thừa kế, chăm sóc dài hạn nên được đưa ra thế nào?", "choices": ["Cứ làm theo đúng lời người bán bảo hiểm tư vấn cho mình", "Quyết thật nhanh cho xong, càng nghĩ lâu càng thêm rối", "Cân nhắc với đủ thông tin, khi cần thì hỏi chuyên gia", "Chép nguyên cách làm của một người quen mà không cần tìm hiểu hoàn cảnh nhà mình"], "answer": 2, "hard": True},
     ],
     "N04-02": [
         {"id": "q402a", "prompt": "Bảo hiểm nên hiểu trước hết là gì?", "choices": ["Cách làm giàu nhanh", "Công cụ quản lý rủi ro lớn — lớp bảo vệ, không thay An Toàn / quỹ khẩn cấp", "Sản phẩm bắt buộc phải mua hết mọi gói"], "answer": 1, "hard": True},
@@ -765,8 +801,59 @@ def _sync_from_db(user_id: str) -> None:
         _PROFILES[user_id], _REVS[user_id] = loaded[0], loaded[1]
 
 
+# --- follow-up ticket item 1: demo persona progress per login session ------------------------------
+# The partner demo personas P1–P6 are ONE public login shared by every tester. While
+# WELORA_GUEST_DEMO is on, a persona's Academy progress (read lessons, KUAT results, XP, badges) is
+# kept per login session — the same ``scope_key`` as its open KUAT attempts (#243 / migration 019:
+# a hash of the bearer token, never the token) — so a tester never sees another tester's mastery.
+# Each session starts from the persona's demo seed (P2 / P3 / P6: N02-01 + N02-02 mastered, from
+# the trusted seeded mastery; P1 / P4 / P5: an empty tree). A new login = a fresh seed state.
+# Storage: the same ``academy_profiles`` table under the key ``<user_id>#<scope>`` (no migration);
+# a row is only written once the session makes progress (views never write), and the persona's
+# session rows are dropped whenever the demo seed runs (every deploy). A demo session never writes
+# the persona's shared gate mastery (user_flags) — that stays the seeded state for every tester.
+# Regular accounts (and every account with WELORA_GUEST_DEMO=0): key = user_id, unchanged.
+SESSION_KEY_SEP = "#"
+
+
+def profile_key(user_id: str, *, session: Optional[str] = None, ip: Optional[str] = None) -> str:
+    """Key of the Academy profile a request reads / writes (see above)."""
+    from welora import academy_store as store
+    from welora.auth import guest_demo_enabled
+
+    if not user_id or SESSION_KEY_SEP in user_id or not guest_demo_enabled():
+        return user_id
+    scope = store.attempt_scope(user_id, session=session, ip=ip)
+    return f"{user_id}{SESSION_KEY_SEP}{scope}" if scope else user_id
+
+
+def _base_uid(key: str) -> str:
+    return key.split(SESSION_KEY_SEP, 1)[0]
+
+
+def is_session_key(key: str) -> bool:
+    return SESSION_KEY_SEP in (key or "")
+
+
+def _demo_start_state(user_id: str) -> dict[str, Any]:
+    """The persona's demo seed state (as ``seed_profile`` writes it): gate path mastered when the
+    persona's server-written mastery is ≥ apply, else an empty tree."""
+    from welora.goals_api import effective_mastery_state
+    from welora.mastery import _RANK, GATE_MIN
+
+    p = _normalise({})
+    if _RANK.get(str(effective_mastery_state(user_id) or ""), 0) >= _RANK[GATE_MIN]:
+        _mark_gate_path_mastered(p)
+    else:
+        _refresh_locks(p)
+    return p
+
+
 def _profile(user_id: str) -> dict[str, Any]:
     _sync_from_db(user_id)
+    if is_session_key(user_id) and user_id not in _PROFILES:
+        _PROFILES[user_id] = _demo_start_state(_base_uid(user_id))  # saved on the first progress
+        _BACKFILL_CHECKED.add(user_id)
     p = _normalise(_PROFILES.setdefault(user_id, {}))
     if user_id not in _BACKFILL_CHECKED:
         p = _backfill_from_mastery(user_id, p)
@@ -829,7 +916,7 @@ def _backfill_from_mastery(user_id: str, p: dict[str, Any]) -> dict[str, Any]:
         _BACKFILL_CHECKED.add(user_id)
         return p
     for _round in range(3):
-        if not _trusted_gate_mastery(user_id):
+        if not _trusted_gate_mastery(_base_uid(user_id)):
             _BACKFILL_CHECKED.add(user_id)
             return p
         _mark_gate_path_mastered(p)
@@ -864,7 +951,14 @@ def seed_profile(user_id: str, *, gate_passed: bool) -> dict[str, Any]:
         _refresh_locks(p)
     _PROFILES[user_id] = p
     _BACKFILL_CHECKED.discard(user_id)
+    # item 1: every tester session of this persona restarts from the new seed state
+    prefix = user_id + SESSION_KEY_SEP
+    for k in [k for k in _PROFILES if k.startswith(prefix)]:
+        _PROFILES.pop(k, None)
+        _REVS.pop(k, None)
+        _BACKFILL_CHECKED.discard(k)
     if store.use_db_profiles():
+        store.delete_session_profiles(user_id)
         _REVS[user_id] = store.save_profile(user_id, p)
     else:
         _REVS.pop(user_id, None)
@@ -938,6 +1032,20 @@ def _refresh_badges(p: dict[str, Any]) -> None:
         p["badges"].append(BADGE_KET_NOI)
 
 
+def served_valid(node_id: str, served: Any) -> bool:
+    """True when every served slot still maps to a question of the node's CURRENT bank with the same
+    number of options (an attempt issued before a bank update is not)."""
+    by_id = {q["id"]: q for q in QUESTIONS.get(node_id, [])}
+    if not isinstance(served, list) or not served:
+        return False
+    for slot in served:
+        q = by_id.get((slot or {}).get("q")) if isinstance(slot, dict) else None
+        perm = (slot or {}).get("perm") if isinstance(slot, dict) else None
+        if q is None or not isinstance(perm, list) or sorted(perm) != list(range(len(q["choices"]))):
+            return False
+    return True
+
+
 def _served_public(node_id: str, served: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What the learner sees for one attempt: slot ids k1…kN, options in the served order. No "hard"
     marker (round 2: it would tell which questions decide the verdict)."""
@@ -973,8 +1081,9 @@ def kuat_info(node_id: str) -> dict[str, Any]:
             "bank_size": len(QUESTIONS.get(node_id, []))}
 
 
-def get_tree(user_id: str) -> dict[str, Any]:
-    p = _profile(user_id)
+def get_tree(user_id: str, *, key: Optional[str] = None) -> dict[str, Any]:
+    """``key``: the profile key (``profile_key``; demo persona session) — default the user id."""
+    p = _profile(key or user_id)
     _refresh_locks(p)
     nodes = []
     for n in NODES:
@@ -1000,6 +1109,7 @@ def get_tree(user_id: str) -> dict[str, Any]:
         "module_id": MODULE_ID,
         "title": MODULE_TITLE,
         "threshold": KUAT_PASS_THRESHOLD,
+        "pass_rule": PASS_RULE_VI,  # item 6: the header copy comes from the real rule
         "xp": p["xp"],
         "badges": list(p["badges"]),
         "nodes": nodes,
@@ -1051,7 +1161,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
 
     if node_id not in _NODE_BY_ID:
         return None
-    p = _profile(user_id)
+    p = _profile(profile_key(user_id, session=session, ip=ip))
     _refresh_locks(p)
     n = dict(_NODE_BY_ID[node_id])
     st = p["nodes"][node_id]
@@ -1081,10 +1191,11 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
     return n
 
 
-def mark_read(user_id: str, node_id: str) -> dict[str, Any]:
+def mark_read(user_id: str, node_id: str, *, key: Optional[str] = None) -> dict[str, Any]:
     if node_id not in _NODE_BY_ID:
         return {"error": "unknown node"}
-    p = _profile(user_id)
+    key = key or user_id
+    p = _profile(key)
     _refresh_locks(p)
     st = p["nodes"][node_id]
     if st["status"] == STATUS_LOCKED:
@@ -1095,7 +1206,7 @@ def mark_read(user_id: str, node_id: str) -> dict[str, Any]:
         st["status"] = STATUS_KUAT_PENDING
         if st["mastery_level"] == "not_started":
             st["mastery_level"] = "learning"
-    _save(user_id)
+    _save(key)
     return {"ok": True, "xp": p["xp"], "status": st["status"], "awarded_xp": False}
 
 
@@ -1147,8 +1258,9 @@ def _wire_mastery(user_id: str) -> None:
     grant_from_academy(user_id)
 
 
-def _apply_result(user_id: str, node_id: str, passed: bool) -> dict[str, Any]:
-    p = _profile(user_id)
+def _apply_result(user_id: str, node_id: str, passed: bool, *, key: Optional[str] = None) -> dict[str, Any]:
+    key = key or user_id
+    p = _profile(key)
     st = p["nodes"][node_id]
     attempt = {
         "node_id": node_id,
@@ -1167,7 +1279,8 @@ def _apply_result(user_id: str, node_id: str, passed: bool) -> dict[str, Any]:
             p["xp"] += XP_PER_PASS
             p["awarded_xp"].append(node_id)
             awarded = True
-        if node_id == GATE_NODE:
+        if node_id == GATE_NODE and not is_session_key(key):
+            # item 1: a demo tester session never flips the persona's shared gate mastery
             _wire_mastery(user_id)
         _refresh_locks(p)
         _refresh_badges(p)
@@ -1176,7 +1289,7 @@ def _apply_result(user_id: str, node_id: str, passed: bool) -> dict[str, Any]:
         st["mastery_level"] = "familiar"
         st["last_kuat"] = attempt
         _refresh_locks(p)
-    _save(user_id)
+    _save(key)
     return {
         "kuat_result": {  # pass / fail only (round 2): no score / count / percent
             "passed": passed,
@@ -1188,7 +1301,7 @@ def _apply_result(user_id: str, node_id: str, passed: bool) -> dict[str, Any]:
         "awarded_xp": awarded,
         "badges": list(p["badges"]),
         "status": st["status"],
-        "tree": get_tree(user_id),
+        "tree": get_tree(user_id, key=key),
         "os_nudge": os_nudge_for(node_id, first_pass=bool(awarded)),
     }
 
@@ -1216,6 +1329,11 @@ def start_attempt(user_id: str, node_id: str, *, ip: Optional[str] = None,
     store.check_kuat_allowed(user_id, node_id, ip)
     scope = store.attempt_scope(user_id, session=session, ip=ip)
     att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id), ip=ip, scope=scope)
+    if not att.get("created") and not served_valid(node_id, att["served"]):
+        # an attempt issued from an older bank (follow-up item 5 replaced three banks): retire it
+        # and draw from the current bank
+        store.expire_attempt(att["attempt_id"])
+        att = store.open_or_create_attempt(user_id, node_id, lambda: _draw(node_id), ip=ip, scope=scope)
     return {**kuat_info(node_id), "attempt_id": att["attempt_id"], "expires_at": att["expires_at"],
             "node_id": node_id, "questions": _served_public(node_id, att["served"])}
 
@@ -1233,7 +1351,8 @@ def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], a
 
     if node_id not in _NODE_BY_ID:
         return {"error": "unknown node"}
-    p = _profile(user_id)
+    key = profile_key(user_id, session=session, ip=ip)
+    p = _profile(key)
     _refresh_locks(p)
     if p["nodes"][node_id]["status"] == STATUS_LOCKED:
         return {"error": "locked", "passed": False, "xp": p["xp"]}
@@ -1249,6 +1368,9 @@ def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], a
     aid = (attempt_id or "").strip() or store.latest_open_attempt_id(user_id, node_id, scope=scope)
     served = store.peek_attempt(aid, user_id, node_id, scope=scope) if aid else None
     if not served:
+        return {"error": "attempt_invalid"}
+    if not served_valid(node_id, served):  # issued from an older bank → nothing graded / counted
+        store.expire_attempt(aid)
         return {"error": "attempt_invalid"}
     if any(int(_SLOT_RE.match(i).group(1)) > len(served) for i in ids):
         return {"error": "reload"}  # answers for questions this attempt never showed
@@ -1268,7 +1390,7 @@ def submit_kuat_attempt(user_id: str, node_id: str, attempt_id: Optional[str], a
         raise
     if passed:
         reservation.release()
-    return _apply_result(user_id, node_id, passed)
+    return _apply_result(user_id, node_id, passed, key=key)
 
 
 def _wait_vi(seconds: int) -> str:
@@ -1306,6 +1428,9 @@ COOLDOWN_MSG_VI = {
     # item 3: too many NEW attempts on non-gate nodes from one network
     "ip_starts": ("Mạng bạn đang dùng đã mở quá nhiều lượt bài KUAT trong thời gian ngắn. Bạn có thể mở bài "
                   "mới " + _RETRY + "." + _REVIEW),
+    # follow-up item 4: too many NEW non-gate attempts by this account
+    "user_starts": ("Bạn đã mở quá nhiều lượt bài KUAT mới trong thời gian ngắn. Bạn có thể mở bài mới "
+                    + _RETRY + "." + _REVIEW),
 }
 VN_TZ = timezone(timedelta(hours=7), "ICT")
 ATTEMPT_INVALID_MSG_VI = "Lượt KUAT này đã hết hạn hoặc đã được nộp. Hãy tải lại bài để làm lượt mới."
@@ -1334,14 +1459,22 @@ def cooldown_payload(e: Any, node_id: Optional[str] = None) -> dict[str, Any]:
         "retry_at_vn": at_vn,
     }
     if n:
-        out.update({"lesson_title": lesson, "lesson_href": "/app/content?key=" + str(n.get("principle_key") or "")})
+        out.update({"lesson_title": lesson, "lesson_href": lesson_href(str(n["node_id"]))})
     return out
 
 
-def service_get_tree(user_id: str) -> tuple[int, dict]:
+def lesson_href(node_id: str) -> str:
+    """Follow-up item 2: the «ôn lại bài» link of a KUAT notice opens the lesson IN the Academy
+    (/app/academy?node=…), which follows the Academy guest gate (open to device guests only while
+    WELORA_GUEST_DEMO is on; login required otherwise) — not /app/content (Welorapedia), which
+    always needs a login."""
+    return "/app/academy?node=" + node_id
+
+
+def service_get_tree(user_id: str, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:
     if not user_id:
         return 400, {"error": "user_id is required"}
-    return 200, get_tree(user_id)
+    return 200, get_tree(user_id, key=profile_key(user_id, session=session, ip=ip))
 
 
 def service_get_node(user_id: str, node_id: str, *, ip: Optional[str] = None,
@@ -1354,12 +1487,12 @@ def service_get_node(user_id: str, node_id: str, *, ip: Optional[str] = None,
     return 200, n
 
 
-def service_mark_read(body: dict) -> tuple[int, dict]:
+def service_mark_read(body: dict, *, ip: Optional[str] = None, session: Optional[str] = None) -> tuple[int, dict]:
     user_id = (body or {}).get("user_id") or ""
     node_id = (body or {}).get("node_id") or ""
     if not user_id or not node_id:
         return 400, {"error": "user_id and node_id required"}
-    out = mark_read(user_id, node_id)
+    out = mark_read(user_id, node_id, key=profile_key(user_id, session=session, ip=ip))
     if out.get("error"):
         return 400, out
     return 200, out
@@ -1374,7 +1507,7 @@ def service_start_kuat(body: dict, *, ip: Optional[str] = None, session: Optiona
         return 400, {"error": "user_id and node_id required"}
     if node_id not in _NODE_BY_ID or not QUESTIONS.get(node_id):
         return 404, {"error": "unknown node"}
-    p = _profile(user_id)
+    p = _profile(profile_key(user_id, session=session, ip=ip))
     _refresh_locks(p)
     if p["nodes"][node_id]["status"] == STATUS_LOCKED:
         return 403, {"error": "locked"}

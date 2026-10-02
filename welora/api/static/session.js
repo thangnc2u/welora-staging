@@ -65,7 +65,8 @@
   /* migration-019 ticket item 5: /app/academy is a guest page only when the server marked it
      (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
   function guestAcademy() {
-    if (currentPath() !== "/app/academy") return false;
+    var cp = currentPath();
+    if (cp !== "/app/academy" && cp !== "/app/learn") return false;  /* follow-up item 3: /app/learn alias */
     try {
       var m = w.document.querySelector('meta[name="welora-guest-academy"]');
       return !!(m && m.getAttribute("content") === "1");

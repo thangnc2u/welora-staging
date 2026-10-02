@@ -201,6 +201,16 @@ class TestMigration021(_Base):
 
 # =========================================================================== item 3
 class TestOtpHmac(_Base):
+    def setUp(self):
+        self._key = os.environ.pop("WELORA_OTP_HMAC_KEY", None)
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        os.environ.pop("WELORA_OTP_HMAC_KEY", None)
+        if self._key is not None:
+            os.environ["WELORA_OTP_HMAC_KEY"] = self._key
+
     def test_format_key_and_legacy_rules(self):
         h = otp_hash.code_hash("d", "c1", "123456")
         self.assertTrue(h.startswith("hmac256:"))
@@ -696,9 +706,11 @@ class TestWelorapediaGuests(unittest.TestCase):
         from fastapi.testclient import TestClient
         from welora.api.app import create_app
 
-        self._prev = {k: os.environ.get(k) for k in ("WELORA_GUEST_DEMO", "WELORA_ENV", "WELORA_DB_URL", "WELORA_STORE",
-                                                    "WELORA_DEMO_AUTOSEED")}
+        if not hasattr(self, "_prev"):  # first call only — a second call must not save the first call's env
+            self._prev = {k: os.environ.get(k) for k in ("WELORA_GUEST_DEMO", "WELORA_ENV", "WELORA_DB_URL",
+                                                        "WELORA_STORE", "WELORA_DEMO_AUTOSEED")}
         self.tmp = tempfile.mkdtemp()
+        self._tmps = getattr(self, "_tmps", []) + [self.tmp]
         os.environ.update({"WELORA_GUEST_DEMO": guest_demo, "WELORA_ENV": env, "WELORA_DEMO_AUTOSEED": "0",
                            **db_env(self.tmp)})
         return TestClient(create_app())
@@ -709,7 +721,8 @@ class TestWelorapediaGuests(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        shutil.rmtree(getattr(self, "tmp", ""), ignore_errors=True)
+        for t in getattr(self, "_tmps", []):
+            shutil.rmtree(t, ignore_errors=True)
 
     def test_content_pages_marker_only_with_flag(self):
         c = self._client("1")

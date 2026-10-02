@@ -196,6 +196,40 @@ def load_profile(user_id: str) -> Optional[tuple[dict, int]]:
         conn.close()
 
 
+def load_profile_v(user_id: str) -> Optional[tuple[dict, int, str]]:
+    """(profile, rev, updated_at) — follow-up #244/#245 item 10 (version = rev + updated_at)."""
+    conn = _conn()
+    try:
+        r = conn.execute("SELECT profile_json, rev, updated_at FROM academy_profiles WHERE user_id=?",
+                         (user_id,)).fetchone()
+        if not r:
+            return None
+        return json.loads(r["profile_json"]), int(r["rev"]), str(r["updated_at"])
+    finally:
+        conn.close()
+
+
+def profile_version(user_id: str) -> Optional[tuple[int, str]]:
+    """(rev, updated_at) of the stored row, None when there is none (one PK lookup per read)."""
+    conn = _conn()
+    try:
+        r = conn.execute("SELECT rev, updated_at FROM academy_profiles WHERE user_id=?", (user_id,)).fetchone()
+        return (int(r["rev"]), str(r["updated_at"])) if r else None
+    finally:
+        conn.close()
+
+
+def delete_profile(user_id: str) -> int:
+    """Follow-up #244/#245 item 13: drop ONE profile row (a demo session's «reset tiến độ demo»)."""
+    conn = _conn()
+    try:
+        cur = conn.execute("DELETE FROM academy_profiles WHERE user_id=?", (user_id,))
+        conn.commit()
+        return int(cur.rowcount or 0)
+    finally:
+        conn.close()
+
+
 def profile_rev(user_id: str) -> Optional[int]:
     conn = _conn()
     try:

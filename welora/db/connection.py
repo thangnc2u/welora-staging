@@ -257,3 +257,29 @@ def ph(dialect: Dialect | None = None) -> str:
     """Parameter placeholder: ? for sqlite, %s for postgres."""
     d = dialect or detect_dialect()
     return "%s" if d == "postgres" else "?"
+
+
+def _real_conn(conn: Any) -> Any:
+    return getattr(conn, "_real", conn)
+
+
+def is_postgres_conn(conn: Any) -> bool:
+    return isinstance(_real_conn(conn), PgCompatConnection)
+
+
+def lock_user(conn: Any, user_id: str) -> None:
+    """Per-user write lock until the end of the CURRENT transaction (follow-up item 8 — replaces the
+    ``UPDATE users SET updated_at=updated_at`` trick, which needed an existing row and rewrote it).
+
+    * PostgreSQL: ``pg_advisory_xact_lock`` on a 64-bit hash of the user id (released at COMMIT /
+      ROLLBACK; independent of the users row, no row rewrite, no trigger, no bloat).
+    * SQLite: ``BEGIN IMMEDIATE`` — the database write lock (SQLite serialises writers anyway; this
+      takes it BEFORE the reads that decide, so two requests can never both read the old state).
+      Already inside a transaction (ambient block / earlier write) → that transaction holds it.
+    Callers commit (or roll back) to release it."""
+    real = _real_conn(conn)
+    if isinstance(real, PgCompatConnection):
+        real.execute("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", ("welora-user:" + str(user_id or ""),))
+        return
+    if not getattr(real, "in_transaction", False):
+        real.execute("BEGIN IMMEDIATE")

@@ -321,19 +321,74 @@ def login_or_register_device(
         conn.close()
 
 
+# --- follow-up item 6: contact changes clear the matching "verified" timestamp ----------------------
+# ``users.email_verified_at`` / ``users.phone_verified_at`` prove possession of THAT address / number
+# (they make the account "verified" for the KUAT budgets, guest claim, phone-OTP attach …). Any
+# write that CHANGES users.email or users.phone must therefore go through ``set_user_contact``,
+# which clears the timestamp of the changed channel and supersedes that channel's open
+# verification codes. Same value (e-mail case / phone format only, e.g. '0912…' → '+84912…') is not
+# a change and keeps the proof. The few remaining direct writes are proof-of-possession writes of
+# the SAME number (phone-OTP attach / contact verification / phone E.164 migration) — listed in
+# tests/test_followup_244_245.py (grep guard).
+_KEEP: Any = object()
+
+
+def _same_email(a: Any, b: Any) -> bool:
+    return (str(a or "").strip().lower() or None) == (str(b or "").strip().lower() or None)
+
+
+def _same_phone(a: Any, b: Any) -> bool:
+    ra, rb = str(a or "").strip(), str(b or "").strip()
+    if not ra or not rb:
+        return not ra and not rb
+    return (try_normalize_phone(ra) or ra) == (try_normalize_phone(rb) or rb)
+
+
+def set_user_contact(conn, user_id: str, *, email: Any = _KEEP, phone: Any = _KEEP) -> dict[str, bool]:
+    """Write users.email / users.phone (values as given; None clears). Caller commits.
+    Returns {"email_changed", "phone_changed"}."""
+    out = {"email_changed": False, "phone_changed": False}
+    row = conn.execute("SELECT email, phone FROM users WHERE user_id=?", (user_id,)).fetchone()
+    if row is None:
+        return out
+    sets: list[str] = []
+    args: list[Any] = []
+    if email is not _KEEP:
+        sets.append("email=?")
+        args.append(email or None)
+        if not _same_email(row["email"], email):
+            sets.append("email_verified_at=NULL")
+            out["email_changed"] = True
+    if phone is not _KEEP:
+        sets.append("phone=?")
+        args.append(phone or None)
+        if not _same_phone(row["phone"], phone):
+            sets.append("phone_verified_at=NULL")
+            out["phone_changed"] = True
+    if not sets:
+        return out
+    conn.execute("UPDATE users SET " + ", ".join(sets) + " WHERE user_id=?", (*args, user_id))
+    for ch, key in (("email", "email_changed"), ("phone", "phone_changed")):
+        if out[key]:  # a code sent to the OLD address / number can no longer verify anything
+            conn.execute("UPDATE contact_verifications SET consumed=2 WHERE user_id=? AND channel=? AND consumed=0",
+                         (user_id, ch))
+    return out
+
+
 def _otp_code_hash(challenge_id: str, code: str) -> str:
-    """Phone-OTP code at rest: salted per challenge like email-OTP (`sha256:` marks hashed rows)."""
-    return "sha256:" + hashlib.sha256(f"welora-phone-otp:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+    """Phone-OTP code at rest: HMAC with the server key (``hmac256:``, welora.otp_hash — follow-up
+    item 3); salted per challenge like the other codes."""
+    from welora import otp_hash
+
+    return otp_hash.code_hash("welora-phone-otp", challenge_id, code)
 
 
 def _otp_code_matches(challenge_id: str, stored: str, code: str) -> bool:
-    import hmac
+    """``hmac256:`` (current) · ``sha256:`` (issued before the HMAC deploy, until expiry) · plaintext
+    (in-flight legacy rows, 10-min TTL)."""
+    from welora import otp_hash
 
-    stored = stored or ""
-    c = (code or "").strip()
-    if stored.startswith("sha256:"):
-        return hmac.compare_digest(stored, _otp_code_hash(challenge_id, c))
-    return bool(stored) and hmac.compare_digest(stored, c)  # in-flight legacy plaintext rows (10-min TTL)
+    return otp_hash.matches("welora-phone-otp", challenge_id, stored, code, legacy_plain=True)
 
 
 def otp_challenge_phone(challenge_id: str, *, url: str | None = None) -> Optional[str]:
@@ -471,12 +526,22 @@ def verify_otp(
         if _now() > expires:
             raise ValueError("OTP expired")
 
+        # follow-up item 4: RESERVE one attempt atomically before the code is checked (as
+        # contact_verify does) — the conditional UPDATE is the only gate, so a concurrent burst of
+        # wrong codes can never exceed OTP_MAX_ATTEMPTS (the old read-check-then-increment could).
+        cur = conn.execute(
+            "UPDATE otp_challenges SET attempts=attempts+1 WHERE challenge_id=? AND consumed=0 AND attempts<?",
+            (challenge_id, OTP_MAX_ATTEMPTS),
+        )
+        conn.commit()
+        if int(cur.rowcount or 0) != 1:
+            again = conn.execute("SELECT consumed FROM otp_challenges WHERE challenge_id=?",
+                                 (challenge_id,)).fetchone()
+            if again is not None and again["consumed"]:
+                raise ValueError("challenge already used")
+            raise ValueError("too many attempts")
+
         if not _otp_code_matches(challenge_id, row["code"], code):
-            conn.execute(
-                "UPDATE otp_challenges SET attempts=attempts+1 WHERE challenge_id=?",
-                (challenge_id,),
-            )
-            conn.commit()
             raise ValueError("invalid code")
 
         # CoS review #239: an ambiguous number (migration collision) never signs anyone in by OTP —
@@ -1349,7 +1414,8 @@ def service_me(token: str) -> tuple[int, dict]:  # type: ignore[no-redef]
             if row is not None:
                 fl = contact_verify.flags(conn, row)
                 out.update({k: fl[k] for k in ("verified", "email_verified", "phone_verified",
-                                                "verify_eligible", "can_verify_now")})
+                                                "verify_eligible", "can_verify_now", "verify_snoozed",
+                                                "verify_snoozed_until")})
         finally:
             conn.close()
     except Exception as e:  # pragma: no cover

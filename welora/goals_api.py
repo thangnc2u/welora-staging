@@ -308,6 +308,15 @@ def gate_flags(user_id: str) -> dict:
             flags["mastery_no_efund_invest"] = effective_mastery_state(user_id)
         except Exception:
             pass
+    # follow-up #244/#245 item 14: a demo tester's login session sees ITS gate mastery (read only —
+    # never written back; regular accounts / WELORA_GUEST_DEMO=0 unchanged)
+    try:
+        from welora.academy import overlay_session_mastery
+
+        flags["mastery_no_efund_invest"] = overlay_session_mastery(
+            user_id, str(flags.get("mastery_no_efund_invest") or "not_started"))
+    except Exception:  # pragma: no cover
+        pass
     return _apply_debt_goal_flags(user_id, flags)
 
 

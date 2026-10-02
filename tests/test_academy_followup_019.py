@@ -102,7 +102,9 @@ class TestDemoProgressPerSessionDb(unittest.TestCase):
 
     def test_shared_gate_mastery_never_moves(self):
         o = self.o
-        self.assertEqual(o["p4_mastery_after_a"], ["learning", "learning"])
+        # follow-up #244/#245 item 14: session A (passed N02-02) sees ITS gate mastery; session B and
+        # the persona's shared flags stay at the seed state
+        self.assertEqual(o["p4_mastery_after_a"], ["apply", "learning"])
         self.assertEqual(o["p4_gate_after_a"], "not_passed")
         self.assertEqual(o["flags_source"], {"m": "learning", "s": "seed"})
         self.assertEqual(o["base_p4_profile_xp"], 0)  # the persona's own (seed) profile is untouched
@@ -319,7 +321,9 @@ class TestLearnAliasJs(unittest.TestCase):
                 self.assertEqual(self._run(f, path, "0"), "/app/login", (f, path))  # production
                 self.assertIsNone(self._run(f, path, "0", "tok"), (f, path))  # logged in
             self.assertEqual(self._run(f, "/app/learning", "1"), "/app/login")  # exact alias only
-            self.assertEqual(self._run(f, "/app/content", "1"), "/app/login")
+            # follow-up #244/#245 item 12: Welorapedia follows the same marker rule now
+            self.assertIsNone(self._run(f, "/app/content", "1"))
+            self.assertEqual(self._run(f, "/app/content", "0"), "/app/login")
 
 
 class TestGuestDemoOffBlocksGuestsOnLearn(unittest.TestCase):
@@ -559,7 +563,8 @@ class TestConstraintsUnchanged(unittest.TestCase):
         names = sorted(p.name for p in (ROOT / "welora" / "db" / "migrations").glob("*.sql"))
         self.assertEqual(names[-1], "018_kuat_one_open_attempt.sql")
         pg = sorted(p.name for p in (ROOT / "welora" / "db" / "migrations" / "postgres").glob("*.sql"))
-        self.assertEqual(pg[-1], "020_contact_verification.sql")
+        # this ticket added none (later tickets may: 021_verify_snooze = follow-up #244/#245 item 2)
+        self.assertFalse([n for n in pg if n[:3] > "020" and ("academy" in n or "kuat" in n)])
 
 
 if __name__ == "__main__":

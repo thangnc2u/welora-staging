@@ -230,7 +230,7 @@ class TestOtpEchoFlag(_Base):
         code = auth_svc.FIXED_OTP
         body = self._request("0944445555")
         stored = self._stored_code(body["challenge_id"])
-        self.assertTrue(stored.startswith("sha256:"))  # hashed at rest
+        self.assertTrue(stored.startswith("hmac256:"))  # hashed at rest (HMAC, follow-up #244/#245 item 3)
         self.assertNotIn(code, stored)
         bad = self.client.post("/auth/otp/verify", json={"challenge_id": body["challenge_id"], "code": "000000"})
         self.assertEqual(bad.status_code, 400)

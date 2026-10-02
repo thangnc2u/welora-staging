@@ -31,6 +31,7 @@ from welora.auth import (
     DEMO_PASSWORD,
     DEMO_PHONE,
     _hash_password,
+    set_user_contact,
     ensure_auth_schema,
     guest_demo_enabled,
 )
@@ -381,9 +382,10 @@ def _upsert_demo_user_once(*, user_id: str, email: str, phone: str, display_name
         if by_email:
             existing_id = by_email["user_id"]
             conn.execute(
-                "UPDATE users SET display_name=?, phone=?, password_hash=?, role=? WHERE user_id=?",
-                (display_name, phone, pw, "demo", existing_id),
+                "UPDATE users SET display_name=?, password_hash=?, role=? WHERE user_id=?",
+                (display_name, pw, "demo", existing_id),
             )
+            set_user_contact(conn, existing_id, phone=phone)  # follow-up item 6: change → unverified
             conn.commit()
             return {
                 "seeded": False,
@@ -397,10 +399,10 @@ def _upsert_demo_user_once(*, user_id: str, email: str, phone: str, display_name
         ).fetchone()
         if by_id:
             conn.execute(
-                "UPDATE users SET display_name=?, device_id=?, email=?, phone=?, "
-                "password_hash=?, role=? WHERE user_id=?",
-                (display_name, device_key, email, phone, pw, "demo", user_id),
+                "UPDATE users SET display_name=?, device_id=?, password_hash=?, role=? WHERE user_id=?",
+                (display_name, device_key, pw, "demo", user_id),
             )
+            set_user_contact(conn, user_id, email=email, phone=phone)  # follow-up item 6
             conn.commit()
             return {
                 "seeded": True,

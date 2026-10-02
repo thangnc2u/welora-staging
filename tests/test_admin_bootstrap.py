@@ -173,9 +173,11 @@ class TestAdminEmails(_Base):
         self.assertEqual(out["role"], "admin")
         self.assertIsNone(auth_svc.resolve_token(sq["token"]))
         self.assertEqual(json.loads(self.audit("admin_role_granted")[0]["detail"])["revoked_sessions"], 1)
-        # password login into the admin account stays rejected
+        # password login into the admin account stays rejected — follow-up #244/#245 item 5: the
+        # squatter's password was cleared on promotion, so it no longer matches at all (401)
         r = self.client.post("/auth/login", json={"email": FOUNDER, "password": "Squatter1!x"})
-        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.status_code, 401)
+        self.assertTrue(json.loads(self.audit("admin_role_granted")[0]["detail"])["password_cleared"])
         # device flow with the (predictable) guest device key is refused
         dk = "guest:" + hashlib.sha256(FOUNDER.encode()).hexdigest()[:16]
         r = self.client.post("/auth/device", json={"device_id": dk})
@@ -221,6 +223,13 @@ class TestAdminEmails(_Base):
         self.client.post("/auth/register", json={"email": FOUNDER, "password": "Passw0rd!x"})
         uid = self.otp_login(FOUNDER)["user_id"]
         os.environ["WELORA_ADMIN_EMAILS"] = ""
+        # follow-up #244/#245 item 5: the pre-registration password was cleared when the row was
+        # promoted → it can never sign in again (also not after a de-listing)
+        r = self.client.post("/auth/login", json={"email": FOUNDER, "password": "Passw0rd!x"})
+        self.assertEqual(r.status_code, 401, r.text)
+        # a de-listed admin that still has a password (set after the promotion, e.g. by an older
+        # build) is demoted at its next password login and continues as a normal user
+        self.x("UPDATE users SET password_hash=? WHERE user_id=?", (auth_svc._hash_password("Passw0rd!x"), uid))
         r = self.client.post("/auth/login", json={"email": FOUNDER, "password": "Passw0rd!x"})
         self.assertEqual(r.status_code, 200, r.text)  # de-listed → demoted, continues as a normal user
         self.assertEqual(r.json()["role"], "guest")

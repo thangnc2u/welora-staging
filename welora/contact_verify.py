@@ -14,8 +14,9 @@ Flow
   contact still equals the code's target) → ``auth.has_verified_contact`` is true → KUAT uses the
   verified budget and the account is a valid guest-claim target.
 
-Code at rest: ``sha256:`` of a per-challenge salted string (never stored or logged in clear, never
-echoed — not even with WELORA_OTP_ECHO). TTL ``WELORA_VERIFY_OTP_TTL_S`` (600 s). At most
+Code at rest: ``hmac256:`` — HMAC with the server key WELORA_OTP_HMAC_KEY of a per-challenge salted
+string (welora.otp_hash; codes issued before that deploy as ``sha256:`` verify until they expire) —
+never stored or logged in clear, never echoed (not even with WELORA_OTP_ECHO). TTL ``WELORA_VERIFY_OTP_TTL_S`` (600 s). At most
 ``WELORA_VERIFY_MAX_ATTEMPTS`` (5) code checks per challenge: every check first RESERVES an attempt
 with one conditional UPDATE (``attempts < max AND consumed = 0 AND not expired``), so even a
 concurrent burst cannot exceed the limit; the correct code then consumes the challenge with
@@ -33,8 +34,6 @@ the next start (same rule as today for a verified listed address).
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 import os
 import secrets
@@ -43,7 +42,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from welora.db.connection import get_connection
+from welora.db.connection import get_connection, lock_user
 
 log = logging.getLogger("welora.contact_verify")
 
@@ -185,6 +184,16 @@ def apply_contact_verification_schema(conn: Any, dialect: str = "sqlite") -> dic
     return {"phone_verified_at_added": added}
 
 
+def apply_verify_snooze_schema(conn: Any, dialect: str = "sqlite") -> dict[str, Any]:
+    """Migration 021 (follow-up item 2) as an idempotent data step: users.verify_snooze_until."""
+    added = False
+    if not _has_column(conn, dialect, "users", "verify_snooze_until"):
+        conn.execute("ALTER TABLE users ADD COLUMN verify_snooze_until TEXT")
+        added = True
+    conn.commit()
+    return {"verify_snooze_until_added": added}
+
+
 # --------------------------------------------------------------------------- helpers
 
 def _iso(ts: float) -> str:
@@ -202,8 +211,22 @@ def _ts(raw: Any) -> float:
     return d.timestamp()
 
 
+_DOMAIN = "welora-contact-verify"
+
+
 def _code_hash(challenge_id: str, code: str) -> str:
-    return "sha256:" + hashlib.sha256(f"welora-contact-verify:{challenge_id}:{code}".encode("utf-8")).hexdigest()
+    """HMAC with the server key (``hmac256:``, welora.otp_hash — follow-up item 3)."""
+    from welora import otp_hash
+
+    return otp_hash.code_hash(_DOMAIN, challenge_id, code)
+
+
+def _code_matches(challenge_id: str, stored: str, code: str) -> bool:
+    """Current ``hmac256:`` codes, and ``sha256:`` codes issued before the HMAC deploy (until they
+    expire — TTL ≤ 1 h, same attempt limits)."""
+    from welora import otp_hash
+
+    return otp_hash.matches(_DOMAIN, challenge_id, stored, code)
 
 
 def _clean_code(code: Any) -> str:
@@ -316,6 +339,32 @@ def _deliverable(channel: str) -> bool:
     return sms.enabled()
 
 
+# --- follow-up item 2: «Để sau» per user on the server (was localStorage only) -------------------
+SNOOZE_S = 24 * 3600
+
+
+def _snoozed_until(row, t: float) -> Optional[str]:
+    try:
+        raw = row["verify_snooze_until"]
+    except (IndexError, KeyError):  # pragma: no cover - before migration 021
+        return None
+    return str(raw) if raw and _ts(raw) > t else None
+
+
+def snooze(uid: str, *, now: Optional[float] = None, url: Optional[str] = None) -> dict[str, Any]:
+    """«Để sau»: hide the reminder for 24 h for this ACCOUNT (every device / browser). Only the
+    signed-in account's own row; a new press restarts the 24 h."""
+    t = time.time() if now is None else float(now)
+    until = _iso(t + SNOOZE_S)
+    conn = get_connection(url)
+    try:
+        conn.execute("UPDATE users SET verify_snooze_until=? WHERE user_id=?", (until, uid))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "verify_snoozed": True, "verify_snoozed_until": until, "snooze_s": SNOOZE_S}
+
+
 def flags(conn, row) -> dict[str, Any]:
     """Verification flags for /auth/me and the FE banner (booleans only, no PII beyond the row)."""
     from welora.auth import has_verified_contact
@@ -323,7 +372,10 @@ def flags(conn, row) -> dict[str, Any]:
 
     ok = eligible(conn, row)
     pending = _unverified_channels(row) if ok else []
+    until = _snoozed_until(row, time.time()) if row is not None else None
     return {
+        "verify_snoozed": bool(until),
+        "verify_snoozed_until": until,
         "verified": bool(row is not None and has_verified_contact(conn, row)),
         "email_verified": bool(row is not None and _set(row["email"]) and _set(row["email_verified_at"])),
         "phone_verified": bool(row is not None and _set(row["phone"]) and _set(row["phone_verified_at"])),
@@ -408,10 +460,11 @@ def issue(uid: str, channel: Optional[str] = None, *, now: Optional[float] = Non
                         "expires_at": None, "delivery": "none", "sms_enabled": sms.enabled(),
                         "resend_after_s": 0, "max_attempts": max_attempts(), "attempts_left": 0,
                         "message": MSG_SMS_OFF.format(target=_mask("phone", target))}
-        # per-user lock for the rest of this transaction: concurrent sends for one account run one
-        # after another (PG row lock; SQLite write lock), so the cooldown / daily checks below see
-        # the code a parallel request just created. The unique index is the backstop.
-        conn.execute("UPDATE users SET updated_at=updated_at WHERE user_id=?", (uid,))
+        # per-user lock for the rest of this transaction (follow-up item 8: a real lock — PG advisory
+        # xact lock / SQLite BEGIN IMMEDIATE, welora.db.connection.lock_user): concurrent sends for
+        # one account run one after another, so the cooldown / daily checks below see the code a
+        # parallel request just created. The unique index is the backstop.
+        lock_user(conn, uid)
         prev = _latest_open(conn, uid, ch)
         if enforce_cooldown and prev is not None:
             wait = int(round(_ts(prev["created_at"]) + resend_cooldown_s() - t))
@@ -507,11 +560,18 @@ def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Opt
         if ch is None or not c:
             raise bad
         cid = ch["challenge_id"]
+        # follow-up item 7: the daily wrong-code cap RESERVES its slot atomically — the per-user lock
+        # (item 8) is taken BEFORE the 24 h count and held until the attempt below is reserved and
+        # committed, so concurrent checks of one account are counted one after another and a burst
+        # can never exceed WELORA_VERIFY_DAILY_FAIL_MAX (every check reserves one attempt; the one
+        # successful check of a used code is the only non-wrong one).
+        lock_user(conn, uid)
         if daily_fail_max() > 0:
             wrong, retry = _daily_fails(conn, uid, t)
             if wrong >= daily_fail_max():
+                conn.rollback()
                 raise _daily_error(retry)
-        # reserve one attempt atomically: the limit holds even for a concurrent burst
+        # reserve one attempt atomically: the per-code limit holds even for a concurrent burst
         cur = conn.execute(
             "UPDATE contact_verifications SET attempts=attempts+1 "
             "WHERE challenge_id=? AND consumed=0 AND attempts<? AND expires_at>?",
@@ -526,7 +586,7 @@ def confirm(uid: str, code: Any, challenge_id: Optional[str] = None, *, now: Opt
                 raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)
             raise bad
         listed = _admin_listed(str(ch["channel"]), str(ch["target"]))  # R1: never verifiable
-        if listed or not hmac.compare_digest(str(ch["code_hash"] or ""), _code_hash(cid, c)):
+        if listed or not _code_matches(cid, str(ch["code_hash"] or ""), c):
             left = max(0, max_attempts() - int(ch["attempts"] or 0) - 1)
             if left == 0:
                 raise VerifyError(429, "VERIFY_TOO_MANY_ATTEMPTS", MSG_TOO_MANY)

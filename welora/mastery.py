@@ -77,6 +77,9 @@ def service_get_mastery(user_id: str, node_id: str = NODE_NO_EFUND) -> tuple[int
             from welora.goals_api import effective_mastery_state
 
             st = effective_mastery_state(user_id)
+            from welora.academy import overlay_session_mastery  # item 14: demo session view
+
+            st = overlay_session_mastery(user_id, st)
             out.update({"state": st, "meets_gate": _RANK.get(st, 0) >= _RANK[GATE_MIN]})
         except Exception:  # pragma: no cover
             pass

@@ -193,7 +193,7 @@ class TestPhoneOtpHashing(_Base):
         os.environ["WELORA_OTP_ECHO"] = "1"
         r = self.client.post("/auth/otp/request", json={"phone": "0918000111"}).json()
         stored = self.q1("SELECT code FROM otp_challenges WHERE challenge_id=?", (r["challenge_id"],))["code"]
-        self.assertTrue(stored.startswith("sha256:"))
+        self.assertTrue(stored.startswith("hmac256:"))
         self.assertNotIn(r["pilot_code"], stored)
         # in-flight row written before this change (plaintext code)
         cid = str(uuid.uuid4())

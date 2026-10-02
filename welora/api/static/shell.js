@@ -25,7 +25,8 @@
   /* migration-019 ticket item 5: /app/academy for guests only when the server marked the page
      (<meta name="welora-guest-academy" content="1"> — WELORA_GUEST_DEMO on); keep in sync with auth-gate.js. */
   var _guestAcademy = false;
-  if (path === "/app/academy" || path === "/app/learn") {  /* follow-up item 3: /app/learn = Academy alias */
+  /* follow-up item 3: /app/learn = Academy alias; follow-up #244/#245 item 12: Welorapedia (/app/content…) */
+  if (path === "/app/academy" || path === "/app/learn" || path === "/app/content" || path.indexOf("/app/content/") === 0) {
     try {
       var _gm = document.querySelector('meta[name="welora-guest-academy"]');
       _guestAcademy = !!(_gm && _gm.getAttribute("content") === "1");
@@ -243,7 +244,7 @@
 
   /* Migration 020: «Xác minh tài khoản» reminder for signed-in accounts whose e-mail / phone is not
      verified yet (GET /auth/me → verify_eligible && !verified && can_verify_now). Skippable:
-     «Để sau» hides it for 24 h; it never blocks the page. Demo personas / device guests / admin
+     «Để sau» hides it for 24 h for the account (server: verify_snoozed); it never blocks the page. Demo personas / device guests / admin
      never see it (server flags). */
   (function injectVerifyBanner() {
     var skip = { "/app/login": 1, "/app/register": 1, "/app/forgot-password": 1, "/app/reset-password": 1,
@@ -260,6 +261,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) {
         if (!me || !me.verify_eligible || me.verified || !me.can_verify_now) return;
+        if (me.verify_snoozed) return;  /* follow-up item 2: «Để sau» is kept per account on the server */
         if (document.getElementById("weloraVerifyBanner")) return;
         var box = document.createElement("div");
         box.id = "weloraVerifyBanner";
@@ -285,6 +287,12 @@
         later.style.cssText = "background:none;border:0;color:var(--text-secondary,#A8B0C0);text-decoration:underline;cursor:pointer;font-size:13px";
         later.textContent = "Để sau";
         later.addEventListener("click", function () {
+          /* follow-up item 2: 24 h per ACCOUNT on the server (POST /auth/verify/snooze →
+             users.verify_snooze_until); localStorage only spares this device the /auth/me call */
+          try {
+            fetch("/auth/verify/snooze", { method: "POST", keepalive: true,
+                                          headers: { Authorization: "Bearer " + tok } }).catch(function () {});
+          } catch (_eVs) {}
           try { localStorage.setItem("welora_verify_banner_until", String(Date.now() + 24 * 3600 * 1000)); } catch (_eVl) {}
           if (box.parentNode) box.parentNode.removeChild(box);
         });

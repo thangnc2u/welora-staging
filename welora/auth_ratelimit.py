@@ -269,8 +269,9 @@ def client_ip(peer: Optional[str], forwarded_for: Optional[str] = None, *, heade
 
 
 def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], url: Optional[str] = None,
-                     now: Optional[float] = None) -> None:
-    """Raise RateLimited if over the limit; otherwise record this attempt."""
+                     now: Optional[float] = None) -> dict[str, str]:
+    """Raise RateLimited if over the limit; otherwise record this attempt. Returns {scope: event_id}
+    of the rows written (``release`` can take one back — follow-up item 1)."""
     assert action in ACTIONS, action
     from welora.auth import ensure_auth_schema
 
@@ -286,7 +287,7 @@ def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], u
     if ip and imax > 0:
         scopes.append(("ip", _key_hash("ip", ip_bucket(ip)), imax))
     if not scopes:
-        return
+        return {}
     conn = get_connection(url)
     try:
         for scope, kh, mx in scopes:
@@ -299,15 +300,38 @@ def check_and_record(action: str, *, ip: Optional[str], target: Optional[str], u
                 oldest = datetime.fromisoformat(rows[0]["created_at"]).timestamp()
                 raise RateLimited(oldest + win - t)
         stamp = _iso(t)
+        written: dict[str, str] = {}
         for scope, kh, _mx in scopes:
+            eid = str(uuid.uuid4())
             conn.execute(
                 "INSERT INTO auth_rate_events(event_id, action, scope, key_hash, created_at) VALUES (?,?,?,?,?)",
-                (str(uuid.uuid4()), action, scope, kh, stamp),
+                (eid, action, scope, kh, stamp),
             )
+            written[scope] = eid
         conn.execute("DELETE FROM auth_rate_events WHERE created_at<?", (_iso(t - max(win, _PRUNE_AFTER_S)),))
         conn.commit()
+        return written
     finally:
         conn.close()
+
+
+def release(event_ids: list[str], *, url: Optional[str] = None) -> None:
+    """Take back rows written by ``check_and_record`` for a request that did no work (follow-up
+    item 1: a resend refused by the cooldown sends nothing, so it must not use up the per-user send
+    budget). Never raises — a row that could not be deleted just counts until the window ends."""
+    ids = [i for i in (event_ids or []) if i]
+    if not ids:
+        return
+
+    def _do() -> None:
+        conn = get_connection(url)
+        try:
+            _delete_events(conn, ids)
+            conn.commit()
+        finally:
+            conn.close()
+
+    _safe("release", _do)
 
 
 # --- /auth/login: failures only, reserve-then-count -------------------------------------------

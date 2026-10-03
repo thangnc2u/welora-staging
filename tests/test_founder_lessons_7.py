@@ -1,6 +1,6 @@
 """Ticket "GP follow-up sau #246/#247" item 1: the 7 placeholder lessons (N01-06, N02-03..07, N04-05)
-and their 84 KUAT questions are the Founder-approved v1.3 text (CoS-checked, ticket 3eea91c4), entered
-verbatim (docs/content/Welora_Academy_7_Bai_v1.3.md, copied byte-for-byte from the Founder file).
+and their 84 KUAT questions are the Founder-approved v1.6 text (CoS-checked, ticket 3eea91c4; replaces v1.3), entered
+verbatim (docs/content/Welora_Academy_7_Bai_v1.6.md, copied byte-for-byte from the Founder file).
 
 - Runtime titles = the WA titles (not the short M02 tree names); each lesson carries its locked
   one-sentence goal; the M02 tree order is unchanged (N02-05 before N02-04).
@@ -21,10 +21,10 @@ from pathlib import Path
 from welora import academy
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "docs" / "content" / "Welora_Academy_7_Bai_v1.3.md"
+SOURCE = ROOT / "docs" / "content" / "Welora_Academy_7_Bai_v1.6.md"
 NODES = ("N01-06", "N02-03", "N02-04", "N02-05", "N02-06", "N02-07", "N04-05")
 SECTIONS = ("Nội dung", "Ý chính", "Ví dụ tình huống", "Việc nên làm ngay")
-GOAL = "Mục tiêu"  # v1.3 label (was «Mục tiêu (khóa 2026-10-02)»)
+GOAL = "Mục tiêu"  # label since v1.3 (was «Mục tiêu (khóa 2026-10-02)»)
 CODE = re.compile(r"\b[A-Z]{2,7}-\d{2}\b")
 QRE = re.compile(r"(?ms)^\*\*q(\d+)\.\*\*\s*(.*?)\s*\nA\. (.*?)\s*\nB\. (.*?)\s*\nC\. (.*?)\s*\nD\. (.*?)\s*\n"
                  r"Đáp án: ([ABCD])\s*\nCore: (có|không)\s*$")
@@ -59,9 +59,9 @@ def _body(nid: str) -> str:
 
 
 class TestSource(unittest.TestCase):
-    def test_source_is_the_founder_v13_file(self):
+    def test_source_is_the_founder_v16_file(self):
         self.assertEqual(tuple(SRC), NODES)
-        self.assertEqual(tuple(academy.FOUNDER_V13_NODES), NODES)
+        self.assertEqual(tuple(academy.FOUNDER_LESSON_NODES), NODES)
         for nid in NODES:
             self.assertEqual(SRC[nid]["raw_q"], 12, nid)  # every question block parsed
             self.assertEqual(len(SRC[nid]["questions"]), 12, nid)

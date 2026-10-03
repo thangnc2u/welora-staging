@@ -493,13 +493,13 @@ def os_nudge_for(node_id: str, *, first_pass: bool = True) -> dict[str, Any] | N
 
 
 # Ticket "GP follow-up sau #246/#247" item 1 — the 7 placeholder lessons and their 84 KUAT questions are
-# the Founder-approved v1.2 text (Welora_Academy_7_Bai_v1.2.md, 2026-10-03), entered verbatim: lesson
+# the Founder-approved v1.7 text (Welora_Academy_7_Bai_v1.7.md, 2026-10-03; v1.6 lessons + 33 options reworded), entered verbatim: lesson
 # bodies in content/WA-*.md, questions below. Founder OK: only the option POSITIONS were moved (fixed,
 # committed here — not shuffled at runtime beyond the usual per-attempt perm) so the correct answers sit
 # 3 × A / B / C / D per node instead of 70 / 84 on B. Rule used: a non-B answer keeps its letter while
 # that letter has quota (3), the rest take the remaining letters A, B, C, D round-robin in question
-# order; the distractors keep their source order. tests/test_founder_v12_lessons.py checks the text.
-FOUNDER_V12_NODES = ("N01-06", "N02-03", "N02-04", "N02-05", "N02-06", "N02-07", "N04-05")
+# order; the distractors keep their source order. tests/test_founder_lessons_7.py checks the text.
+FOUNDER_LESSON_NODES = ("N01-06", "N02-03", "N02-04", "N02-05", "N02-06", "N02-07", "N04-05")
 
 QUESTIONS: dict[str, list[dict[str, Any]]] = {
     "N01-01": [
@@ -576,19 +576,19 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q105-12", "prompt": "Bài học có khuyến nghị một app duy nhất cho mọi người không?", "choices": ["Sổ giấy mới là cách duy nhất hiệu quả", "Có, chỉ nên dùng app của ngân hàng", "Không", "Nên chọn app càng nhiều tính năng càng tốt"], "answer": 2, "hard": False},
     ],
     "N01-06": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q106-01", "prompt": "Mong muốn “muốn tiết kiệm nhiều hơn” khác mục tiêu tài chính ở điểm nào?", "choices": ["Mục tiêu cần số hoặc trạng thái, thời hạn và lý do", "Mong muốn này đã đủ để đo việc phải làm tháng này", "Hai kiểu câu đó đều đo được tiến độ từng tháng", "Một cụm ngắn cũng đủ để theo dõi việc mỗi tháng"], "answer": 0, "hard": True},
-        {"id": "q106-02", "prompt": "Công thức đủ dùng trong bài gồm những phần nào?", "choices": ["Chỉ cần tên nơi gửi tiền là đủ để theo dõi tháng này", "Số hoặc trạng thái, thời hạn, lý do, mốc kiểm tra", "Chỉ cần so với mức sống của người cùng cơ quan", "Chỉ cần cảm giác yên tâm khi năm vừa khép lại"], "answer": 1, "hard": True},
-        {"id": "q106-03", "prompt": "Vì sao mục tiêu “có xe như đồng nghiệp” dễ gãy?", "choices": ["Vì mua xe bị xem là khoản phải chi mỗi tháng trong nhà", "Vì bài này cấm mọi khoản mua xe trong năm nay", "Vì lý do đến từ so sánh, không từ việc nhà mình cần", "Vì mục tiêu có con số cụ thể thì luôn là mục tiêu sai"], "answer": 2, "hard": True},
-        {"id": "q106-04", "prompt": "Khi có nhiều mong muốn, bài khuyên giữ bao nhiêu mục tiêu trọng tâm?", "choices": ["Giữ năm mục tiêu cùng lúc để khỏi bỏ sót", "Không viết một mục tiêu nào trong năm", "Biến mọi khoản chi thành mục tiêu riêng", "Chỉ giữ một đến hai mục tiêu trọng tâm"], "answer": 3, "hard": True},
-        {"id": "q106-05", "prompt": "Thứ tự ưu tiên Welora khi nhiều mục tiêu cùng lúc là gì?", "choices": ["Mục tiêu tăng trưởng làm trước, quỹ để lại sau", "Việc nào đang hào hứng thì ưu tiên làm trước", "An Toàn trước, rồi hạn cứng, rồi mục tiêu dài hơn", "Chỉ làm mục tiêu mà bạn bè đang theo đuổi"], "answer": 2, "hard": True},
-        {"id": "q106-06", "prompt": "Cổng An Toàn Welora về quỹ khẩn cấp là mức nào?", "choices": ["Ít nhất 3 tháng chi tiêu thiết yếu, không dưới mức đó", "Chỉ cần đã ghi Goal, không cần đếm đủ tháng chi tiêu", "Một tháng chi tiêu thiết yếu, nhà tự chọn mức Passed", "Bằng toàn bộ thu nhập hộ kiếm được trong một năm"], "answer": 0, "hard": True},
-        {"id": "q106-07", "prompt": "Mốc trung gian dùng để làm gì?", "choices": ["Dùng mốc này để thay hẳn lý do của mục tiêu", "Biết sớm mình lệch để sửa, khỏi chờ ngày cuối", "Xóa mục tiêu nếu tháng đầu chưa tới mốc đã ghi", "Mang mốc ra so với tiến độ của người khác"], "answer": 1, "hard": False},
-        {"id": "q106-08", "prompt": "Chị Mai nên biến câu “tiết kiệm nhiều hơn” thành dạng nào?", "choices": ["Giữ câu cũ, vì tháng nào gửi được là mục tiêu đã rõ", "Khoan đến cuối năm rồi mới chốt một lần cho cả nhà xong", "Quỹ 36 triệu trong 12 tháng, mốc 9 triệu, để khỏi vay đột xuất", "Chọn năm mục tiêu cùng lúc để tháng này có đủ việc phải làm hơn"], "answer": 2, "hard": False},
-        {"id": "q106-09", "prompt": "Nếu mốc 3 tháng chưa tới, hướng trong bài là gì?", "choices": ["Dừng mục tiêu đang làm rồi để sang năm sau tính tiếp", "Vay thêm một khoản để đủ số mốc cho kịp hạn này", "Đổi mục tiêu theo việc người khác đang làm mỗi tuần", "Giảm chi không thiết yếu, hoặc kéo hạn có chủ đích"], "answer": 3, "hard": False},
-        {"id": "q106-10", "prompt": "“Vì sao” của mục tiêu nên gắn với điều gì?", "choices": ["Đời sống của mình hoặc gia đình", "Bảng xếp hạng thu nhập quanh mình", "Tên sản phẩm đang được quảng cáo", "Số tiền người khác đang khoe tuần này"], "answer": 0, "hard": False},
-        {"id": "q106-11", "prompt": "Mục tiêu “trả hết 18 triệu dư nợ thẻ trong 8 tháng” thiếu gì nếu chưa có lý do?", "choices": ["Câu này đã đủ, không thiếu phần nào nữa", "Thiếu phần vì sao việc này quan trọng với mình", "Thiếu tên cửa hàng và ngày thẻ đã quẹt món thêm", "Thiếu một mức lợi nhuận dự kiến để theo"], "answer": 1, "hard": False},
-        {"id": "q106-12", "prompt": "Được phép tự đặt Goal quỹ cao hơn 3 tháng không?", "choices": ["Không được, nhà chỉ được đặt đúng 3 tháng", "Chỉ được phép đặt Goal thấp hơn 3 tháng", "Goal quỹ đứng riêng, không dính Cổng An Toàn", "Có, mức Passed tối thiểu vẫn là 3 tháng"], "answer": 3, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q106-01", "prompt": "Mong muốn “muốn tiết kiệm nhiều hơn” khác mục tiêu tài chính ở điểm nào?", "choices": ["Mục tiêu cần số hoặc trạng thái, thời hạn và lý do gắn với nhà mình", "Mong muốn chung đã đủ để đo việc tháng này phải làm", "Hai kiểu câu đó đều đo được tiến độ từng tháng", "Mục tiêu một cụm ngắn cũng đủ để theo dõi"], "answer": 0, "hard": True},
+        {"id": "q106-02", "prompt": "Công thức đủ dùng trong bài gồm những phần nào?", "choices": ["Biết tên ngân hàng nơi gửi là đủ theo dõi cả năm, không cần số hay hạn", "Số hoặc trạng thái, thời hạn, lý do, mốc kiểm tra", "Số so với mức sống của người cùng cơ quan là đủ, không cần hạn hay lý do", "Cảm giác yên tâm cuối năm đã được xem là công thức, không cần mốc"], "answer": 1, "hard": True},
+        {"id": "q106-03", "prompt": "Vì sao mục tiêu “có xe như đồng nghiệp” dễ gãy?", "choices": ["Mua xe bị xem là khoản phải chi mỗi tháng trong nhà", "Lý do bài này cấm mua xe của hộ", "Lý do đến từ so sánh, không từ việc nhà mình cần", "Mục tiêu có con số cụ thể thì luôn bị xem là mục tiêu sai"], "answer": 2, "hard": True},
+        {"id": "q106-04", "prompt": "Khi có nhiều mong muốn, bài khuyên giữ bao nhiêu mục tiêu trọng tâm?", "choices": ["Năm mục tiêu cùng lúc để khỏi bỏ sót việc", "Không viết mục tiêu nào trong năm nay", "Biến mọi khoản chi thành một mục tiêu riêng", "Giữ một đến hai mục tiêu trọng tâm"], "answer": 3, "hard": True},
+        {"id": "q106-05", "prompt": "Thứ tự ưu tiên Welora khi nhiều mục tiêu cùng lúc là gì?", "choices": ["Tăng trưởng làm trước, quỹ để sau", "Việc nào đang hào hứng thì ưu tiên làm trước", "An Toàn trước, rồi hạn cứng, rồi mục tiêu dài hơn", "Theo mục tiêu mà bạn bè đang theo đuổi"], "answer": 2, "hard": True},
+        {"id": "q106-06", "prompt": "Cổng An Toàn Welora về quỹ khẩn cấp là mức nào?", "choices": ["Ngưỡng tối thiểu là 3 tháng chi tiêu thiết yếu", "Một tháng chi tiêu thiết yếu là đủ để được qua cổng", "Một tháng chi tiêu, nhà tự chọn mức", "Bằng thu nhập hộ trong một năm"], "answer": 0, "hard": True},
+        {"id": "q106-07", "prompt": "Mốc trung gian dùng để làm gì?", "choices": ["Mốc này dùng để thay hẳn lý do đã ghi của mục tiêu", "Mốc để biết sớm mình lệch, khỏi chờ ngày cuối", "Xóa mục tiêu nếu tháng đầu chưa tới mốc đã ghi trên giấy", "Mang mốc ra so với tiến độ của người khác"], "answer": 1, "hard": False},
+        {"id": "q106-08", "prompt": "Chị Mai nên biến câu “tiết kiệm nhiều hơn” thành dạng nào?", "choices": ["Giữ câu cũ, vì tháng nào gửi được thì mục tiêu đã đủ rõ để theo", "Khoan đến cuối năm rồi mới chốt một lần cho cả nhà, không cần mốc giữa", "Quỹ 36 triệu trong 12 tháng, mốc 9 triệu, để khỏi vay đột xuất", "Chọn năm mục tiêu cùng lúc để tháng này có việc cho cả nhà"], "answer": 2, "hard": False},
+        {"id": "q106-09", "prompt": "Nếu mốc 3 tháng chưa tới, hướng trong bài là gì?", "choices": ["Giảm mục tiêu đang làm rồi để sang năm sau tính tiếp", "Vay thêm một khoản mới để đủ số mốc cho kịp hạn", "Đổi mục tiêu theo việc người khác đang làm mỗi tuần", "Giảm chi không thiết yếu, hoặc kéo hạn có chủ đích khi mốc chưa tới"], "answer": 3, "hard": False},
+        {"id": "q106-10", "prompt": "“Vì sao” của mục tiêu nên gắn với điều gì?", "choices": ["Đời sống của mình hoặc của gia đình mình", "Xếp hạng thu nhập của những người quanh mình", "Tên sản phẩm đang quảng cáo", "Số tiền người khác khoe"], "answer": 0, "hard": False},
+        {"id": "q106-11", "prompt": "Mục tiêu “trả hết 18 triệu dư nợ thẻ trong 8 tháng” thiếu gì nếu chưa có lý do?", "choices": ["Câu này đã đủ để theo dõi, không thiếu gì nữa", "Thiếu phần vì sao việc này quan trọng với mình", "Thiếu tên cửa hàng và ngày thẻ đã quẹt từng món một", "Thiếu mức lợi nhuận dự kiến"], "answer": 1, "hard": False},
+        {"id": "q106-12", "prompt": "Được phép tự đặt Goal quỹ cao hơn 3 tháng không?", "choices": ["Nhà chỉ được đặt đúng 3 tháng, không hơn", "Được phép đặt Goal thấp hơn 3 tháng cho nhẹ", "Goal quỹ đứng riêng, không liên quan Cổng An Toàn", "Được đặt cao hơn, Passed vẫn 3 tháng"], "answer": 3, "hard": False},
     ],
     "N01-07": [
         {"id": "q107-01", "prompt": "Lãi kép là gì?", "choices": ["Phí phạt khi rút tiền sớm", "Lãi được trả gấp đôi mỗi năm", "Lãi chỉ tính trên số gốc ban đầu", "Lãi được cộng vào gốc, rồi chính khoản lãi đó lại tiếp tục sinh lãi ở các kỳ sau"], "answer": 3, "hard": True},
@@ -637,79 +637,79 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q02l", "prompt": "Điểm sức khỏe tài chính cao có thay được việc quỹ phải đủ 3 tháng không?", "choices": ["Điểm cao là đủ rồi", "Cổng vẫn cần quỹ đủ 3 tháng, điểm không thay được", "Thay được nếu điểm trên 80", "Quỹ được 2 tháng là đủ"], "answer": 1, "hard": True},
     ],
     "N02-03": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q203-01", "prompt": "Bài này yêu cầu quỹ khẩn cấp được giữ thế nào?", "choices": ["Thanh khoản cao và tách khỏi tiền tiêu hằng ngày", "Khóa càng lâu càng tốt để khỏi tiêu vào việc vặt", "Để chung với lương cho tiện lúc chuyển khoản", "Ưu tiên nơi lãi nhìn cao nhất trong tuần này"], "answer": 0, "hard": True},
-        {"id": "q203-02", "prompt": "Vai trò của quỹ khẩn cấp trong bài này là gì?", "choices": ["Là công cụ sinh lời chính của cả hộ", "Là lớp bảo vệ khi có sự cố thật", "Là khoản thay mọi mục tiêu dài hạn", "Là tiền chờ một chỗ góp vốn mở ra"], "answer": 1, "hard": True},
-        {"id": "q203-03", "prompt": "Vì sao không để quỹ chung tài khoản lương?", "choices": ["Vì lương không được phép gửi ở ngân hàng", "Vì tách quỹ là việc trái quy định nhà", "Vì dễ tiêu dần cho việc đã biết trước", "Vì tiền mặt trong ví an toàn hơn mọi chỗ"], "answer": 2, "hard": True},
-        {"id": "q203-04", "prompt": "Chỗ nào không hợp vai trò quỹ khẩn cấp?", "choices": ["Chỗ rút được trong ít ngày và tách khỏi tiền tiêu", "Một sổ tách riêng, rút được khi có việc đột xuất", "Tài khoản không dùng để quẹt chi tiêu hằng ngày", "Cổ phiếu hoặc góp vốn, giá nhảy, không chắc rút lúc cần"], "answer": 3, "hard": True},
-        {"id": "q203-05", "prompt": "Đuổi lãi cao hơn một chút cho quỹ khẩn cấp là đổi vai vì sao?", "choices": ["Vì lúc cần tiền có thể không lấy ra được", "Vì mọi khoản lãi trên quỹ đều bị cấm hết", "Vì quỹ phải bằng đúng một tháng chi tiêu", "Vì chỉ vàng mới được dùng để giữ quỹ này"], "answer": 0, "hard": True},
-        {"id": "q203-06", "prompt": "Mức quỹ tối thiểu để qua Cổng An Toàn là gì?", "choices": ["Một tuần chi tiêu thiết yếu của hộ", "Ít nhất 3 tháng chi tiêu thiết yếu", "Bằng đúng số dư nợ thẻ đang quay", "Không cần gắn với số tháng chi tiêu"], "answer": 1, "hard": True},
-        {"id": "q203-07", "prompt": "Anh Khoa nên làm gì với 30 triệu quỹ?", "choices": ["Để nguyên trong lương cho dễ tiêu dần mỗi tháng", "Chuyển hết sang góp vốn vì có lời hứa rút linh hoạt", "Để chỗ rút trong ít ngày, tách tiền tiêu, không đầu tư", "Tiêu bớt một phần rồi tính lại chỗ giữ sau đó"], "answer": 2, "hard": False},
-        {"id": "q203-08", "prompt": "Vàng để lâu năm hợp mục tiêu nào hơn?", "choices": ["Chỗ cần rút ra trong ít ngày tới", "Khoản thay toàn bộ chi tiêu thiết yếu", "Mục tiêu khác, không phải quỹ khẩn cấp", "Khoản bắt buộc phải có của mọi hộ"], "answer": 2, "hard": False},
-        {"id": "q203-09", "prompt": "“Rút được trong ít ngày” nhằm tránh điều gì?", "choices": ["Tránh việc nhà còn giữ tiền mặt ở nhà", "Tránh việc tách quỹ sang một chỗ khác", "Tránh việc ghi lại số dư mỗi tháng", "Tránh lúc sự cố thì tiền đang bị khóa"], "answer": 3, "hard": False},
-        {"id": "q203-10", "prompt": "Được dùng quỹ khẩn cấp để đầu tư rồi gửi lại không?", "choices": ["Không, vì đang tháo lớp đệm trước khi biết sự cố", "Được, nếu cơ hội tuần này nhìn khá đẹp hơn", "Được nếu mang một nửa số đang nằm trong quỹ", "Được nếu vài người quen cùng làm việc đó thêm này"], "answer": 0, "hard": False},
-        {"id": "q203-11", "prompt": "Bài này có chỉ tên một ngân hàng hoặc sản phẩm không?", "choices": ["Có, kèm một mức lãi được cam kết sẵn", "Không, chỉ đưa tiêu chí rút được và tách được", "Có, nhưng chỉ với sản phẩm khóa dài hạn thêm này", "Có, theo bảng xếp hạng ngay trong tuần"], "answer": 1, "hard": False},
-        {"id": "q203-12", "prompt": "Muốn quỹ dày hơn 3 tháng thì xử lý ra sao?", "choices": ["Không được phép để quỹ dày hơn mức tối thiểu", "Phải mang phần dư đi vào một khoản đầu tư", "Phải nhập phần dư lại vào tiền tiêu hằng ngày", "Được Goal cao hơn, Passed vẫn là 3 tháng"], "answer": 3, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q203-01", "prompt": "Bài này yêu cầu quỹ khẩn cấp được giữ thế nào?", "choices": ["Thanh khoản cao và tách khỏi tiền tiêu hằng ngày", "Khóa càng lâu càng tốt để khỏi tiêu vặt", "Thanh khoản để chung với lương cho tiện chuyển khoản", "Ưu tiên nơi lãi nhìn cao nhất trong tuần này"], "answer": 0, "hard": True},
+        {"id": "q203-02", "prompt": "Vai trò của quỹ khẩn cấp trong bài này là gì?", "choices": ["Công cụ sinh lời chính của cả hộ đang đi làm", "Lớp bảo vệ khi có sự cố thật như mất việc", "Chỗ thay cho mọi mục tiêu dài hạn", "Tiền chờ một chỗ góp vốn vừa mở ra"], "answer": 1, "hard": True},
+        {"id": "q203-03", "prompt": "Vì sao không để quỹ chung tài khoản lương?", "choices": ["Lương không được phép gửi ở ngân hàng", "Tách quỹ sang sổ riêng là bị cấm", "Dễ tiêu dần cho việc đã biết trước như ăn uống", "Tiền mặt trong ví an toàn hơn mọi chỗ khác"], "answer": 2, "hard": True},
+        {"id": "q203-04", "prompt": "Chỗ nào không hợp vai trò quỹ khẩn cấp?", "choices": ["Tài khoản rút trong ít ngày, không dùng để quẹt", "Sổ không khóa hạn, rút được khi có việc đột xuất", "Ví riêng, tách khỏi lương, lấy ra được trong vài ngày", "Cổ phiếu hoặc góp vốn, giá nhảy, không chắc rút lúc cần"], "answer": 3, "hard": True},
+        {"id": "q203-05", "prompt": "Đuổi lãi cao hơn một chút cho quỹ khẩn cấp là đổi vai vì sao?", "choices": ["Lúc cần tiền có thể không lấy ra được, hoặc phải bán lỗ", "Mọi khoản lãi trên quỹ đều bị cấm hết", "Quỹ khẩn cấp chỉ cần bằng một tháng chi tiêu", "Vàng mới được dùng để giữ quỹ này"], "answer": 0, "hard": True},
+        {"id": "q203-06", "prompt": "Mức quỹ tối thiểu để qua Cổng An Toàn là gì?", "choices": ["Một tuần chi tiêu là đã đủ rồi", "Ngưỡng tối thiểu là 3 tháng chi tiêu", "Bằng đúng số dư nợ thẻ đang quay vòng này", "Không cần gắn với số tháng chi tiêu"], "answer": 1, "hard": True},
+        {"id": "q203-07", "prompt": "Anh Khoa nên làm gì với 30 triệu quỹ?", "choices": ["Để nguyên trong lương cho dễ tiêu dần", "Chuyển hết sang góp vốn vì có lời hứa rút", "Để chỗ rút trong ít ngày, tách tiền tiêu", "Tiêu bớt một phần rồi tính lại chỗ giữ sau"], "answer": 2, "hard": False},
+        {"id": "q203-08", "prompt": "Vàng để lâu năm hợp mục tiêu nào hơn?", "choices": ["Chỗ cần rút ra trong ít ngày tới khi có việc đột xuất, nên vẫn hợp quỹ khẩn cấp", "Khoản thay toàn bộ chi tiêu thiết yếu của hộ trong tháng", "Vàng để lâu hợp mục tiêu khác, không phải quỹ khẩn cấp", "Vàng là khoản bắt buộc phải có của mọi hộ"], "answer": 2, "hard": False},
+        {"id": "q203-09", "prompt": "“Rút được trong ít ngày” nhằm tránh điều gì?", "choices": ["Giữ tiền mặt trong nhà là ổn, vì tiền mặt không bị khóa hạn như sổ tiết kiệm", "Tránh việc tách quỹ sang một chỗ khác, vì để chung lương mới dễ kiểm mỗi tháng", "Tránh việc ghi lại số dư mỗi tháng", "Khóa đúng lúc sự cố là điều cần tránh, vì không lấy ra được"], "answer": 3, "hard": False},
+        {"id": "q203-10", "prompt": "Được dùng quỹ khẩn cấp để đầu tư rồi gửi lại không?", "choices": ["Không, vì như thế là tháo đệm sớm", "Tháo được nếu cơ hội tuần này nhìn khá đẹp hơn mức quỹ", "Được với một nửa số đang nằm trong quỹ", "Được nếu vài người quen cùng làm việc đó"], "answer": 0, "hard": False},
+        {"id": "q203-11", "prompt": "Bài này có chỉ tên một ngân hàng hoặc sản phẩm không?", "choices": ["Bài có kèm một mức lãi được hứa sẵn để chọn chỗ giữ quỹ khẩn cấp", "Tiêu chí bài đưa ra chỉ là rút được và tách được", "Sản phẩm khóa dài hạn vẫn được, miễn rút ra lúc có sự cố", "Cứ xem bảng xếp hạng trong tuần rồi chọn chỗ lãi cao nhất"], "answer": 1, "hard": False},
+        {"id": "q203-12", "prompt": "Muốn quỹ dày hơn 3 tháng thì xử lý ra sao?", "choices": ["Quỹ dày hơn mức tối thiểu thì không giữ, phần dư phải mang đi đầu tư", "Mang phần dư đi vào một khoản đầu tư ngay khi quỹ vượt 3 tháng", "Phần dư phải đổ vào tiền tiêu hằng ngày, kẻo để tiền nằm chết", "Dày hơn thì được, mức Passed tối thiểu vẫn là 3 tháng"], "answer": 3, "hard": False},
     ],
     "N02-05": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q205-01", "prompt": "Bài này phân biệt nợ tốt và nợ xấu theo hướng nào?", "choices": ["Nợ nào cũng làm hộ yếu đi như nhau", "Nợ xây năng lực khác nợ làm hộ yếu đi", "Nợ lãi thấp luôn là nợ tốt với nhà", "Chỉ nhìn tên gói vay là đủ để xếp"], "answer": 1, "hard": True},
-        {"id": "q205-02", "prompt": "Nhóm nào được bài xếp vào nợ nguy hiểm?", "choices": ["Thẻ quay vòng, tiền đã tiêu, không còn tài sản", "Khoản đang trả đúng hạn và gắn với đi làm", "Khoản đã được trả xong từ tháng trước rồi", "Tiền nhà tự để dành trong một quỹ riêng"], "answer": 0, "hard": True},
-        {"id": "q205-03", "prompt": "Vay nóng để đầu tư được xem là gì?", "choices": ["Chiến lược nên làm sớm cho kịp đợt", "Cách dùng thay cho quỹ khẩn cấp nhà", "Nợ nguy hiểm, chồng rủi ro khi chưa có đệm", "Việc bắt buộc trước khi lập ngân sách"], "answer": 2, "hard": True},
-        {"id": "q205-04", "prompt": "Nợ quá hạn cần xử lý ra sao?", "choices": ["Bỏ qua nếu số tiền còn lại đang còn nhỏ", "Đảo sang một gói mới cho hết tên cũ đi", "Dùng quỹ khẩn cấp để đầu tư rồi trả sau", "Đưa về đúng hạn trước khi bàn chuyện"], "answer": 3, "hard": True},
-        {"id": "q205-05", "prompt": "“Có thể chấp nhận” có nghĩa là gì?", "choices": ["Nên vay thêm ngay để đủ việc trong tháng này", "Còn nghĩa vụ, gắn tài sản hoặc năng lực", "Không cần trả nữa nếu lãi đang ở mức thấp rồi", "Nó tương đương với nợ tiêu dùng lãi cao luôn"], "answer": 1, "hard": True},
-        {"id": "q205-06", "prompt": "Tên “vay ưu đãi” có đổi bản chất khoản nợ không?", "choices": ["Có, vì cái tên ưu đãi đã nghĩa là khoản tốt", "Có, nếu vài người quen cùng vay đúng gói đó", "Không, thiếu năng lực và dòng tiền yếu", "Chỉ đổi bản chất khi lãi trên giấy bằng không"], "answer": 2, "hard": True},
-        {"id": "q205-07", "prompt": "Trong ví dụ chị Lan, khoản cần dồn trả thêm trước là khoản nào?", "choices": ["Khoản vay xe đang được trả đúng hạn rồi", "Cả hai khoản, đóng sạch trong tuần này", "Không có khoản nào cần được dồn thêm", "Thẻ mười hai triệu tiêu vào đồ ăn uống"], "answer": 3, "hard": False},
-        {"id": "q205-08", "prompt": "Ba câu hỏi nhận diện trong bài gồm những gì?", "choices": ["Sau khi tiêu còn gì, có gắn tài sản không, có phải vay mới không", "Chỉ hỏi người quen đã vay khoản này chưa, không hỏi bản chất của nợ", "Chỉ cần hỏi màu thẻ cùng ngân hàng đang phát hành rồi", "Chỉ cần hỏi ngày mở khoản cùng nơi giấy đã ký rồi này"], "answer": 0, "hard": False},
-        {"id": "q205-09", "prompt": "Khoản lãi thấp có thể vẫn nguy hiểm khi nào?", "choices": ["Khi hộ không trả được nếu không cắt chi tiêu thiết yếu", "Khi đang trả đúng hạn và còn tài sản tương ứng thêm này", "Khi khoản đó đã được tất toán sạch từ trước rồi", "Khi số tiền còn lại xuống dưới một triệu đồng"], "answer": 0, "hard": False},
-        {"id": "q205-10", "prompt": "Thứ tự xử lý trong bài là gì?", "choices": ["Khoản gắn tài sản phải đóng trước bằng quỹ", "Xử lý quá hạn và tiêu dùng lãi cao trước", "Khoản nào cũng để sang năm sau hết", "Chỉ xử lý khoản đứng tên người thân"], "answer": 1, "hard": False},
-        {"id": "q205-11", "prompt": "Xe máy đang dùng để đi làm, trả đúng hạn, khác thẻ tiêu dùng ở điểm nào?", "choices": ["Không khác thẻ tiêu dùng ở điểm nào cả thêm", "Không còn được tính là một khoản nợ", "Còn gắn việc tạo thu nhập và đang đúng hạn", "Nên dừng trả ngay trong tháng này luôn"], "answer": 2, "hard": False},
-        {"id": "q205-12", "prompt": "Gọi một khoản là nợ có thể chấp nhận có cho phép vay thêm ngay không?", "choices": ["Được vay thêm vì đã gọi là chấp nhận", "Được nếu lãi ghi trên giấy bằng không", "Được nếu khoản đó đứng tên người khác", "Không được, vì nợ vẫn là nghĩa vụ"], "answer": 3, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q205-01", "prompt": "Bài này phân biệt nợ tốt và nợ xấu theo hướng nào?", "choices": ["Nợ nào cũng làm hộ yếu đi như nhau sau khi vay", "Nợ xây năng lực khác nợ làm hộ yếu đi sau khi tiêu hết", "Nợ lãi thấp luôn là nợ tốt", "Nhìn tên gói vay là đủ để phân loại"], "answer": 1, "hard": True},
+        {"id": "q205-02", "prompt": "Nhóm nào được bài xếp vào nợ nguy hiểm?", "choices": ["Thẻ quay vòng, tiền đã tiêu hết vào đồ", "Thẻ đang trả đúng hạn và gắn với đi làm", "Khoản đã được trả xong từ tháng trước", "Tiền nhà tự để dành trong quỹ riêng"], "answer": 0, "hard": True},
+        {"id": "q205-03", "prompt": "Vay nóng để đầu tư được xem là gì?", "choices": ["Đây là chiến lược nên làm sớm", "Cách dùng thay cho quỹ khẩn cấp của nhà", "Đây là nợ nguy hiểm khi chưa có đệm", "Việc bắt buộc trước khi lập ngân sách"], "answer": 2, "hard": True},
+        {"id": "q205-04", "prompt": "Nợ quá hạn cần xử lý ra sao?", "choices": ["Bỏ qua nếu số tiền còn lại đang nhỏ", "Đảo sang một gói mới cho hết tên cũ đi", "Dùng quỹ khẩn cấp để đầu tư rồi trả sau", "Đưa về đúng hạn rồi hãy bàn tiếp"], "answer": 3, "hard": True},
+        {"id": "q205-05", "prompt": "“Có thể chấp nhận” có nghĩa là gì?", "choices": ["Vay thêm ngay để đủ việc trong tháng", "Còn nghĩa vụ, gắn tài sản hoặc năng lực", "Không cần trả nữa nếu lãi đang ở mức thấp rồi", "Nó tương đương với nợ tiêu dùng lãi cao luôn"], "answer": 1, "hard": True},
+        {"id": "q205-06", "prompt": "Tên “vay ưu đãi” có đổi bản chất khoản nợ không?", "choices": ["Tên ưu đãi nghĩa là khoản này tốt", "Vài người quen cùng vay đúng gói đó thì đổi", "Năng lực thiếu và dòng tiền yếu thì vẫn là nợ xấu", "Chỉ đổi khi lãi trên giấy bằng không"], "answer": 2, "hard": True},
+        {"id": "q205-07", "prompt": "Trong ví dụ chị Lan, khoản cần dồn trả thêm trước là khoản nào?", "choices": ["Ưu tiên khoản vay xe đang trả đúng hạn", "Cả hai khoản, đóng sạch trong tuần", "Chẳng có khoản nào cần được dồn thêm", "Ưu tiên thẻ mười hai triệu tiêu vào đồ ăn uống"], "answer": 3, "hard": False},
+        {"id": "q205-08", "prompt": "Ba câu hỏi nhận diện trong bài gồm những gì?", "choices": ["Sau khi tiêu còn gì, có gắn tài sản không, có phải vay mới không", "Sau khi hỏi người quen đã vay khoản này chưa, không cần biết tiền đã tiêu vào đâu", "Hỏi màu thẻ cùng ngân hàng đang phát hành", "Hỏi ngày mở khoản cùng nơi giấy đã ký"], "answer": 0, "hard": False},
+        {"id": "q205-09", "prompt": "Khoản lãi thấp có thể vẫn nguy hiểm khi nào?", "choices": ["Khi hộ không trả được nếu không cắt chi tiêu thiết yếu", "Khi đang trả đúng hạn và còn tài sản tương ứng thì vẫn là nợ làm hộ yếu đi", "Khi khoản đó đã được tất toán sạch từ trước", "Khi số tiền còn lại xuống dưới một triệu đồng thì khoản đó hết là nợ xấu"], "answer": 0, "hard": False},
+        {"id": "q205-10", "prompt": "Thứ tự xử lý trong bài là gì?", "choices": ["Xử lý khoản gắn tài sản phải đóng trước bằng quỹ", "Xử lý quá hạn và tiêu dùng lãi cao trước", "Khoản nào cũng để sang năm sau hết", "Xử lý mỗi khoản đứng tên người thân"], "answer": 1, "hard": False},
+        {"id": "q205-11", "prompt": "Xe máy đang dùng để đi làm, trả đúng hạn, khác thẻ tiêu dùng ở điểm nào?", "choices": ["Khoản này không khác thẻ tiêu dùng ở điểm nào, dù đang gắn với việc làm", "Không còn được tính là nợ, vì đã gắn với việc tạo thu nhập", "Khoản này còn gắn việc tạo thu nhập và đang đúng hạn", "Nên dừng trả ngay trong tháng này vì khoản đã gắn với việc làm"], "answer": 2, "hard": False},
+        {"id": "q205-12", "prompt": "Gọi một khoản là nợ có thể chấp nhận có cho phép vay thêm ngay không?", "choices": ["Vẫn được vay thêm vì đã gọi là chấp nhận, nợ cũ không còn là nghĩa vụ", "Được nếu lãi ghi trên giấy bằng 0 thì vay thêm không còn là nghĩa vụ", "Được nếu khoản đứng tên người khác thì nhà không còn nghĩa vụ", "Vẫn là nghĩa vụ, không được vay thêm ngay"], "answer": 3, "hard": False},
     ],
     "N02-04": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q204-01", "prompt": "Avalanche ưu tiên khoản nào khi dồn tiền trả thêm?", "choices": ["Khoản đang chịu lãi suất cao nhất", "Khoản mới vay gần ngày nhất", "Khoản đang đứng tên người thân", "Khoản nào cũng được cộng thêm như nhau"], "answer": 0, "hard": True},
-        {"id": "q204-02", "prompt": "Snowball ưu tiên khoản nào?", "choices": ["Khoản dư nợ nhỏ nhất để có lần xong sớm", "Khoản có lãi thấp nhất trong danh sách", "Khoản đang đứng tên người khác trong nhà", "Khoản chưa tới ngày phải trả trong tháng"], "answer": 0, "hard": True},
-        {"id": "q204-03", "prompt": "Cả hai phương pháp đều cần việc gì với các khoản không được ưu tiên?", "choices": ["Ngừng trả để dồn hết sang một khoản", "Trả tối thiểu để không bỏ các khoản đó", "Gộp hết vào một ứng dụng cho gọn bảng", "Đảo sang một khoản mới cho dễ nhìn hơn"], "answer": 1, "hard": True},
-        {"id": "q204-04", "prompt": "Vì sao không cứ chọn Avalanche dù nó giảm lãi trên lý thuyết?", "choices": ["Vì cách giảm lãi trên giấy đang bị cấm dùng", "Vì cách dư nợ nhỏ luôn tiết kiệm nhiều hơn", "Vì bỏ giữa chừng không bằng cách mình làm đến hết", "Vì mỗi nhà chỉ được trả duy nhất một khoản"], "answer": 2, "hard": True},
-        {"id": "q204-05", "prompt": "Chỉ trả tối thiểu mọi khoản, không dồn thêm khoản nào, dẫn tới gì?", "choices": ["Mọi khoản sẽ hết rất nhanh trong năm nay", "Nhà đương nhiên được cho qua Cổng An Toàn", "Nhà không cần phải viết danh sách nợ nữa", "Không có khoản nào giảm thật ngoài mức tối thiểu"], "answer": 3, "hard": True},
-        {"id": "q204-06", "prompt": "Có nên rút quỹ tối thiểu 3 tháng để tất toán nợ lãi thấp không?", "choices": ["Luôn nên rút quỹ để đóng cho xong", "Không nên, lớp đệm quỹ vẫn phải giữ", "Chỉ khi người quen khuyên nên rút", "Có, nếu muốn chuyển sang đầu tư ngay"], "answer": 1, "hard": True},
-        {"id": "q204-07", "prompt": "Người hay bỏ cuộc vì mục tiêu dài nên nghiêng về cách nào?", "choices": ["Cách dư nợ nhỏ, vì có mốc xong sớm", "Không trả theo một kế hoạch nào cả", "Đổi cách trả mỗi tuần cho đỡ nhàm", "Chỉ trả khoản đang có lãi thấp nhất"], "answer": 0, "hard": False},
-        {"id": "q204-08", "prompt": "Trong ví dụ ba khoản, khoản nên dồn thêm trước theo Avalanche là khoản nào?", "choices": ["Vay người thân, khoản không tính lãi", "Vay ứng lương, vì nằm giữa danh sách", "Thẻ tám triệu, vì đó là lãi cao nhất", "Cả ba khoản, chia phần trả thêm đều"], "answer": 2, "hard": False},
-        {"id": "q204-09", "prompt": "Đổi phương pháp mỗi tháng vì nghe chuyện người khác nghĩa là gì?", "choices": ["Đang chọn được cách tối ưu nhất rồi", "Đang đi đúng nguyên tắc của bài này", "Đổi cách còn hơn là giữ mức tối thiểu", "Chưa có một phương pháp để theo"], "answer": 3, "hard": False},
-        {"id": "q204-10", "prompt": "Bài này có hứa một số tiền lãi tiết kiệm cố định không?", "choices": ["Có, và áp dụng được cho mọi hộ như nhau", "Không, vì còn tùy lãi, dư nợ và việc trả thêm", "Có, nếu nhà chọn cách dư nợ nhỏ trước", "Có, nếu nhà đảo hết nợ sang một khoản mới"], "answer": 1, "hard": False},
-        {"id": "q204-11", "prompt": "Phần trả thêm khác phần tối thiểu ở điểm nào?", "choices": ["Hai phần trả đó không khác nhau gì cả đâu rồi", "Phần trả tối thiểu để dành sang đầu tư", "Phần trả thêm làm khoản giảm nhanh hơn", "Phần tiền trả thêm chỉ được chuyển vào quỹ"], "answer": 2, "hard": False},
-        {"id": "q204-12", "prompt": "Câu ghi sau khi chọn phương pháp nên có gì?", "choices": ["Tên sản phẩm nhà định mua trong tháng này", "Chỉ cảm xúc của đúng ngày hôm đó mà thôi à", "Một câu hứa về mức lợi nhuận trong tháng tới", "Khoản dồn thêm vì lãi cao hoặc dư nợ nhỏ"], "answer": 3, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q204-01", "prompt": "Avalanche ưu tiên khoản nào khi dồn tiền trả thêm?", "choices": ["Khoản đang chịu lãi suất cao nhất trong danh sách nợ", "Khoản mới vay gần ngày nhất", "Khoản đứng tên người thân trong nhà", "Khoản nào cũng được cộng thêm một phần bằng nhau"], "answer": 0, "hard": True},
+        {"id": "q204-02", "prompt": "Snowball ưu tiên khoản nào?", "choices": ["Dồn vào khoản dư nợ nhỏ nhất để có lần xong", "Dồn vào khoản có lãi thấp nhất trong danh sách", "Khoản đang đứng tên người khác", "Khoản chưa tới ngày phải trả"], "answer": 0, "hard": True},
+        {"id": "q204-03", "prompt": "Cả hai phương pháp đều cần việc gì với các khoản không được ưu tiên?", "choices": ["Ngừng trả để dồn hết sang một khoản", "Trả tối thiểu để không bỏ các khoản còn lại", "Gộp hết vào một ứng dụng cho gọn", "Đảo sang một khoản mới cho dễ nhìn hơn"], "answer": 1, "hard": True},
+        {"id": "q204-04", "prompt": "Vì sao không cứ chọn Avalanche dù nó giảm lãi trên lý thuyết?", "choices": ["Vì cách giảm lãi trên giấy đang bị cấm dùng", "Cách dư nợ nhỏ luôn tiết kiệm hơn", "Vì bỏ giữa chừng không bằng cách làm đến hết", "Mỗi nhà được trả duy nhất một khoản"], "answer": 2, "hard": True},
+        {"id": "q204-05", "prompt": "Chỉ trả tối thiểu mọi khoản, không dồn thêm khoản nào, dẫn tới gì?", "choices": ["Chẳng khoản nào hết trong năm nay nếu nhà chỉ trả đúng mức tối thiểu", "Viết xong danh sách nợ là nhà đương nhiên được qua Cổng An Toàn", "Nhà không cần phải viết danh sách nợ nữa", "Không có khoản nào giảm thật ngoài mức tối thiểu"], "answer": 3, "hard": True},
+        {"id": "q204-06", "prompt": "Có nên rút quỹ tối thiểu 3 tháng để tất toán nợ lãi thấp không?", "choices": ["Rút quỹ khẩn cấp để đóng nợ cho xong trong tháng này", "Lớp đệm quỹ vẫn phải giữ, không nên rút", "Chỉ khi người quen khuyên nên rút quỹ để đóng nợ", "Muốn chuyển sang đầu tư ngay thì nên rút quỹ khẩn cấp"], "answer": 1, "hard": True},
+        {"id": "q204-07", "prompt": "Người hay bỏ cuộc vì mục tiêu dài nên nghiêng về cách nào?", "choices": ["Cách dư nợ nhỏ, vì có mốc xong sớm", "Cách không trả theo một kế hoạch nào cả", "Đổi cách trả mỗi tuần cho đỡ nhàm", "Trả mỗi khoản đang có lãi thấp nhất"], "answer": 0, "hard": False},
+        {"id": "q204-08", "prompt": "Trong ví dụ ba khoản, khoản nên dồn thêm trước theo Avalanche là khoản nào?", "choices": ["Thẻ vay người thân, khoản không tính lãi", "Vay ứng lương, vì nằm giữa danh sách", "Thẻ tám triệu, vì lãi cao nhất", "Cả ba khoản, chia phần trả thêm đều"], "answer": 2, "hard": False},
+        {"id": "q204-09", "prompt": "Đổi phương pháp mỗi tháng vì nghe chuyện người khác nghĩa là gì?", "choices": ["Chưa chọn được cách tối ưu nhất rồi", "Đang đi đúng nguyên tắc của bài vì còn đổi cách mỗi tuần", "Đổi cách còn hơn là giữ mức tối thiểu cho đến hết nợ", "Chưa có một phương pháp để theo đến cuối"], "answer": 3, "hard": False},
+        {"id": "q204-10", "prompt": "Bài này có hứa một số tiền lãi tiết kiệm cố định không?", "choices": ["Áp một mức cho mọi hộ như nhau", "Bài không hứa, còn tùy lãi và dư nợ", "Có, đúng nếu chọn cách dư nợ nhỏ trước", "Đảo hết nợ sang một khoản mới"], "answer": 1, "hard": False},
+        {"id": "q204-11", "prompt": "Phần trả thêm khác phần tối thiểu ở điểm nào?", "choices": ["Hai phần trả đó không khác nhau", "Phần trả tối thiểu để dành đầu tư", "Phần trả thêm làm khoản giảm nhanh hơn", "Phần tiền trả thêm chỉ được chuyển vào quỹ"], "answer": 2, "hard": False},
+        {"id": "q204-12", "prompt": "Câu ghi sau khi chọn phương pháp nên có gì?", "choices": ["Ghi tên sản phẩm nhà định mua trong tháng này", "Cảm xúc của đúng ngày hôm đó mà thôi", "Một câu hứa về mức lợi nhuận trong tháng tới", "Ghi khoản dồn thêm vì lãi cao"], "answer": 3, "hard": False},
     ],
     "N02-06": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q206-01", "prompt": "Kế hoạch trả nợ đủ dùng cần những gì?", "choices": ["Chỉ một câu hứa sẽ cố gắng trong tháng", "Dư nợ, tối thiểu, trả thêm, khoản được dồn", "Chỉ tên ứng dụng đang dùng để trả nợ", "Chỉ cảm xúc của ngày cuối tháng này"], "answer": 1, "hard": True},
-        {"id": "q206-02", "prompt": "Số trả thêm lấy từ đâu?", "choices": ["Từ quỹ đang nằm dưới 3 tháng chi tiêu thiết yếu", "Từ một khoản vay mới vừa mở ra trong tháng này", "Từ tiền còn sau chi tiêu thiết yếu và sau phần giữ quỹ", "Từ khoản học phí đã hẹn phải đóng trong kỳ này"], "answer": 2, "hard": True},
-        {"id": "q206-03", "prompt": "Quỹ chưa đủ 3 tháng thì có rút để tất toán nợ lãi thấp không?", "choices": ["Có, cứ rút quỹ ra để đóng cho nhanh hơn", "Chỉ được rút một nửa số đang nằm trong quỹ", "Rút quỹ rồi mang đi đầu tư để bù lại sau", "Không, giữ lớp đệm và trả bằng dòng tiền còn lại"], "answer": 3, "hard": True},
-        {"id": "q206-04", "prompt": "Một tháng không trả thêm được thì làm gì?", "choices": ["Xóa hết kế hoạch và chờ sang tháng sau", "Ghi lý do, giảm số trả thêm, giữ ngày xem lại", "Vay mới để đủ chỉ tiêu đã ghi cho đẹp", "Đổi phương pháp nhiều lần trong cùng tháng này"], "answer": 1, "hard": True},
-        {"id": "q206-05", "prompt": "Vì sao nên chuyển khoản đúng ngày lĩnh lương?", "choices": ["Vì hệ thống chạy được lúc mệt, đỡ phụ thuộc nhớ", "Vì mọi nhà bị buộc trả vào một ngày cả nước thêm", "Vì đến ngày đó thì không cần danh sách nợ", "Vì chuyển đúng ngày là đã thay được quỹ"], "answer": 0, "hard": True},
-        {"id": "q206-06", "prompt": "Bài có hứa ngày hết nợ chính xác cho mọi hộ không?", "choices": ["Có, áp được với mọi hộ và mọi loại nợ đang có", "Có, nếu nhà chọn cách lãi cao để trả trước", "Không, lãi và thu nhập đổi; chỉ hứa việc ghi", "Có, nếu nhà đảo hết nợ sang một khoản mới rồi"], "answer": 2, "hard": True},
-        {"id": "q206-07", "prompt": "Anh Hùng quỹ hơn 1,5 tháng, muốn rút 10 triệu tất toán thẻ. Hướng trong bài là gì?", "choices": ["Rút quỹ ra để đóng sạch thẻ ngay trong tháng này", "Vay thêm một khoản mới để trả hết thẻ này đi", "Ngừng trả mức tối thiểu của cả hai khoản nợ đi", "Giữ quỹ, dồn phần còn sau thiết yếu vào thẻ"], "answer": 3, "hard": False},
-        {"id": "q206-08", "prompt": "Các khoản không được ưu tiên xử lý ra sao trong tháng?", "choices": ["Ngừng trả khoản đó trong tháng này", "Giữ mức tối thiểu của khoản đó", "Dồn hết tiền tháng vào khoản đó", "Nhờ người khác đứng tên khoản đó"], "answer": 1, "hard": False},
-        {"id": "q206-09", "prompt": "Ngày xem lại dùng để kiểm việc gì?", "choices": ["Dư nợ giảm chưa, khoản mới không, tháng sau dồn được", "Chỉ xem giá vàng và tỷ giá ngay trong ngày vừa rồi rồi", "Chỉ xem bài đăng của người lạ về cách trả nợ thôi", "Chỉ xem điểm tín dụng của người quen trong nhóm thôi"], "answer": 0, "hard": False},
-        {"id": "q206-10", "prompt": "Đảo nợ chỉ để bảng nhìn gọn, khi chưa hiểu phí mới, thì sao?", "choices": ["Nên làm ngay để bảng nợ nhìn gọn hơn", "Là bước bắt buộc trước khi ghi bốn cột", "Chưa nên, bài không hướng dẫn đảo nợ", "Làm vậy là đủ, không cần ghi bốn cột"], "answer": 2, "hard": False},
-        {"id": "q206-11", "prompt": "Kế hoạch 5 triệu trong khi chỉ còn 1 triệu sau các việc bắt buộc là kế hoạch gì?", "choices": ["Là kế hoạch sát với tiền của tháng này", "Là cách đúng với nguyên tắc hệ thống nhà thêm", "Là cách giữ quỹ khi chưa đủ số tháng", "Số cho đẹp, không làm được trong tháng này"], "answer": 3, "hard": False},
-        {"id": "q206-12", "prompt": "Bốn cột trong bài gồm những gì?", "choices": ["Tên khoản, dư nợ, tối thiểu, trả thêm", "Tên sản phẩm, lãi hứa, điểm thưởng, quà", "Chỉ một ô tổng cộng cho cả tháng này", "Ảnh chụp mặt trước của chiếc thẻ"], "answer": 0, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q206-01", "prompt": "Kế hoạch trả nợ đủ dùng cần những gì?", "choices": ["Chỉ cần hứa sẽ cố gắng trả trong tháng", "Dư nợ, tối thiểu, trả thêm, khoản được dồn", "Tên ứng dụng đang dùng để trả nợ", "Cảm xúc của ngày cuối tháng này"], "answer": 1, "hard": True},
+        {"id": "q206-02", "prompt": "Số trả thêm lấy từ đâu?", "choices": ["Từ quỹ đang nằm dưới 3 tháng chi tiêu thiết yếu", "Từ một khoản vay mới vừa mở trong tháng này", "Từ tiền còn sau chi tiêu thiết yếu và sau phần giữ quỹ", "Từ khoản học phí đã hẹn phải đóng kỳ này"], "answer": 2, "hard": True},
+        {"id": "q206-03", "prompt": "Quỹ chưa đủ 3 tháng thì có rút để tất toán nợ lãi thấp không?", "choices": ["Có, cứ rút quỹ ra để đóng cho nhanh", "Rút một nửa số đang nằm trong quỹ", "Rút quỹ rồi mang đi đầu tư để bù", "Không, giữ lớp đệm và trả bằng dòng còn lại"], "answer": 3, "hard": True},
+        {"id": "q206-04", "prompt": "Một tháng không trả thêm được thì làm gì?", "choices": ["Xóa kế hoạch rồi chờ tháng sau, không cần ghi lý do", "Ghi lý do, giảm số trả thêm, giữ ngày xem lại", "Vay mới để đủ chỉ tiêu đã ghi", "Đổi phương pháp nhiều lần trong tháng"], "answer": 1, "hard": True},
+        {"id": "q206-05", "prompt": "Vì sao nên chuyển khoản đúng ngày lĩnh lương?", "choices": ["Vì hệ thống chạy được lúc mệt, đỡ phụ thuộc nhớ", "Mọi nhà bị buộc trả vào một ngày cả nước, không được chọn ngày của mình", "Đến ngày đó thì không cần danh sách nợ, hệ thống tự trả", "Vì chuyển đúng ngày là đã thay được quỹ"], "answer": 0, "hard": True},
+        {"id": "q206-06", "prompt": "Bài có hứa ngày hết nợ chính xác cho mọi hộ không?", "choices": ["Hứa được với mọi hộ và mọi loại nợ", "Nhà chọn cách lãi cao để trả trước thì đổi", "Lãi và thu nhập đổi, chỉ hứa việc đã ghi", "Nhà đảo hết nợ sang một khoản mới là xong"], "answer": 2, "hard": True},
+        {"id": "q206-07", "prompt": "Anh Hùng quỹ hơn 1,5 tháng, muốn rút 10 triệu tất toán thẻ. Hướng trong bài là gì?", "choices": ["Lấy 10 triệu trong quỹ đóng sạch thẻ ngay tháng này", "Vay thêm một khoản mới để trả thẻ cho sạch bảng", "Ngừng trả mức tối thiểu của cả hai khoản trong tháng này", "Giữ quỹ, dồn phần còn sau thiết yếu vào thẻ"], "answer": 3, "hard": False},
+        {"id": "q206-08", "prompt": "Các khoản không được ưu tiên xử lý ra sao trong tháng?", "choices": ["Thôi trả hẳn khoản đó trong tháng này cho nhẹ", "Tháng đó giữ mức tối thiểu của khoản đó", "Dồn hết tiền tháng vào khoản đó", "Nhờ người khác đứng tên khoản đó"], "answer": 1, "hard": False},
+        {"id": "q206-09", "prompt": "Ngày xem lại dùng để kiểm việc gì?", "choices": ["Xem nợ giảm chưa, tháng sau dồn bao nhiêu", "Giá vàng và tỷ giá ngay trong ngày vừa rồi", "Bài của người lạ về cách trả nợ", "Điểm tín dụng của người quen trong nhóm bạn"], "answer": 0, "hard": False},
+        {"id": "q206-10", "prompt": "Đảo nợ chỉ để bảng nhìn gọn, khi chưa hiểu phí mới, thì sao?", "choices": ["Chưa nên làm ngay cho bảng nợ gọn hơn, vì đảo nợ không nằm trong bài", "Bước bắt buộc trước khi ghi bốn cột, không cần biết dư nợ", "Chưa nên, bài không hướng dẫn sản phẩm đảo nợ", "Làm vậy là đủ, không cần ghi bốn cột dư nợ và trả thêm"], "answer": 2, "hard": False},
+        {"id": "q206-11", "prompt": "Kế hoạch 5 triệu trong khi chỉ còn 1 triệu sau các việc bắt buộc là kế hoạch gì?", "choices": ["Số kế hoạch sát với tiền tháng này thì không phải kế hoạch hệ thống", "Cách đúng với nguyên tắc của nhà khi số không làm được", "Cách giữ quỹ khi chưa đủ số tháng, nên ghi số cho đẹp", "Số cho đẹp, không làm được trong tháng này"], "answer": 3, "hard": False},
+        {"id": "q206-12", "prompt": "Bốn cột trong bài gồm những gì?", "choices": ["Tên khoản, dư nợ, tối thiểu, trả thêm", "Tên sản phẩm, lãi hứa, điểm thưởng, quà", "Một ô tổng cho cả tháng này", "Ảnh chụp mặt trước chiếc thẻ"], "answer": 0, "hard": False},
     ],
     "N02-07": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q207-01", "prompt": "Bài này xếp thứ tự trả nợ và đầu tư ra sao?", "choices": ["Quỹ và nợ nguy hiểm trước đầu tư tăng trưởng", "Đầu tư tăng trưởng trước, quỹ để lại sau", "Làm cùng lúc bằng cách lấy tiền từ quỹ", "Chỉ nhìn cơ hội đang mở trong tuần này"], "answer": 0, "hard": True},
-        {"id": "q207-02", "prompt": "Cổng An Toàn Passed khi quỹ ở mức nào?", "choices": ["Chỉ cần Goal ghi sẵn là đủ để được qua cổng", "Ít nhất 3 tháng chi tiêu thiết yếu, không dưới mức đó", "Một tháng chi tiêu thiết yếu, nhà tự chọn mức", "Bằng đúng số tiền nhà đang định mang đi đầu tư"], "answer": 1, "hard": True},
-        {"id": "q207-03", "prompt": "Chưa Passed thì tiền quỹ được đưa sang đầu tư tăng trưởng không?", "choices": ["Được nếu sợ lỡ đợt góp trong tuần này", "Được chuyển một nửa số quỹ sang đó", "Không được đưa tiền quỹ sang việc đó", "Được khi người quen đã góp từ trước"], "answer": 2, "hard": True},
-        {"id": "q207-04", "prompt": "Dùng quỹ khẩn cấp để đầu tư rồi “gửi lại” là việc gì?", "choices": ["Cách giữ lớp đệm vẫn còn nguyên vẹn", "Việc làm cho đủ điều kiện được Passed", "Cách dùng thay cho việc trả nợ quá hạn", "Tháo lớp bảo vệ trước khi biết sự cố"], "answer": 3, "hard": True},
-        {"id": "q207-05", "prompt": "Nợ nào phải xử lý trước khi bàn đầu tư tăng trưởng?", "choices": ["Nợ tiêu dùng lãi cao hoặc đang quá hạn", "Mọi khoản đã trả đúng hạn và gắn tài sản", "Khoản đã tất toán từ tháng trước rồi", "Tiền mừng nhà vừa nhận trong tháng này"], "answer": 0, "hard": True},
-        {"id": "q207-06", "prompt": "Công cụ có được hạ ngưỡng 3 tháng hoặc tắt Hard Deny không?", "choices": ["Được nếu người dùng nài xin được hạ", "Không được hạ ngưỡng hay tắt chặn cứng", "Được hạ trong một tuần rồi trả lại sau", "Được nếu đổi tên mục tiêu đang mở ra"], "answer": 1, "hard": True},
-        {"id": "q207-07", "prompt": "Trong ví dụ quỹ 2 tháng và thẻ 9 triệu, việc tháng này là gì?", "choices": ["Lấy tiền quỹ đi góp vốn cho kịp đợt này đã", "Tất toán thẻ bằng vay mới rồi mới góp vốn", "Giữ quỹ, bổ sung tới 3 tháng, dồn trả thêm vào thẻ", "Bỏ cả quỹ lẫn thẻ để chờ sang tháng sau nữa"], "answer": 2, "hard": False},
-        {"id": "q207-08", "prompt": "Nợ gắn tài sản, đang đúng hạn, phải xử lý ra sao?", "choices": ["Tất toán ngay bằng đúng số tiền quỹ tối thiểu", "Coi như khoản đó không còn là một khoản nợ nữa", "Đảo khoản đó sang thẻ để gom về một chỗ trả hết", "Trả theo kế hoạch, không lấy quỹ tối thiểu đóng"], "answer": 3, "hard": False},
-        {"id": "q207-09", "prompt": "Tiền được bàn cho mục tiêu dài hạn là tiền nào?", "choices": ["Tiền đang nằm sẵn trong quỹ khẩn cấp, chưa phải tiền mục tiêu dài", "Tiền không cần cho chi thiết yếu, quỹ tối thiểu, nợ nguy hiểm", "Tiền học phí đã được hẹn đóng ngay trong tháng này", "Tiền vừa vay nóng để kịp tham gia một đợt góp vốn"], "answer": 1, "hard": False},
-        {"id": "q207-10", "prompt": "Cảm xúc sợ lỡ cơ hội được dùng thế nào?", "choices": ["Là người được quyền cầm lái tháng này", "Là lý do đủ để xin hạ ngưỡng số tháng", "Là dữ liệu cần quản, không phải lệnh", "Thay được cho danh sách nợ trong tháng"], "answer": 2, "hard": False},
-        {"id": "q207-11", "prompt": "Bài này có chỉ một sản phẩm để mua không?", "choices": ["Có, kèm một mức lợi nhuận được hứa", "Có, kể cả khi cổng chưa được Passed", "Có, để dùng sản phẩm đó thay cho quỹ", "Không chỉ tên sản phẩm nào để mua"], "answer": 3, "hard": False},
-        {"id": "q207-12", "prompt": "Quyết định cuối thuộc về ai?", "choices": ["Người dùng, trong ngưỡng đã được khóa", "Bài đăng đang lan trên mạng tuần này thêm", "Công cụ, và được quyền tắt cổng đi", "Người đang rủ tham gia khoản góp vốn"], "answer": 0, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q207-01", "prompt": "Bài này xếp thứ tự trả nợ và đầu tư ra sao?", "choices": ["Quỹ và nợ nguy hiểm trước đầu tư tăng trưởng", "Tăng trưởng làm trước, lớp đệm để lại sau", "Làm cùng lúc bằng cách lấy tiền từ quỹ", "Nhìn cơ hội đang mở trong tuần này"], "answer": 0, "hard": True},
+        {"id": "q207-02", "prompt": "Cổng An Toàn Passed khi quỹ ở mức nào?", "choices": ["Goal ghi sẵn trên app là đủ để qua cổng", "Ngưỡng tối thiểu là 3 tháng chi tiêu thiết yếu", "Một tháng chi tiêu, nhà tự chọn mức", "Bằng số tiền nhà đang định mang đi đầu tư"], "answer": 1, "hard": True},
+        {"id": "q207-03", "prompt": "Chưa Passed thì tiền quỹ được đưa sang đầu tư tăng trưởng không?", "choices": ["Được lấy quỹ nếu sợ lỡ đợt góp tuần này", "Chuyển một nửa số quỹ sang đó", "Cấm đưa tiền quỹ sang đầu tư khi chưa qua cổng", "Khi người quen đã góp từ trước rồi"], "answer": 2, "hard": True},
+        {"id": "q207-04", "prompt": "Dùng quỹ khẩn cấp để đầu tư rồi “gửi lại” là việc gì?", "choices": ["Lớp đệm vẫn còn nguyên khi mang quỹ đi đầu tư", "Việc làm cho đủ điều kiện được Passed", "Cách dùng thay cho việc trả nợ quá hạn", "Tháo lớp bảo vệ trước khi biết sự cố"], "answer": 3, "hard": True},
+        {"id": "q207-05", "prompt": "Nợ nào phải xử lý trước khi bàn đầu tư tăng trưởng?", "choices": ["Nợ tiêu dùng lãi cao hoặc đang quá hạn, trước khi bàn đầu tư", "Nợ đã trả đúng hạn và gắn tài sản thì để sau, không phải nợ phải xử lý trước khi đầu tư", "Khoản đã tất toán từ tháng trước rồi", "Tiền mừng nhà vừa nhận trong tháng này"], "answer": 0, "hard": True},
+        {"id": "q207-06", "prompt": "Công cụ có được hạ ngưỡng 3 tháng hoặc tắt Hard Deny không?", "choices": ["Người dùng xin thì được hạ ngưỡng, vì công cụ phải nghe theo người dùng", "Hạ ngưỡng 3 tháng hoặc tắt chặn cứng là không được", "Hạ một tuần rồi trả lại sau", "Được nếu đổi tên mục tiêu đang mở ra"], "answer": 1, "hard": True},
+        {"id": "q207-07", "prompt": "Trong ví dụ quỹ 2 tháng và thẻ 9 triệu, việc tháng này là gì?", "choices": ["Lấy tiền quỹ đi góp vốn cho kịp đợt, vì quỹ hai tháng vẫn đủ", "Tất toán thẻ bằng vay mới rồi góp vốn, không đợi đủ 3 tháng", "Giữ quỹ, bổ sung tới 3 tháng, dồn trả thêm vào thẻ", "Bỏ cả quỹ lẫn thẻ để chờ tháng sau, không bổ sung tới 3 tháng"], "answer": 2, "hard": False},
+        {"id": "q207-08", "prompt": "Nợ gắn tài sản, đang đúng hạn, phải xử lý ra sao?", "choices": ["Trả ngay bằng số tiền quỹ tối thiểu để đóng sạch khoản gắn tài sản", "Coi như khoản đó không còn là nợ", "Đảo khoản sang thẻ để gom một chỗ trả, cho bảng nợ gọn", "Trả theo kế hoạch, không lấy quỹ tối thiểu để đóng"], "answer": 3, "hard": False},
+        {"id": "q207-09", "prompt": "Tiền được bàn cho mục tiêu dài hạn là tiền nào?", "choices": ["Tiền đang nằm sẵn trong quỹ khẩn cấp của nhà là tiền được bàn cho mục tiêu dài hạn", "Tiền không cần cho chi thiết yếu, quỹ tối thiểu, nợ nguy hiểm", "Tiền học phí đã được hẹn đóng tháng này là tiền được bàn cho mục tiêu dài hạn", "Tiền vừa vay nóng để kịp một đợt góp"], "answer": 1, "hard": False},
+        {"id": "q207-10", "prompt": "Cảm xúc sợ lỡ cơ hội được dùng thế nào?", "choices": ["Cảm xúc được quyền cầm lái trong tháng này", "Lý do đủ để xin hạ ngưỡng số tháng", "Dữ liệu cần quản, không phải lệnh bỏ cổng", "Thay được cho danh sách nợ trong tháng"], "answer": 2, "hard": False},
+        {"id": "q207-11", "prompt": "Bài này có chỉ một sản phẩm để mua không?", "choices": ["Bài có kèm một mức lợi nhuận hứa để chọn sản phẩm", "Kể cả khi cổng chưa Passed vẫn mua được sản phẩm", "Dùng sản phẩm đó thay cho quỹ khi bài đã chỉ tên sản phẩm", "Bài không chỉ tên sản phẩm nào để mua"], "answer": 3, "hard": False},
+        {"id": "q207-12", "prompt": "Quyết định cuối thuộc về ai?", "choices": ["Người dùng, trong ngưỡng đã được khóa", "Bài đăng đang lan trên mạng tuần này", "Công cụ, và được quyền tắt cổng khi người dùng xin", "Người đang rủ tham gia góp vốn trong tuần"], "answer": 0, "hard": False},
     ],
     "N03-01": [
         # Follow-up item 5 — chuẩn N02 (P0b r2/r3): 12 câu × 4 lựa chọn, 6 câu trọng tâm; độ dài cân bằng (đáp án
@@ -872,19 +872,19 @@ QUESTIONS: dict[str, list[dict[str, Any]]] = {
         {"id": "q404-12", "prompt": "Heo đất / lọ tiết kiệm phù hợp với mục tiêu nào của trẻ nhỏ?", "choices": ["Trả nợ cho cha mẹ", "Mua nhà khi lớn", "Mục tiêu ngắn", "Đầu tư dài hạn"], "answer": 2, "hard": False},
     ],
     "N04-05": [
-        # Founder v1.2 (2026-10-03), verbatim; only option positions moved (see FOUNDER_V12_NODES).
-        {"id": "q405-01", "prompt": "Bài này nói di sản và thừa kế nên được xử lý thế nào?", "choices": ["Thiết kế có ý, không để mặc định", "Để mặc định, khi có việc rồi hãy tính", "Chỉ bàn khi tranh chấp đã nổ ra rồi", "Chỉ để người khác quyết thay cho mình"], "answer": 0, "hard": True},
-        {"id": "q405-02", "prompt": "Im lặng về ý nguyện thường dẫn tới gì?", "choices": ["Việc thừa kế sau đó rồi sẽ tự biến mất", "Người ở lại phải đoán trong lúc đang lo", "Giấy tờ rồi sẽ tự có hiệu lực đủ", "Nợ gắn với tài sản rồi tự được xóa"], "answer": 1, "hard": True},
-        {"id": "q405-03", "prompt": "Ba việc của di sản trong bài là gì?", "choices": ["Chỉ việc chia số tiền mặt còn lại trong nhà thôi", "Chỉ việc mua thêm tài sản trước khi nói ra thôi", "Rõ tài sản, nghĩa vụ, ý nguyện và thủ tục để ý đứng được", "Chỉ việc đổi tên sổ sang người khác ngay lập tức"], "answer": 2, "hard": True},
-        {"id": "q405-04", "prompt": "Bước làm được trước khi có giấy hoàn chỉnh là gì?", "choices": ["Tự chép một mẫu trên mạng và coi là xong", "Chuyển hết cho một người ngay trong tuần", "Hứa miệng cho mỗi người một kiểu khác nhau", "Liệt kê tài sản, nợ, và nói trong nhà về chăm sóc"], "answer": 3, "hard": True},
-        {"id": "q405-05", "prompt": "Vì sao không coi tờ giấy tự viết là đã xong?", "choices": ["Vì giấy sai thủ tục có thể không có hiệu lực", "Vì việc nói trong nhà bị xem là điều xui xẻo", "Vì nhà không được phép liệt kê tài sản ra", "Vì chỉ có ngân hàng mới được phép biết ý này"], "answer": 0, "hard": True},
-        {"id": "q405-06", "prompt": "Bài này có phải tư vấn pháp lý không?", "choices": ["Phải, và có sẵn mẫu di chúc để dùng ngay", "Không, giấy hiệu lực cần người chuyên môn", "Phải, nếu làm theo một điều luật được trích", "Phải, và áp dụng được như nhau ở mọi tỉnh"], "answer": 1, "hard": True},
-        {"id": "q405-07", "prompt": "Anh Nam nên làm gì trước?", "choices": ["Cứ tiếp tục không nói với nhà, vì sợ nói ra sẽ xui cho cả nhà", "Tự viết một tờ chia nhà rồi cất kỹ vào ngăn kéo của nhà", "Nói với vợ về chỗ ở, chăm sóc, nợ, rồi gặp người hành nghề", "Chuyển nhà cho một người ngay để cho xong việc này rồi"], "answer": 2, "hard": False},
-        {"id": "q405-08", "prompt": "Chuyển hết tài sản cho một người ngay có thể tạo gì?", "choices": ["Coi như hết sạch mọi việc pháp lý còn lại", "Thay được cho danh sách nợ của cả hộ", "Coi là đủ ý nguyện trong mọi hoàn cảnh nhà này", "Hệ quả sở hữu và quan hệ nếu chưa được tư vấn"], "answer": 3, "hard": False},
-        {"id": "q405-09", "prompt": "Danh sách đầu tiên nên gồm những gì?", "choices": ["Nhà, sổ, xe, bảo hiểm, nợ ngân hàng và nợ nhà", "Chỉ gồm số tiền mặt đang để trong ví nhà", "Chỉ gồm tài sản đang đứng tên của hàng xóm", "Chỉ gồm ảnh và giấy tờ không mang giá tiền mặt"], "answer": 0, "hard": False},
-        {"id": "q405-10", "prompt": "Nhà có nhiều con hoặc hoàn cảnh phức tạp thì dừng ở đâu trước khi làm giấy?", "choices": ["Cứ tự quyết một mình rồi mới nói với nhà sau", "Trao đổi vừa sức, rồi tìm người hành nghề", "Đăng mẫu lên mạng rồi nhờ người lạ sửa giúp hộ", "Cứ không nói với ai cho đến khi có việc xảy ra"], "answer": 1, "hard": False},
-        {"id": "q405-11", "prompt": "Nói sớm giúp việc gì, theo bài?", "choices": ["Làm quãng đường phía trước ngắn hơn", "Thay cho thủ tục pháp lý nhà cần làm thêm này", "Giảm khoảng trống hiểu lầm cho người ở lại", "Xóa khoản nợ ngân hàng còn gắn nhà"], "answer": 2, "hard": False},
-        {"id": "q405-12", "prompt": "Welora có thay việc soạn giấy thừa kế không?", "choices": ["Có, và soạn thay được giấy thừa kế", "Có nếu quỹ khẩn cấp đã đủ 3 tháng", "Có nếu dùng đúng mẫu đang nằm trong bài", "Không, Welora không thay việc soạn giấy"], "answer": 3, "hard": False},
+        # Founder v1.7 (2026-10-03), verbatim; only option positions moved (see FOUNDER_LESSON_NODES).
+        {"id": "q405-01", "prompt": "Bài này nói di sản và thừa kế nên được xử lý thế nào?", "choices": ["Thiết kế có ý, không để mặc định cho người ở lại đoán", "Để mặc định, khi có việc rồi hãy tính", "Bàn khi tranh chấp đã nổ ra rồi", "Để người khác quyết thay cho mình"], "answer": 0, "hard": True},
+        {"id": "q405-02", "prompt": "Im lặng về ý nguyện thường dẫn tới gì?", "choices": ["Việc thừa kế sau đó tự biến mất", "Người ở lại phải đoán trong lúc đang lo tang", "Giấy tờ rồi sẽ tự có hiệu lực", "Nợ gắn với tài sản rồi tự được xóa"], "answer": 1, "hard": True},
+        {"id": "q405-03", "prompt": "Ba việc của di sản trong bài là gì?", "choices": ["Rõ việc chia số tiền mặt còn trong nhà", "Mua thêm tài sản trước khi nói", "Rõ tài sản, nghĩa vụ, ý nguyện và thủ tục để ý đứng được", "Đổi tên sổ sang người khác ngay lập tức"], "answer": 2, "hard": True},
+        {"id": "q405-04", "prompt": "Bước làm được trước khi có giấy hoàn chỉnh là gì?", "choices": ["Chép một mẫu trên mạng và coi như đã xong", "Đưa hết cho một người trong tuần", "Hứa miệng cho mỗi người một kiểu khác nhau", "Liệt kê tài sản, nợ, và nói về chăm sóc"], "answer": 3, "hard": True},
+        {"id": "q405-05", "prompt": "Vì sao không coi tờ giấy tự viết là đã xong?", "choices": ["Vì giấy sai thủ tục có thể không có hiệu lực khi cần dùng", "Nói với người nhà bị xem là điều xui", "Nhà không được phép liệt kê tài sản ra giấy, vì liệt kê làm giấy tự viết mất hiệu lực", "Ngân hàng mới được phép biết ý này"], "answer": 0, "hard": True},
+        {"id": "q405-06", "prompt": "Bài này có phải tư vấn pháp lý không?", "choices": ["Giấy mẫu có sẵn nên dùng ngay", "Giấy có hiệu lực cần người có chuyên môn, bài không phải tư vấn", "Làm theo một điều luật trích là đủ", "Áp dụng như nhau ở mọi tỉnh, không cần người nghề, mẫu trong bài là đủ hiệu lực"], "answer": 1, "hard": True},
+        {"id": "q405-07", "prompt": "Anh Nam nên làm gì trước?", "choices": ["Cứ im, vì sợ nói ra sẽ xui cho cả nhà", "Tự viết một tờ chia nhà rồi cất ngăn kéo", "Nói với vợ về chỗ ở, chăm sóc, nợ, rồi gặp người hành nghề", "Chuyển nhà cho một người ngay để cho xong việc, khỏi cần nói với vợ"], "answer": 2, "hard": False},
+        {"id": "q405-08", "prompt": "Chuyển hết tài sản cho một người ngay có thể tạo gì?", "choices": ["Chuyển xong thì hết việc pháp lý còn lại, nhà không còn tranh chấp", "Thay được cho danh sách nợ của cả hộ", "Đủ ý nguyện trong mọi hoàn cảnh của nhà, không cần hỏi người hành nghề", "Hệ quả sở hữu và quan hệ nếu chưa được tư vấn"], "answer": 3, "hard": False},
+        {"id": "q405-09", "prompt": "Danh sách đầu tiên nên gồm những gì?", "choices": ["Nhà, sổ, xe, bảo hiểm, nợ ngân hàng và nợ người thân", "Danh sách chỉ cần tiền mặt trong ví, sổ và xe không phải ghi", "Tài sản đang đứng tên của hàng xóm vẫn phải ghi vào danh sách nhà mình", "Ảnh và giấy không mang giá tiền"], "answer": 0, "hard": False},
+        {"id": "q405-10", "prompt": "Nhà có nhiều con hoặc hoàn cảnh phức tạp thì dừng ở đâu trước khi làm giấy?", "choices": ["Tự quyết một mình, ký giấy xong rồi mới nói với người nhà", "Trao đổi vừa sức, rồi tìm người hành nghề khi làm giấy", "Đăng mẫu lên mạng rồi nhờ người lạ sửa hộ trước khi gặp người hành nghề", "Cứ không nói với ai cho đến khi có việc, rồi mới tìm người hành nghề"], "answer": 1, "hard": False},
+        {"id": "q405-11", "prompt": "Nói sớm giúp việc gì, theo bài?", "choices": ["Nói sớm chỉ làm việc phía trước gọn hơn, không liên quan người ở lại", "Thay thủ tục pháp lý nhà cần làm, nói xong là giấy có hiệu lực", "Giảm khoảng trống hiểu lầm cho người ở lại", "Xóa khoản nợ ngân hàng còn gắn với nhà chỉ bằng cách nói sớm"], "answer": 2, "hard": False},
+        {"id": "q405-12", "prompt": "Welora có thay việc soạn giấy thừa kế không?", "choices": ["Welora vẫn soạn thay được giấy thừa kế cho người dùng", "Quỹ đủ 3 tháng thì Welora soạn thay giấy thừa kế", "Mẫu trong bài đủ để Welora soạn thay giấy thừa kế", "Welora không thay việc soạn giấy thừa kế"], "answer": 3, "hard": False},
     ],
     "N04-06": [
         {"id": "q406-01", "prompt": "Di sản phi tài chính là gì?", "choices": ["Sổ tiết kiệm đứng tên con", "Vàng cất trong két sắt ở nhà", "Những gì truyền qua thế hệ không đo bằng tiền: giá trị, thói quen, kỹ năng, câu chuyện, uy tín", "Nhà đất để lại cho con"], "answer": 2, "hard": True},
@@ -1492,9 +1492,60 @@ def get_tree(user_id: str, *, key: Optional[str] = None) -> dict[str, Any]:
 
 
 
+# Ticket 3eea91c4 item 3: the internal metadata line(s) of a lesson file — «**principle_key:** GOAL-01 ·
+# Bài liên kết: WP-01-07», «**secondary_keys:** …» — are not part of the lesson. The server drops them
+# from body_markdown for EVERY lesson (not only the client's stripFrontmatter); the linked WP ids move to
+# the separate `related_links` field, the key itself is already the node's `principle_key`.
+_LESSON_META_LINE = re.compile(r"^\s*\*\*(?:principle_key|secondary_keys):\*\*")
+_WP_ID = re.compile(r"\bWP-\d{2}-\d{2}\b")
+
+
+def _split_lesson_meta(body: str) -> tuple[str, list[str]]:
+    """(body without the metadata lines, WP ids named on a «Bài liên kết» metadata line)."""
+    kept, links = [], []
+    dropped_prev = False
+    for line in (body or "").split("\n"):
+        if _LESSON_META_LINE.match(line):
+            if "liên kết" in line.lower():
+                links += [w for w in _WP_ID.findall(line) if w not in links]
+            dropped_prev = True
+            continue
+        if dropped_prev and not line.strip() and kept and not kept[-1].strip():
+            continue  # no double blank line where the metadata line was
+        dropped_prev = False
+        kept.append(line)
+    return "\n".join(kept), links
+
+
 def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
-    """Load WA markdown by lesson_id; fall back to mapped WA/WP, then FALLBACK_BODY."""
+    """The lesson body as served to the learner (metadata lines / WP internal headers removed)."""
+    return _learner_lesson(lesson_id, principle_key)[0]
+
+
+def _learner_lesson(lesson_id: str, principle_key: str) -> tuple[str, list[str]]:
+    """(learner body_markdown, related WP ids). PR #249 r2 (b): a WP-backed body also goes through
+    content_map.strip_internal_headers — the «# WP-xx-xx:» title and the **Module:** / **Mức rủi ro:** /
+    **Version:** / **Status:** header block are internal, like on /content."""
+    from welora.content_map import strip_internal_headers
+
+    body, from_wp = _lesson_source(lesson_id, principle_key)
+    if from_wp:
+        body = strip_internal_headers(body)
+    return _split_lesson_meta(body)
+
+
+def _lesson_source_markdown(lesson_id: str, principle_key: str) -> str:
+    """Raw lesson source (file text as stored)."""
+    return _lesson_source(lesson_id, principle_key)[0]
+
+
+def _lesson_source(lesson_id: str, principle_key: str) -> tuple[str, bool]:
+    """Load WA markdown by lesson_id; fall back to mapped WA/WP, then FALLBACK_BODY.
+    Returns (text, True when the text is a WP article)."""
     from welora.content_map import CONTENT_BY_KEY, FALLBACK_BODY, content_root, _read_rel
+
+    def cap(body: str) -> str:
+        return body[:20000] + "\n\n… (truncated)" if len(body) > 20000 else body
 
     root = content_root()
     lid = (lesson_id or "").strip()
@@ -1505,25 +1556,17 @@ def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
             if direct.is_file():
                 matches = [direct]
         if matches:
-            body = matches[0].read_text(encoding="utf-8", errors="replace")
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
+            return cap(matches[0].read_text(encoding="utf-8", errors="replace")), False
     meta = CONTENT_BY_KEY.get(principle_key) or {}
-    for rel in (meta.get("path_wa"), meta.get("path_wp")):
+    for rel, wp in ((meta.get("path_wa"), False), (meta.get("path_wp"), True)):
         body, _ = _read_rel(root, rel)
         if (body or "").strip():
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
+            return cap(body), wp
     for rel in meta.get("path_wp_extra") or []:
         body, _ = _read_rel(root, rel)
         if (body or "").strip():
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
-    fb = FALLBACK_BODY.get(principle_key) or ""
-    return fb
+            return cap(body), True
+    return FALLBACK_BODY.get(principle_key) or "", False
 
 
 def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None,
@@ -1539,7 +1582,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
     _refresh_locks(p)
     n = dict(_NODE_BY_ID[node_id])
     st = p["nodes"][node_id]
-    body = _lesson_body_markdown(str(n.get("lesson_id") or ""), str(n.get("principle_key") or ""))
+    body, related_links = _learner_lesson(str(n.get("lesson_id") or ""), str(n.get("principle_key") or ""))
     kuat: dict[str, Any] = kuat_info(node_id)
     questions: list[dict[str, Any]] = []
     if st["status"] != STATUS_LOCKED and issue_attempt and QUESTIONS.get(node_id):
@@ -1560,6 +1603,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
             # Learner-facing stub: VI title only — never leak principle_key / SAFE-* / DEBT-*
             "lesson_stub": n["title"],
             "body_markdown": body,
+            "related_links": related_links,
         }
     )
     return n

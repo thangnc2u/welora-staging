@@ -2,7 +2,7 @@
 
 **principle_key:** DEBT-02 · Bài liên kết: WP-02-05
 
-**Mục tiêu (khóa 2026-10-02):** Chọn Snowball hoặc Avalanche theo cách mình làm đến cùng, sau khi đã biết khoản nào nguy hiểm.
+**Mục tiêu:** Chọn Snowball hoặc Avalanche theo cách mình làm đến cùng, sau khi đã biết khoản nào nguy hiểm.
 
 ## Nội dung
 

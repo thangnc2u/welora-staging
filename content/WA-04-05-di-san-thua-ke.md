@@ -2,11 +2,11 @@
 
 **principle_key:** LEG-01 · Bài liên kết: WP-04-06
 
-**Mục tiêu (khóa 2026-10-02):** Biết vì sao cần nói và ghi ý nguyện về tài sản, nghĩa vụ, người chăm sóc, và khi nào phải nhờ người có chuyên môn pháp lý.
+**Mục tiêu:** Biết vì sao cần nói và ghi ý nguyện về tài sản, nghĩa vụ, người chăm sóc, và khi nào phải nhờ người có chuyên môn pháp lý.
 
 ## Nội dung
 
-Di sản và thừa kế cần được thiết kế, không để mặc định. Im lặng không làm việc biến mất. Nó đẩy việc sang người ở lại, đúng lúc họ đang lo tang và không đủ tỉnh để đoán ý mình.
+Bài này chỉ là giáo dục chung, không phải tư vấn pháp lý, không hướng dẫn soạn di chúc. Di sản và thừa kế cần được thiết kế, không để mặc định. Im lặng không làm việc biến mất. Nó đẩy việc sang người ở lại, đúng lúc họ đang lo tang và không đủ tỉnh để đoán ý mình.
 
 Di sản ở mức bài này không phải “chia hết tiền cho xong”. Ba việc: rõ tài sản nào và nghĩa vụ nào còn gắn, rõ ý muốn ai được chăm sóc và ai được nhận trong khuôn khổ pháp luật, rõ giấy tờ phải làm đúng thủ tục thì ý đó mới đứng được. Ẩn dụ trong Welorapedia là hộp đồ quý: nếu không ai biết hộp ở đâu, chìa ở đâu, ai được mở, người ở lại dễ tranh, dễ mất.
 

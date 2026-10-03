@@ -2,7 +2,7 @@
 
 **principle_key:** DEBT-02 · Bài liên kết: WP-02-07
 
-**Mục tiêu (khóa 2026-10-02):** Lập kế hoạch có dư nợ, lãi, số trả định kỳ và ngày xem lại, mà không phá quỹ khẩn cấp tối thiểu.
+**Mục tiêu:** Lập kế hoạch có dư nợ, lãi, số trả định kỳ và ngày xem lại, mà không phá quỹ khẩn cấp tối thiểu.
 
 ## Nội dung
 

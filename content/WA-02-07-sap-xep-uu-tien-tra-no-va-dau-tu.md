@@ -2,7 +2,7 @@
 
 **principle_key:** DEBT-03 · Bài liên kết: WP-02-08
 
-**Mục tiêu (khóa 2026-10-02):** Đặt quỹ khẩn cấp và nợ nguy hiểm trước khoản đầu tư tăng trưởng, và không nhảy Cổng An Toàn.
+**Mục tiêu:** Đặt quỹ khẩn cấp và nợ nguy hiểm trước khoản đầu tư tăng trưởng, và không nhảy Cổng An Toàn.
 
 ## Nội dung
 

@@ -1,6 +1,6 @@
 """Ticket "GP follow-up sau #246/#247" item 1: the 7 placeholder lessons (N01-06, N02-03..07, N04-05)
-and their 84 KUAT questions are the Founder-approved v1.2 text, entered verbatim
-(docs/content/Welora_Academy_7_Bai_v1.2.md, copied byte-for-byte from the Founder file).
+and their 84 KUAT questions are the Founder-approved v1.7 text (CoS-checked, ticket 3eea91c4; lessons as v1.6), entered
+verbatim (docs/content/Welora_Academy_7_Bai_v1.7.md, copied byte-for-byte from the Founder file).
 
 - Runtime titles = the WA titles (not the short M02 tree names); each lesson carries its locked
   one-sentence goal; the M02 tree order is unchanged (N02-05 before N02-04).
@@ -21,10 +21,10 @@ from pathlib import Path
 from welora import academy
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "docs" / "content" / "Welora_Academy_7_Bai_v1.2.md"
+SOURCE = ROOT / "docs" / "content" / "Welora_Academy_7_Bai_v1.7.md"
 NODES = ("N01-06", "N02-03", "N02-04", "N02-05", "N02-06", "N02-07", "N04-05")
 SECTIONS = ("Nội dung", "Ý chính", "Ví dụ tình huống", "Việc nên làm ngay")
-GOAL = "Mục tiêu (khóa 2026-10-02)"
+GOAL = "Mục tiêu"  # label since v1.3 (was «Mục tiêu (khóa 2026-10-02)»)
 CODE = re.compile(r"\b[A-Z]{2,7}-\d{2}\b")
 QRE = re.compile(r"(?ms)^\*\*q(\d+)\.\*\*\s*(.*?)\s*\nA\. (.*?)\s*\nB\. (.*?)\s*\nC\. (.*?)\s*\nD\. (.*?)\s*\n"
                  r"Đáp án: ([ABCD])\s*\nCore: (có|không)\s*$")
@@ -59,9 +59,9 @@ def _body(nid: str) -> str:
 
 
 class TestSource(unittest.TestCase):
-    def test_source_is_the_founder_v12_file(self):
+    def test_source_is_the_founder_v17_file(self):
         self.assertEqual(tuple(SRC), NODES)
-        self.assertEqual(tuple(academy.FOUNDER_V12_NODES), NODES)
+        self.assertEqual(tuple(academy.FOUNDER_LESSON_NODES), NODES)
         for nid in NODES:
             self.assertEqual(SRC[nid]["raw_q"], 12, nid)  # every question block parsed
             self.assertEqual(len(SRC[nid]["questions"]), 12, nid)
@@ -89,16 +89,22 @@ class TestLessons(unittest.TestCase):
             body, meta = _body(nid), SRC[nid]["meta"]
             lines = body.split("\n")
             self.assertEqual(lines[0], f"# {academy._NODE_BY_ID[nid]['lesson_id']} {meta['Tên runtime']}", nid)
-            # academy.html stripFrontmatter drops the H1 and the **principle_key:** line, so the learner
-            # sees the locked one-sentence goal first, then the sections.
-            self.assertEqual(lines[1:5], ["", f"**principle_key:** {meta['principle_key']}", "",
-                                          f"**{GOAL}:** {meta[GOAL]}"], nid)
+            # Ticket 3eea91c4 item 3: the server drops the «**principle_key:** … · Bài liên kết …» line, so the
+            # locked one-sentence goal comes right after the H1 (academy.html strips only the H1).
+            self.assertEqual(lines[1:3], ["", f"**{GOAL}:** {meta[GOAL]}"], nid)
+            self.assertNotIn("principle_key", body, nid)
+            self.assertNotIn("Bài liên kết", body, nid)
             for sec in SECTIONS:
                 src = "\n".join(x.rstrip() for x in SRC[nid]["sections"][sec].split("\n"))
                 self.assertIn(f"\n## {sec}\n\n{src}\n", body + "\n", (nid, sec))
             self.assertNotIn("Đáp án:", body, nid)  # questions stay in the KUAT bank, not the lesson
             # v1.2: no principle code in what the learner reads (only the hidden principle_key line has one)
-            self.assertNotRegex("\n".join(lines[3:]), CODE, nid)
+            self.assertNotRegex("\n".join(lines[1:]), CODE, nid)
+
+    def test_n04_05_disclaimer_is_served(self):
+        disclaimer = ("Bài này chỉ là giáo dục chung, không phải tư vấn pháp lý, không hướng dẫn soạn di chúc.")
+        self.assertTrue(SRC["N04-05"]["sections"]["Nội dung"].startswith(disclaimer))
+        self.assertIn(f"## Nội dung\n\n{disclaimer}", _body("N04-05"))
 
     def test_no_principle_code_in_questions(self):
         for nid in NODES:

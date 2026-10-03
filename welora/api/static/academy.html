@@ -209,12 +209,18 @@ async function loadTree(){
   return d;
 }
 
+function isInternalHeaderLine(t){
+  return /^#\s*W[AP]-/.test(t) || /^\*\*(Module|M\u1ee9c r\u1ee7i ro|Version|Status|principle_key|secondary_keys):/i.test(t);
+}
 function stripFrontmatter(md){
+  // PR #249 r3: drop a leading block only when every non-empty line above the first --- is an internal
+  // header line (# WA-/# WP- title or **Module:** / **Mức rủi ro:** … line). A --- later in the lesson
+  // (e.g. before «Câu hỏi liên quan gợi ý») no longer cuts the body. The server strips headers already.
   var s=String(md||'').replace(/^\uFEFF/,'');
   var idx=s.search(/\n---\s*\n/);
   if(idx>=0){
-    var head=s.slice(0,idx);
-    if(/principle_key|Module:|M\u1ee9c r\u1ee7i ro|Version:|Status:|^#\s*W[AP]-/m.test(head)){
+    var head=s.slice(0,idx).split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+    if(head.length && head.every(isInternalHeaderLine)){
       s=s.slice(idx).replace(/^\n---\s*\n/,'');
     }
   }
@@ -222,8 +228,7 @@ function stripFrontmatter(md){
   while(lines.length){
     var t=lines[0].trim();
     if(!t){ lines.shift(); continue; }
-    if(/^#\s*W[AP]-/.test(t)){ lines.shift(); continue; }
-    if(/^\*\*(Module|M\u1ee9c r\u1ee7i ro|Version|Status|principle_key|secondary_keys):/i.test(t)){ lines.shift(); continue; }
+    if(isInternalHeaderLine(t)){ lines.shift(); continue; }
     break;
   }
   return lines.join('\n').replace(/^\s+/,'');

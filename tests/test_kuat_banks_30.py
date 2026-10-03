@@ -10,18 +10,19 @@ DB scenarios run in subprocesses (tests/_kb30_dbmode.py) on SQLite, or PG17 via 
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
-import random
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from collections import Counter
+from fractions import Fraction
+from math import ceil, comb
 from pathlib import Path
 
-import pytest
 
 from tests._db_target import db_env
 from welora import academy
@@ -32,42 +33,12 @@ FORBIDDEN = r"(?i)^không,\s*trừ khi|chắc lời|cam kết lãi"
 BANKS_30 = tuple([f"N01-0{i}" for i in range(2, 8)] + [f"N02-0{i}" for i in range(3, 8)]
                  + [f"N03-0{i}" for i in range(2, 8)] + [f"N04-0{i}" for i in range(2, 8)]
                  + [f"N05-0{i}" for i in range(1, 8)])
-# Follow-up #246/#247 item 1 (round 2): N01-06, N02-03..07 and N04-05 are the Founder-approved v1.2 text,
-# entered verbatim (tests/test_founder_v12_lessons.py). All the quality bars below apply to them again.
-# Where the v1.2 wording still misses a bar, that (check, node) pair is a STRICT xfail — the wording may
-# not be edited (round 2/2, Founder) — so the gap stays visible and the xfail turns red once the text is
-# fixed. The pair is skipped inside the all-banks loop and asserted on its own in TestFounderV12Gaps.
-_TIES = "options of equal length (no-ties rule) and correct-answer rank not 3/3/3/3"
-FOUNDER_XFAIL = {
-    ("length_rank", "N01-06"): _TIES + " — ties q106-06/11/12; ranks 3/4/4/1",
-    ("length_rank", "N02-03"): _TIES + " — ties q203-01/03/05/06/09; ranks 6/3/1/2",
-    ("length_rank", "N02-04"): _TIES + " — ties q204-02/03/04/05/06/07/08/09/11; ranks 5/3/2/2",
-    ("length_rank", "N02-05"): _TIES + " — ties q205-01/02/04/05/06/07/08/12; ranks 3/5/0/4",
-    ("length_rank", "N02-06"): _TIES + " — ties q206-02/06/09/10; ranks 3/6/1/2",
-    ("length_rank", "N02-07"): _TIES + " — ties q207-01/05/06/08/10; ranks 5/4/1/2",
-    ("length_rank", "N04-05"): _TIES + " — ties q405-01/03/04/05/06/10/12; ranks 5/5/0/2",
-    ("opening", "N02-03"): "«vì» opens 2 correct answers (q203-03, q203-05), «không» 2 (q203-10, q203-11)",
-    ("opening", "N02-04"): "«khoản» opens 3 correct answers (q204-01, q204-02, q204-12), «không» 3 (q204-05, q204-06, q204-10)",
-    ("opening", "N02-05"): "«nợ» opens 2 correct answers (q205-01, q205-03), «thẻ» 2 (q205-02, q205-07), "
-                           "«còn» 2 (q205-05, q205-11), «không» 2 (q205-06, q205-12)",
-    ("opening", "N02-06"): "«dư» opens 2 correct answers (q206-01, q206-09), «không» 2 (q206-03, q206-06), "
-                           "«giữ» 2 (q206-07, q206-08)",
-    ("opening", "N02-07"): "«không» opens 3 correct answers (q207-03, q207-06, q207-11)",
-    ("opening", "N04-05"): "«không» opens 2 correct answers (q405-06, q405-12)",
-}
-# Opening-word guessing over the real draw / grader, measured 2026-10-03 (3000 attempts per strategy);
-# "avoid never-right" = never pick an option whose opening word never opens a correct answer in the bank.
-_MC = {
-    "N01-06": "avoid never-right ≈ 4.1 %",
-    "N02-03": "avoid never-right ≈ 3.3 %",
-    "N02-04": "pick «không» ≈ 4.1 %, avoid never-right ≈ 3.8 %",
-    "N02-05": "avoid never-right ≈ 6.1 %, pick «thẻ» ≈ 2.4 %, pick «còn» ≈ 2.2 %",
-    "N02-06": "avoid never-right ≈ 18.4 %, pick «không» ≈ 3.5 %, avoid «chỉ» ≈ 2.5 %, pick «dư» ≈ 2.2 %",
-    "N02-07": "avoid never-right ≈ 9.0 %, pick «không» ≈ 4.5 %, avoid «được» ≈ 4.2 %, pick «không được» ≈ 3.5 %",
-    "N04-05": "avoid never-right ≈ 15.8 %, avoid «chỉ» ≈ 3.1 %, pick «không» ≈ 2.3 %",
-}
-for _n, _why in _MC.items():
-    FOUNDER_XFAIL[("mc_opening", _n)] = "opening-word guessing passes KUAT > 2 %: " + _why
+# N01-06, N02-03..07 and N04-05 are the Founder-approved v1.7 text (lessons as v1.6, 33 options reworded),
+# entered verbatim (tests/test_founder_lessons_7.py). Ticket 3eea91c4: every quality bar below applies to
+# them like to the other 23 banks, with no xfail left. v1.7 meets length rank, opening word, grounding and
+# the exact length / random / opening-word guessing bar (2 %) on all 7. Exact max opening-strategy pass
+# rates (exact_rates below, same as the reviewer's exact.py): N01-06 1.32 %, N02-03 1.72 %, N02-04 1.32 %,
+# N02-05 0.99 %, N02-06 1.86 %, N02-07 0.93 %, N04-05 1.69 %.
 
 
 def run(name: str, env: dict, timeout: int = 600) -> dict:
@@ -417,7 +388,7 @@ GROUNDING = {
         "làm giảm, không tăng, khả năng quay lại",
         "hỗ trợ chuyên môn phù hợp",
     ],
-    # Founder v1.2 lessons (follow-up #246/#247 item 1): passage of the served lesson per question.
+    # Founder v1.7 lessons (follow-up #246/#247 item 1, ticket 3eea91c4): passage of the served lesson per question.
     "N01-06": [
         "những câu đó là mong muốn, chưa phải mục tiêu",
         "đạt được gì + số tiền hoặc trạng thái + trong bao lâu + vì lý do gì",
@@ -586,8 +557,37 @@ class TestBanksShape(unittest.TestCase):
 
 
 class TestBanksMonteCarlo(unittest.TestCase):
-    """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % over the real
-    draw / shuffle / grader, for every one of the 30 banks (except the FOUNDER_XFAIL pairs)."""
+    """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % for every one of the
+    30 banks. PR #249 r2: computed EXACTLY over every possible draw (no sampling, deterministic) — the
+    3000-attempt Monte Carlo it replaces flaked (N01-02 «avoid vì» sampled 2.03 % vs 1.54 % exact)."""
+
+    def test_exact_model_matches_draw_and_grader(self):
+        # the model below mirrors academy._draw (k questions, ≥ min-hard core) and _grade_served
+        # (≥ KUAT_PASS_THRESHOLD of the shown questions AND every core one right)
+        bank = academy.QUESTIONS["N02-01"]
+        dist = _draw_dist("N02-01")
+        self.assertEqual(sum(dist.values()), 1)
+        n_hard, k, m = sum(q["hard"] for q in bank), academy.KUAT_DRAW, academy.KUAT_MIN_HARD
+        self.assertEqual(len(dist), sum(comb(n_hard, h) * comb(12 - n_hard, k - h) for h in range(m, k + 1)))
+        by_id = {q["id"]: q for q in bank}
+        for _ in range(20):
+            served = academy._draw("N02-01")
+            self.assertIn(frozenset(s["q"] for s in served), dist)
+            right = [s["perm"].index(by_id[s["q"]]["answer"]) for s in served]
+            soft = [i for i, s in enumerate(served) if not by_id[s["q"]]["hard"]]
+            core = [i for i, s in enumerate(served) if by_id[s["q"]]["hard"]]
+            cases = [((), True), (core[:1], False), (core[:2], False)]
+            if soft:
+                cases.append((soft[:1], True))
+            if len(soft) >= 2:
+                cases.append((soft[:2], False))
+            for wrong, expect in cases:
+                ans = [{"question_id": f"k{i + 1}", "choice": (r + 1) % 4 if i in wrong else r} for i, r in enumerate(right)]
+                self.assertEqual(academy._grade_served("N02-01", served, ans)[1], expect, (wrong, served))
+                pq = {s["q"]: Fraction(0 if i in wrong else 1) for i, s in enumerate(served)}
+                self.assertEqual(_pass_prob_on(bank, frozenset(pq), pq), Fraction(int(expect)))
+        self.assertEqual(_exact_pass("N02-01", {q["id"]: Fraction(1) for q in bank}), 1)
+        self.assertEqual(_exact_pass("N02-01", {q["id"]: Fraction(0) for q in bank}), 0)
 
     def test_length_and_random_strategies(self):
         for node in _checked("mc_length"):
@@ -599,7 +599,7 @@ class TestBanksMonteCarlo(unittest.TestCase):
 
 
 def _checked(check: str) -> list[str]:
-    return [n for n in BANKS_30 if (check, n) not in FOUNDER_XFAIL]
+    return list(BANKS_30)
 
 
 def check_length_rank(tc: unittest.TestCase, nid: str) -> None:
@@ -624,76 +624,112 @@ def check_grounding(tc: unittest.TestCase, nid: str) -> None:
         tc.assertIn(phrase, body, (nid, phrase))
 
 
-MC_TRIALS = 3000
+# Exact guessing rates (PR #249 r2). Logic adapted from the reviewer's reference
+# /workspace/rev249/exact.py (PR #249 review, 2026-10-03): the distribution of the question SET drawn by
+# academy._draw (KUAT_MIN_HARD core sampled first, the rest from all remaining questions), then per set a
+# DP over "question answered right" with every core question forced right and ≥ ceil(threshold × k)
+# right overall (academy._grade_served). A strategy is a per-question probability of picking the right
+# option; option order does not matter (it only looks at the texts), ties are broken uniformly at random.
+# Fractions → exact and deterministic; the bar is the same 2 %.
+BAR = Fraction(1, 50)
+_DIST_CACHE: dict[str, dict] = {}
 
 
-def _mc_rate(node, choose, rng):
-    by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
-    passed = 0
-    for _ in range(MC_TRIALS):
-        served = academy._draw(node)
-        answers = []
-        for i, slot in enumerate(served):
-            shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
-            answers.append({"question_id": f"k{i + 1}", "choice": choose(shown, rng)})
-        passed += academy._grade_served(node, served, answers)[1]
-    return passed / MC_TRIALS
+def _draw_dist(node: str) -> dict:
+    if node not in _DIST_CACHE:
+        bank = academy.QUESTIONS[node]
+        hard = [q["id"] for q in bank if q["hard"]]
+        ids = [q["id"] for q in bank]
+        k = min(academy.KUAT_DRAW, len(bank))
+        nh = min(academy.KUAT_MIN_HARD, len(hard), k)
+        dist: Counter = Counter()
+        for h in itertools.combinations(hard, nh):
+            rest = [i for i in ids if i not in h]
+            w = Fraction(1, comb(len(hard), nh) * comb(len(rest), k - nh))
+            for r in itertools.combinations(rest, k - nh):
+                dist[frozenset(h + r)] += w
+        _DIST_CACHE[node] = dict(dist)
+    return _DIST_CACHE[node]
 
 
-def check_mc_length(tc: unittest.TestCase, node: str) -> None:
-    def by_len(pos):
-        def f(shown, rng):
-            order = sorted(range(len(shown)), key=lambda k: (len(shown[k]), rng.random()))
-            return {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2],
-                    "random": rng.randrange(len(shown))}[pos]
-        return f
+def _pass_prob_on(bank, served: frozenset, pq: dict) -> Fraction:
+    hard = {q["id"] for q in bank if q["hard"]}
+    need = ceil(academy.KUAT_PASS_THRESHOLD * len(served) - 1e-9)
+    dp = {0: Fraction(1)}
+    for qid in served:
+        p, nd = Fraction(pq[qid]), Counter()
+        for c, v in dp.items():
+            nd[c + 1] += v * p
+            if qid not in hard:
+                nd[c] += v * (1 - p)
+        dp = nd
+    return sum((v for c, v in dp.items() if c >= need), Fraction(0))
 
-    rng = random.Random(2446)
-    for s in ("longest", "shortest", "middle", "random"):
-        rate = _mc_rate(node, by_len(s), rng)
-        tc.assertLessEqual(rate, 0.02, (node, s, rate))
+
+def _exact_pass(node: str, pq: dict) -> Fraction:
+    bank = academy.QUESTIONS[node]
+    return sum((w * _pass_prob_on(bank, s, pq) for s, w in _draw_dist(node).items()), Fraction(0))
 
 
-def check_mc_opening(tc: unittest.TestCase, node: str) -> None:
-    rng = random.Random(24461)
+def _length_pq(bank, kind: str) -> dict:
+    out = {}
+    for q in bank:
+        lens = [len(c) for c in q["choices"]]
+        if kind == "random":
+            out[q["id"]] = Fraction(1, len(lens))
+            continue
+        # sorted(range(n), key=(len, random tie-break)) → every tie order equally likely
+        hits = total = 0
+        for tie in itertools.permutations(range(len(lens))):
+            order = sorted(range(len(lens)), key=lambda i: (lens[i], tie[i]))
+            pick = {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2]}[kind]
+            hits += pick == q["answer"]
+            total += 1
+        out[q["id"]] = Fraction(hits, total)
+    return out
 
-    def pick(p):
-        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if p in _openings(x)] or list(range(4)))
 
-    def avoid(ps):
-        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if not (_openings(x) & ps)] or list(range(4)))
-
+def _opening_strategies(bank) -> list[tuple[str, dict]]:
     total, wrong = Counter(), Counter()
-    for q in academy.QUESTIONS[node]:
+    for q in bank:
         for i, c in enumerate(q["choices"]):
             for p in _openings(c):
                 total[p] += 1
                 wrong[p] += i != q["answer"]
     repeated = [p for p, n in total.items() if n >= 2]
     never_right = {p for p in repeated if wrong[p] == total[p]}
-    strategies = [(f"pick {p}", pick(p)) for p in repeated] + [(f"avoid {p}", avoid({p})) for p in repeated]
-    strategies.append(("avoid never-right", avoid(never_right)))
-    for name, fn in strategies:
-        rate = _mc_rate(node, fn, rng)
-        tc.assertLessEqual(rate, 0.02, (node, name, rate))
+
+    def pq(keep):
+        out = {}
+        for q in bank:
+            el = [i for i, c in enumerate(q["choices"]) if keep(c)] or list(range(len(q["choices"])))
+            out[q["id"]] = Fraction(1, len(el)) if q["answer"] in el else Fraction(0)
+        return out
+
+    strategies = [(f"pick {p}", pq(lambda c, p=p: p in _openings(c))) for p in repeated]
+    strategies += [(f"avoid {p}", pq(lambda c, p=p: p not in _openings(c))) for p in repeated]
+    strategies.append(("avoid never-right", pq(lambda c: not (_openings(c) & never_right))))
+    return strategies
 
 
-_CHECKS = {"length_rank": check_length_rank, "opening": check_opening, "grounding": check_grounding,
-           "mc_length": check_mc_length, "mc_opening": check_mc_opening}
+def exact_rates(node: str) -> dict[str, Fraction]:
+    bank = academy.QUESTIONS[node]
+    rates = {s: _exact_pass(node, _length_pq(bank, s)) for s in ("longest", "shortest", "middle", "random")}
+    rates.update({name: _exact_pass(node, pq) for name, pq in _opening_strategies(bank)})
+    return rates
 
 
-class TestFounderV12Gaps(unittest.TestCase):
-    """One strict xfail per (check, node) the Founder v1.2 wording still misses (FOUNDER_XFAIL)."""
+def check_mc_length(tc: unittest.TestCase, node: str) -> None:
+    bank = academy.QUESTIONS[node]
+    for s in ("longest", "shortest", "middle", "random"):
+        rate = _exact_pass(node, _length_pq(bank, s))
+        tc.assertLessEqual(rate, BAR, (node, s, float(rate)))
 
 
-def _gap_test(check, node):
-    def t(self):
-        _CHECKS[check](self, node)
-    return pytest.mark.xfail(strict=True, reason=f"Founder v1.2 {node} {check}: {FOUNDER_XFAIL[(check, node)]}")(t)
-
-
-for (_check, _node) in FOUNDER_XFAIL:
-    setattr(TestFounderV12Gaps, f"test_{_check}_{_node.replace('-', '_')}", _gap_test(_check, _node))
+def check_mc_opening(tc: unittest.TestCase, node: str) -> None:
+    for name, pq in _opening_strategies(academy.QUESTIONS[node]):
+        rate = _exact_pass(node, pq)
+        tc.assertLessEqual(rate, BAR, (node, name, float(rate)))
 
 
 class TestBanksDb(unittest.TestCase):

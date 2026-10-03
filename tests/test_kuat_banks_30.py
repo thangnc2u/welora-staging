@@ -10,15 +10,17 @@ DB scenarios run in subprocesses (tests/_kb30_dbmode.py) on SQLite, or PG17 via 
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
-import random
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from collections import Counter
+from fractions import Fraction
+from math import ceil, comb
 from pathlib import Path
 
 import pytest
@@ -38,9 +40,10 @@ BANKS_30 = tuple([f"N01-0{i}" for i in range(2, 8)] + [f"N02-0{i}" for i in rang
 # grounding on all 7 and length / random guessing on all 7. Still missed (wording may not be edited —
 # reported to the Founder): the «avoid never-right» opening-word strategy (never pick an option whose
 # opening word, seen ≥ 2× in the bank, never opens a correct answer) on 4 nodes. Exact pass rates over
-# every draw (not Monte Carlo): N02-04 2.67 %, N02-05 2.35 %, N02-06 2.52 %, N04-05 3.12 % (bar 2 %).
-# Those pairs are skipped in the all-banks loop and run on their own as xfail in TestFounderGaps —
-# non-strict for mc_opening because a 3000-attempt Monte Carlo of a 2.35 % rate can land under 2 %.
+# every draw (exact_rates below): N02-04 2.67 %, N02-05 2.35 %, N02-06 2.52 %, N04-05 3.12 % (bar 2 %).
+# Those pairs are skipped in the all-banks loop and run on their own as xfail in TestFounderGaps.
+# PR #249 r2: the check is exact now (deterministic); the 4 stay non-strict until the Founder's v1.4
+# text lands, then the remaining pairs (if any) become strict.
 _AVOID = "«avoid never-right» opening-word strategy passes KUAT {rate} (exact; bar 2 %) — never-right openings {words}; beats 1/4 on {qids}"
 FOUNDER_XFAIL: dict[tuple[str, str], str] = {
     ("mc_opening", "N02-04"): _AVOID.format(rate="2.67 %", words="chỉ / có / nhà / đổi",
@@ -570,8 +573,37 @@ class TestBanksShape(unittest.TestCase):
 
 
 class TestBanksMonteCarlo(unittest.TestCase):
-    """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % over the real
-    draw / shuffle / grader, for every one of the 30 banks."""
+    """Length heuristics, random guessing and opening-word strategies pass ≤ 2 % for every one of the
+    30 banks. PR #249 r2: computed EXACTLY over every possible draw (no sampling, deterministic) — the
+    3000-attempt Monte Carlo it replaces flaked (N01-02 «avoid vì» sampled 2.03 % vs 1.54 % exact)."""
+
+    def test_exact_model_matches_draw_and_grader(self):
+        # the model below mirrors academy._draw (k questions, ≥ min-hard core) and _grade_served
+        # (≥ KUAT_PASS_THRESHOLD of the shown questions AND every core one right)
+        bank = academy.QUESTIONS["N02-01"]
+        dist = _draw_dist("N02-01")
+        self.assertEqual(sum(dist.values()), 1)
+        n_hard, k, m = sum(q["hard"] for q in bank), academy.KUAT_DRAW, academy.KUAT_MIN_HARD
+        self.assertEqual(len(dist), sum(comb(n_hard, h) * comb(12 - n_hard, k - h) for h in range(m, k + 1)))
+        by_id = {q["id"]: q for q in bank}
+        for _ in range(20):
+            served = academy._draw("N02-01")
+            self.assertIn(frozenset(s["q"] for s in served), dist)
+            right = [s["perm"].index(by_id[s["q"]]["answer"]) for s in served]
+            soft = [i for i, s in enumerate(served) if not by_id[s["q"]]["hard"]]
+            core = [i for i, s in enumerate(served) if by_id[s["q"]]["hard"]]
+            cases = [((), True), (core[:1], False), (core[:2], False)]
+            if soft:
+                cases.append((soft[:1], True))
+            if len(soft) >= 2:
+                cases.append((soft[:2], False))
+            for wrong, expect in cases:
+                ans = [{"question_id": f"k{i + 1}", "choice": (r + 1) % 4 if i in wrong else r} for i, r in enumerate(right)]
+                self.assertEqual(academy._grade_served("N02-01", served, ans)[1], expect, (wrong, served))
+                pq = {s["q"]: Fraction(0 if i in wrong else 1) for i, s in enumerate(served)}
+                self.assertEqual(_pass_prob_on(bank, frozenset(pq), pq), Fraction(int(expect)))
+        self.assertEqual(_exact_pass("N02-01", {q["id"]: Fraction(1) for q in bank}), 1)
+        self.assertEqual(_exact_pass("N02-01", {q["id"]: Fraction(0) for q in bank}), 0)
 
     def test_length_and_random_strategies(self):
         for node in _checked("mc_length"):
@@ -608,58 +640,112 @@ def check_grounding(tc: unittest.TestCase, nid: str) -> None:
         tc.assertIn(phrase, body, (nid, phrase))
 
 
-MC_TRIALS = 3000
+# Exact guessing rates (PR #249 r2). Logic adapted from the reviewer's reference
+# /workspace/rev249/exact.py (PR #249 review, 2026-10-03): the distribution of the question SET drawn by
+# academy._draw (KUAT_MIN_HARD core sampled first, the rest from all remaining questions), then per set a
+# DP over "question answered right" with every core question forced right and ≥ ceil(threshold × k)
+# right overall (academy._grade_served). A strategy is a per-question probability of picking the right
+# option; option order does not matter (it only looks at the texts), ties are broken uniformly at random.
+# Fractions → exact and deterministic; the bar is the same 2 %.
+BAR = Fraction(1, 50)
+_DIST_CACHE: dict[str, dict] = {}
 
 
-def _mc_rate(node, choose, rng):
-    by_id = {q["id"]: q for q in academy.QUESTIONS[node]}
-    passed = 0
-    for _ in range(MC_TRIALS):
-        served = academy._draw(node)
-        answers = []
-        for i, slot in enumerate(served):
-            shown = [by_id[slot["q"]]["choices"][j] for j in slot["perm"]]
-            answers.append({"question_id": f"k{i + 1}", "choice": choose(shown, rng)})
-        passed += academy._grade_served(node, served, answers)[1]
-    return passed / MC_TRIALS
+def _draw_dist(node: str) -> dict:
+    if node not in _DIST_CACHE:
+        bank = academy.QUESTIONS[node]
+        hard = [q["id"] for q in bank if q["hard"]]
+        ids = [q["id"] for q in bank]
+        k = min(academy.KUAT_DRAW, len(bank))
+        nh = min(academy.KUAT_MIN_HARD, len(hard), k)
+        dist: Counter = Counter()
+        for h in itertools.combinations(hard, nh):
+            rest = [i for i in ids if i not in h]
+            w = Fraction(1, comb(len(hard), nh) * comb(len(rest), k - nh))
+            for r in itertools.combinations(rest, k - nh):
+                dist[frozenset(h + r)] += w
+        _DIST_CACHE[node] = dict(dist)
+    return _DIST_CACHE[node]
 
 
-def check_mc_length(tc: unittest.TestCase, node: str) -> None:
-    def by_len(pos):
-        def f(shown, rng):
-            order = sorted(range(len(shown)), key=lambda k: (len(shown[k]), rng.random()))
-            return {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2],
-                    "random": rng.randrange(len(shown))}[pos]
-        return f
+def _pass_prob_on(bank, served: frozenset, pq: dict) -> Fraction:
+    hard = {q["id"] for q in bank if q["hard"]}
+    need = ceil(academy.KUAT_PASS_THRESHOLD * len(served) - 1e-9)
+    dp = {0: Fraction(1)}
+    for qid in served:
+        p, nd = Fraction(pq[qid]), Counter()
+        for c, v in dp.items():
+            nd[c + 1] += v * p
+            if qid not in hard:
+                nd[c] += v * (1 - p)
+        dp = nd
+    return sum((v for c, v in dp.items() if c >= need), Fraction(0))
 
-    rng = random.Random(2446)
-    for s in ("longest", "shortest", "middle", "random"):
-        rate = _mc_rate(node, by_len(s), rng)
-        tc.assertLessEqual(rate, 0.02, (node, s, rate))
+
+def _exact_pass(node: str, pq: dict) -> Fraction:
+    bank = academy.QUESTIONS[node]
+    return sum((w * _pass_prob_on(bank, s, pq) for s, w in _draw_dist(node).items()), Fraction(0))
 
 
-def check_mc_opening(tc: unittest.TestCase, node: str) -> None:
-    rng = random.Random(24461)
+def _length_pq(bank, kind: str) -> dict:
+    out = {}
+    for q in bank:
+        lens = [len(c) for c in q["choices"]]
+        if kind == "random":
+            out[q["id"]] = Fraction(1, len(lens))
+            continue
+        # sorted(range(n), key=(len, random tie-break)) → every tie order equally likely
+        hits = total = 0
+        for tie in itertools.permutations(range(len(lens))):
+            order = sorted(range(len(lens)), key=lambda i: (lens[i], tie[i]))
+            pick = {"longest": order[-1], "shortest": order[0], "middle": order[len(order) // 2]}[kind]
+            hits += pick == q["answer"]
+            total += 1
+        out[q["id"]] = Fraction(hits, total)
+    return out
 
-    def pick(p):
-        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if p in _openings(x)] or list(range(4)))
 
-    def avoid(ps):
-        return lambda shown, r: r.choice([i for i, x in enumerate(shown) if not (_openings(x) & ps)] or list(range(4)))
-
+def _opening_strategies(bank) -> list[tuple[str, dict]]:
     total, wrong = Counter(), Counter()
-    for q in academy.QUESTIONS[node]:
+    for q in bank:
         for i, c in enumerate(q["choices"]):
             for p in _openings(c):
                 total[p] += 1
                 wrong[p] += i != q["answer"]
     repeated = [p for p, n in total.items() if n >= 2]
     never_right = {p for p in repeated if wrong[p] == total[p]}
-    strategies = [(f"pick {p}", pick(p)) for p in repeated] + [(f"avoid {p}", avoid({p})) for p in repeated]
-    strategies.append(("avoid never-right", avoid(never_right)))
-    for name, fn in strategies:
-        rate = _mc_rate(node, fn, rng)
-        tc.assertLessEqual(rate, 0.02, (node, name, rate))
+
+    def pq(keep):
+        out = {}
+        for q in bank:
+            el = [i for i, c in enumerate(q["choices"]) if keep(c)] or list(range(len(q["choices"])))
+            out[q["id"]] = Fraction(1, len(el)) if q["answer"] in el else Fraction(0)
+        return out
+
+    strategies = [(f"pick {p}", pq(lambda c, p=p: p in _openings(c))) for p in repeated]
+    strategies += [(f"avoid {p}", pq(lambda c, p=p: p not in _openings(c))) for p in repeated]
+    strategies.append(("avoid never-right", pq(lambda c: not (_openings(c) & never_right))))
+    return strategies
+
+
+def exact_rates(node: str) -> dict[str, Fraction]:
+    bank = academy.QUESTIONS[node]
+    rates = {s: _exact_pass(node, _length_pq(bank, s)) for s in ("longest", "shortest", "middle", "random")}
+    rates.update({name: _exact_pass(node, pq) for name, pq in _opening_strategies(bank)})
+    return rates
+
+
+def check_mc_length(tc: unittest.TestCase, node: str) -> None:
+    bank = academy.QUESTIONS[node]
+    for s in ("longest", "shortest", "middle", "random"):
+        rate = _exact_pass(node, _length_pq(bank, s))
+        tc.assertLessEqual(rate, BAR, (node, s, float(rate)))
+
+
+def check_mc_opening(tc: unittest.TestCase, node: str) -> None:
+    for name, pq in _opening_strategies(academy.QUESTIONS[node]):
+        rate = _exact_pass(node, pq)
+        tc.assertLessEqual(rate, BAR, (node, name, float(rate)))
 
 
 _CHECKS = {"length_rank": check_length_rank, "opening": check_opening, "grounding": check_grounding,
@@ -673,7 +759,7 @@ class TestFounderGaps(unittest.TestCase):
 def _gap_test(check, node):
     def t(self):
         _CHECKS[check](self, node)
-    return pytest.mark.xfail(strict=check != "mc_opening",
+    return pytest.mark.xfail(strict=check != "mc_opening",  # mc_opening: strict after v1.4 (PR #249 r2)
                              reason=f"Founder {node} {check}: {FOUNDER_XFAIL[(check, node)]}")(t)
 
 

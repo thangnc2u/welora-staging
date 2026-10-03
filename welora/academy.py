@@ -1518,13 +1518,34 @@ def _split_lesson_meta(body: str) -> tuple[str, list[str]]:
 
 
 def _lesson_body_markdown(lesson_id: str, principle_key: str) -> str:
-    """The lesson body as served to the learner (metadata lines removed)."""
-    return _split_lesson_meta(_lesson_source_markdown(lesson_id, principle_key))[0]
+    """The lesson body as served to the learner (metadata lines / WP internal headers removed)."""
+    return _learner_lesson(lesson_id, principle_key)[0]
+
+
+def _learner_lesson(lesson_id: str, principle_key: str) -> tuple[str, list[str]]:
+    """(learner body_markdown, related WP ids). PR #249 r2 (b): a WP-backed body also goes through
+    content_map.strip_internal_headers — the «# WP-xx-xx:» title and the **Module:** / **Mức rủi ro:** /
+    **Version:** / **Status:** header block are internal, like on /content."""
+    from welora.content_map import strip_internal_headers
+
+    body, from_wp = _lesson_source(lesson_id, principle_key)
+    if from_wp:
+        body = strip_internal_headers(body)
+    return _split_lesson_meta(body)
 
 
 def _lesson_source_markdown(lesson_id: str, principle_key: str) -> str:
-    """Load WA markdown by lesson_id; fall back to mapped WA/WP, then FALLBACK_BODY."""
+    """Raw lesson source (file text as stored)."""
+    return _lesson_source(lesson_id, principle_key)[0]
+
+
+def _lesson_source(lesson_id: str, principle_key: str) -> tuple[str, bool]:
+    """Load WA markdown by lesson_id; fall back to mapped WA/WP, then FALLBACK_BODY.
+    Returns (text, True when the text is a WP article)."""
     from welora.content_map import CONTENT_BY_KEY, FALLBACK_BODY, content_root, _read_rel
+
+    def cap(body: str) -> str:
+        return body[:20000] + "\n\n… (truncated)" if len(body) > 20000 else body
 
     root = content_root()
     lid = (lesson_id or "").strip()
@@ -1535,25 +1556,17 @@ def _lesson_source_markdown(lesson_id: str, principle_key: str) -> str:
             if direct.is_file():
                 matches = [direct]
         if matches:
-            body = matches[0].read_text(encoding="utf-8", errors="replace")
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
+            return cap(matches[0].read_text(encoding="utf-8", errors="replace")), False
     meta = CONTENT_BY_KEY.get(principle_key) or {}
-    for rel in (meta.get("path_wa"), meta.get("path_wp")):
+    for rel, wp in ((meta.get("path_wa"), False), (meta.get("path_wp"), True)):
         body, _ = _read_rel(root, rel)
         if (body or "").strip():
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
+            return cap(body), wp
     for rel in meta.get("path_wp_extra") or []:
         body, _ = _read_rel(root, rel)
         if (body or "").strip():
-            if len(body) > 20000:
-                return body[:20000] + "\n\n… (truncated)"
-            return body
-    fb = FALLBACK_BODY.get(principle_key) or ""
-    return fb
+            return cap(body), True
+    return FALLBACK_BODY.get(principle_key) or "", False
 
 
 def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Optional[str] = None,
@@ -1569,8 +1582,7 @@ def get_node(user_id: str, node_id: str, *, issue_attempt: bool = True, ip: Opti
     _refresh_locks(p)
     n = dict(_NODE_BY_ID[node_id])
     st = p["nodes"][node_id]
-    body, related_links = _split_lesson_meta(
-        _lesson_source_markdown(str(n.get("lesson_id") or ""), str(n.get("principle_key") or "")))
+    body, related_links = _learner_lesson(str(n.get("lesson_id") or ""), str(n.get("principle_key") or ""))
     kuat: dict[str, Any] = kuat_info(node_id)
     questions: list[dict[str, Any]] = []
     if st["status"] != STATUS_LOCKED and issue_attempt and QUESTIONS.get(node_id):

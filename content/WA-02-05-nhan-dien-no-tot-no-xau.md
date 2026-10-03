@@ -6,7 +6,7 @@
 
 ## Nội dung
 
-Không phải mọi khoản vay đều giống nhau. Nợ tốt xây năng lực; nợ xấu làm suy yếu. Cách nhận trong bài này không cần công thức lãi. Hỏi ba việc: khoản này còn lại cái gì sau khi tiêu hết tiền vay, việc trả có gắn thu nhập hoặc tài sản tương ứng không, và thì khoản này có đẩy nhà vào vay mới không.
+Không phải mọi khoản vay đều giống nhau. Nợ tốt xây năng lực; nợ xấu làm suy yếu. Cách nhận trong bài này không cần công thức lãi. Hỏi ba việc: khoản này còn lại cái gì sau khi tiêu hết tiền vay, việc trả có gắn thu nhập hoặc tài sản tương ứng không, và nếu thu nhập giảm một tháng thì khoản này có đẩy nhà vào vay mới không.
 
 Nợ làm suy yếu thường là nợ tiêu dùng lãi cao, tiền đã thành đồ dùng hoặc bữa ăn, không còn tài sản bán lại được, và số trả tháng ăn vào phần đáng lẽ để dành. Thẻ quay vòng, vay ứng để tiêu, vay nóng để “đầu tư cho kịp” thuộc nhóm nguy hiểm trong Welora. Vay nóng để đầu tư không phải chiến lược. Đó là chồng rủi ro lên một hộ chưa có đệm.
 

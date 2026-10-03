@@ -33,12 +33,12 @@ FORBIDDEN = r"(?i)^không,\s*trừ khi|chắc lời|cam kết lãi"
 BANKS_30 = tuple([f"N01-0{i}" for i in range(2, 8)] + [f"N02-0{i}" for i in range(3, 8)]
                  + [f"N03-0{i}" for i in range(2, 8)] + [f"N04-0{i}" for i in range(2, 8)]
                  + [f"N05-0{i}" for i in range(1, 8)])
-# N01-06, N02-03..07 and N04-05 are the Founder-approved v1.6 text (replaces v1.3), entered verbatim
-# (tests/test_founder_lessons_7.py). Ticket 3eea91c4: every quality bar below applies to them like to
-# the other 23 banks, with no xfail left. v1.6 meets length rank, opening word, grounding and the exact
-# length / random / opening-word guessing bar (2 %) on all 7. Exact max opening-strategy pass rates
-# (exact_rates below, same as the reviewer's exact.py): N01-06 0.93 %, N02-03 1.31 %, N02-04 1.32 %,
-# N02-05 0.99 %, N02-06 1.86 % (avoid never-right), N02-07 0.93 %, N04-05 0.93 %.
+# N01-06, N02-03..07 and N04-05 are the Founder-approved v1.7 text (lessons as v1.6, 33 options reworded),
+# entered verbatim (tests/test_founder_lessons_7.py). Ticket 3eea91c4: every quality bar below applies to
+# them like to the other 23 banks, with no xfail left. v1.7 meets length rank, opening word, grounding and
+# the exact length / random / opening-word guessing bar (2 %) on all 7. Exact max opening-strategy pass
+# rates (exact_rates below, same as the reviewer's exact.py): N01-06 1.32 %, N02-03 1.72 %, N02-04 1.32 %,
+# N02-05 0.99 %, N02-06 1.86 %, N02-07 0.93 %, N04-05 1.69 %.
 
 
 def run(name: str, env: dict, timeout: int = 600) -> dict:
@@ -388,7 +388,7 @@ GROUNDING = {
         "làm giảm, không tăng, khả năng quay lại",
         "hỗ trợ chuyên môn phù hợp",
     ],
-    # Founder v1.6 lessons (follow-up #246/#247 item 1, ticket 3eea91c4): passage of the served lesson per question.
+    # Founder v1.7 lessons (follow-up #246/#247 item 1, ticket 3eea91c4): passage of the served lesson per question.
     "N01-06": [
         "những câu đó là mong muốn, chưa phải mục tiêu",
         "đạt được gì + số tiền hoặc trạng thái + trong bao lâu + vì lý do gì",

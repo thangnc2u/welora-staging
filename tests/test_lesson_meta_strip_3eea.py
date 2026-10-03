@@ -111,7 +111,8 @@ class TestNodeApi(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
     def test_reader_shows_the_goal_first(self):
-        js = re.search(r"function stripFrontmatter[\s\S]*?\n}\n", HTML.read_text(encoding="utf-8")).group(0)
+        js = re.search(r"function isInternalHeaderLine[\s\S]*?\nfunction stripFrontmatter[\s\S]*?\n}\n",
+                       HTML.read_text(encoding="utf-8")).group(0)
         bodies = {nid: self._node(nid)["body_markdown"] for nid in FOUNDER}
         out = subprocess.run(["node", "-e", js + "const b=JSON.parse(require('fs').readFileSync(0,'utf8'));"
                               "const o={};for(const k in b){o[k]=stripFrontmatter(b[k]).split('\\n')[0]};"

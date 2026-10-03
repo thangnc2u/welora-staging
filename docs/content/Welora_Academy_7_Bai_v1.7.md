@@ -1,4 +1,4 @@
-# Welora Academy — 7 bài placeholder (bản soạn v1.6)
+# Welora Academy — 7 bài placeholder (bản soạn v1.7)
 
 Founder chốt 2026-10-02:
 Sửa v1.2 (2026-10-03), chỉ hai điểm: cân độ dài phương án KUAT; bỏ mã nguyên tắc khỏi lời bài và đề câu hỏi người học thấy. Metadata principle_key và bài liên kết giữ nguyên. Tên, mục tiêu khóa, ý đáp án đúng, câu trọng tâm giữ nguyên.
@@ -80,13 +80,13 @@ Core: có
 **q4.** Khi có nhiều mong muốn, bài khuyên giữ bao nhiêu mục tiêu trọng tâm?  
 A. Năm mục tiêu cùng lúc để khỏi bỏ sót việc  
 B. Giữ một đến hai mục tiêu trọng tâm  
-C. Giữ không viết một mục tiêu nào trong năm nay  
+C. Không viết mục tiêu nào trong năm nay  
 D. Biến mọi khoản chi thành một mục tiêu riêng  
 Đáp án: B  
 Core: có
 
 **q5.** Thứ tự ưu tiên Welora khi nhiều mục tiêu cùng lúc là gì?  
-A. An toàn tăng trưởng làm trước, quỹ để lại sau  
+A. Tăng trưởng làm trước, quỹ để sau  
 B. Việc nào đang hào hứng thì ưu tiên làm trước  
 C. An Toàn trước, rồi hạn cứng, rồi mục tiêu dài hơn  
 D. Theo mục tiêu mà bạn bè đang theo đuổi  
@@ -110,7 +110,7 @@ D. Mang mốc ra so với tiến độ của người khác
 Core: không
 
 **q8.** Chị Mai nên biến câu “tiết kiệm nhiều hơn” thành dạng nào?  
-A. Quỹ giữ câu cũ, vì tháng nào gửi được là mục tiêu đã đủ rõ để làm  
+A. Giữ câu cũ, vì tháng nào gửi được thì mục tiêu đã đủ rõ để theo  
 B. Quỹ 36 triệu trong 12 tháng, mốc 9 triệu, để khỏi vay đột xuất  
 C. Khoan đến cuối năm rồi mới chốt một lần cho cả nhà, không cần mốc giữa  
 D. Chọn năm mục tiêu cùng lúc để tháng này có việc cho cả nhà  
@@ -127,7 +127,7 @@ Core: không
 
 **q10.** “Vì sao” của mục tiêu nên gắn với điều gì?  
 A. Đời sống của mình hoặc của gia đình mình  
-B. Đời sống xếp hạng thu nhập của người quanh mình  
+B. Xếp hạng thu nhập của những người quanh mình  
 C. Tên sản phẩm đang quảng cáo  
 D. Số tiền người khác khoe  
 Đáp án: A  
@@ -201,9 +201,9 @@ D. Ưu tiên nơi lãi nhìn cao nhất trong tuần này
 Core: có
 
 **q2.** Vai trò của quỹ khẩn cấp trong bài này là gì?  
-A. Lớp lời là công cụ sinh lời chính của cả hộ đang đi làm  
+A. Công cụ sinh lời chính của cả hộ đang đi làm  
 B. Lớp bảo vệ khi có sự cố thật như mất việc  
-C. Lớp thay cho mọi mục tiêu dài hạn  
+C. Chỗ thay cho mọi mục tiêu dài hạn  
 D. Tiền chờ một chỗ góp vốn vừa mở ra  
 Đáp án: B  
 Core: có
@@ -211,7 +211,7 @@ Core: có
 **q3.** Vì sao không để quỹ chung tài khoản lương?  
 A. Lương không được phép gửi ở ngân hàng  
 B. Dễ tiêu dần cho việc đã biết trước như ăn uống  
-C. Dễ tách quỹ là việc trái quy định  
+C. Tách quỹ sang sổ riêng là bị cấm  
 D. Tiền mặt trong ví an toàn hơn mọi chỗ khác  
 Đáp án: B  
 Core: có
@@ -225,7 +225,7 @@ D. Ví riêng, tách khỏi lương, lấy ra được trong vài ngày
 Core: có
 
 **q5.** Đuổi lãi cao hơn một chút cho quỹ khẩn cấp là đổi vai vì sao?  
-A. Cổ phiếu lãi trên quỹ đều bị cấm hết  
+A. Mọi khoản lãi trên quỹ đều bị cấm hết  
 B. Lúc cần tiền có thể không lấy ra được, hoặc phải bán lỗ  
 C. Quỹ khẩn cấp chỉ cần bằng một tháng chi tiêu  
 D. Vàng mới được dùng để giữ quỹ này  
@@ -266,7 +266,7 @@ Core: không
 
 **q10.** Được dùng quỹ khẩn cấp để đầu tư rồi gửi lại không?  
 A. Tháo được nếu cơ hội tuần này nhìn khá đẹp hơn mức quỹ  
-B. Tháo lớp đệm trước khi biết sự cố  
+B. Không, vì như thế là tháo đệm sớm  
 C. Được với một nửa số đang nằm trong quỹ  
 D. Được nếu vài người quen cùng làm việc đó  
 Đáp án: B  
@@ -408,10 +408,10 @@ D. Đổi cách còn hơn là giữ mức tối thiểu cho đến hết nợ
 Core: không
 
 **q10.** Bài này có hứa một số tiền lãi tiết kiệm cố định không?  
-A. Còn áp được cho mọi hộ như nhau  
-B. Còn tùy lãi, dư nợ và việc trả thêm  
-C. Còn đúng nếu chọn cách dư nợ nhỏ trước  
-D. Còn đảo hết nợ sang một khoản mới  
+A. Áp một mức cho mọi hộ như nhau  
+B. Bài không hứa, còn tùy lãi và dư nợ  
+C. Có, đúng nếu chọn cách dư nợ nhỏ trước  
+D. Đảo hết nợ sang một khoản mới  
 Đáp án: B  
 Core: không
 
@@ -499,15 +499,15 @@ D. Việc bắt buộc trước khi lập ngân sách
 Core: có
 
 **q4.** Nợ quá hạn cần xử lý ra sao?  
-A. Đưa qua nếu số tiền còn lại đang còn nhỏ  
-B. Đưa về đúng hạn trước khi bàn chuyện  
+A. Bỏ qua nếu số tiền còn lại đang nhỏ  
+B. Đưa về đúng hạn rồi hãy bàn tiếp  
 C. Đảo sang một gói mới cho hết tên cũ đi  
 D. Dùng quỹ khẩn cấp để đầu tư rồi trả sau  
 Đáp án: B  
 Core: có
 
 **q5.** “Có thể chấp nhận” có nghĩa là gì?  
-A. Còn nên vay thêm ngay để đủ việc  
+A. Vay thêm ngay để đủ việc trong tháng  
 B. Còn nghĩa vụ, gắn tài sản hoặc năng lực  
 C. Không cần trả nữa nếu lãi đang ở mức thấp rồi  
 D. Nó tương đương với nợ tiêu dùng lãi cao luôn  
@@ -515,7 +515,7 @@ D. Nó tương đương với nợ tiêu dùng lãi cao luôn
 Core: có
 
 **q6.** Tên “vay ưu đãi” có đổi bản chất khoản nợ không?  
-A. Năng lực có, vì tên ưu đãi nghĩa là tốt  
+A. Tên ưu đãi nghĩa là khoản này tốt  
 B. Năng lực thiếu và dòng tiền yếu thì vẫn là nợ xấu  
 C. Vài người quen cùng vay đúng gói đó thì đổi  
 D. Chỉ đổi khi lãi trên giấy bằng không  
@@ -614,7 +614,7 @@ Viết bốn cột cho từng khoản nợ và ghi số trả thêm tháng này 
 ### Câu hỏi
 
 **q1.** Kế hoạch trả nợ đủ dùng cần những gì?  
-A. Dư một câu hứa sẽ cố gắng trả trong tháng  
+A. Chỉ cần hứa sẽ cố gắng trả trong tháng  
 B. Dư nợ, tối thiểu, trả thêm, khoản được dồn  
 C. Tên ứng dụng đang dùng để trả nợ  
 D. Cảm xúc của ngày cuối tháng này  
@@ -630,7 +630,7 @@ D. Từ khoản học phí đã hẹn phải đóng kỳ này
 Core: có
 
 **q3.** Quỹ chưa đủ 3 tháng thì có rút để tất toán nợ lãi thấp không?  
-A. Không cứ rút quỹ ra để đóng nhanh hơn  
+A. Có, cứ rút quỹ ra để đóng cho nhanh  
 B. Không, giữ lớp đệm và trả bằng dòng còn lại  
 C. Rút một nửa số đang nằm trong quỹ  
 D. Rút quỹ rồi mang đi đầu tư để bù  
@@ -654,7 +654,7 @@ D. Vì chuyển đúng ngày là đã thay được quỹ
 Core: có
 
 **q6.** Bài có hứa ngày hết nợ chính xác cho mọi hộ không?  
-A. Lãi suất có với mọi hộ và mọi loại nợ  
+A. Hứa được với mọi hộ và mọi loại nợ  
 B. Lãi và thu nhập đổi, chỉ hứa việc đã ghi  
 C. Nhà chọn cách lãi cao để trả trước thì đổi  
 D. Nhà đảo hết nợ sang một khoản mới là xong  
@@ -662,7 +662,7 @@ D. Nhà đảo hết nợ sang một khoản mới là xong
 Core: có
 
 **q7.** Anh Hùng quỹ hơn 1,5 tháng, muốn rút 10 triệu tất toán thẻ. Hướng trong bài là gì?  
-A. Giữ quỹ rồi rút để đóng sạch thẻ ngay trong tháng này  
+A. Lấy 10 triệu trong quỹ đóng sạch thẻ ngay tháng này  
 B. Giữ quỹ, dồn phần còn sau thiết yếu vào thẻ  
 C. Vay thêm một khoản mới để trả thẻ cho sạch bảng  
 D. Ngừng trả mức tối thiểu của cả hai khoản trong tháng này  
@@ -670,7 +670,7 @@ D. Ngừng trả mức tối thiểu của cả hai khoản trong tháng này
 Core: không
 
 **q8.** Các khoản không được ưu tiên xử lý ra sao trong tháng?  
-A. Tháng đó ngừng trả khoản đó trong tháng này  
+A. Thôi trả hẳn khoản đó trong tháng này cho nhẹ  
 B. Tháng đó giữ mức tối thiểu của khoản đó  
 C. Dồn hết tiền tháng vào khoản đó  
 D. Nhờ người khác đứng tên khoản đó  
@@ -678,10 +678,10 @@ D. Nhờ người khác đứng tên khoản đó
 Core: không
 
 **q9.** Ngày xem lại dùng để kiểm việc gì?  
-A. Xem giá vàng và tỷ giá trong ngày vừa rồi  
-B. Xem dư nợ giảm chưa, khoản mới không, tháng sau dồn được bao nhiêu  
-C. Xem bài của người lạ về cách trả nợ  
-D. Xem điểm tín dụng của người quen trong nhóm  
+A. Xem nợ giảm chưa, tháng sau dồn bao nhiêu  
+B. Giá vàng và tỷ giá ngay trong ngày vừa rồi  
+C. Bài của người lạ về cách trả nợ  
+D. Điểm tín dụng của người quen trong nhóm bạn  
 Đáp án: A  
 Core: không
 
@@ -753,7 +753,7 @@ Ghi thứ tự tháng này: giữ hoặc bổ sung quỹ tới 3 tháng, trả t
 ### Câu hỏi
 
 **q1.** Bài này xếp thứ tự trả nợ và đầu tư ra sao?  
-A. Quỹ tăng trưởng trước, lớp đệm để lại sau  
+A. Tăng trưởng làm trước, lớp đệm để lại sau  
 B. Quỹ và nợ nguy hiểm trước đầu tư tăng trưởng  
 C. Làm cùng lúc bằng cách lấy tiền từ quỹ  
 D. Nhìn cơ hội đang mở trong tuần này  
@@ -777,7 +777,7 @@ D. Khi người quen đã góp từ trước rồi
 Core: có
 
 **q4.** Dùng quỹ khẩn cấp để đầu tư rồi “gửi lại” là việc gì?  
-A. Tháo lớp đệm vẫn còn nguyên vẹn là chưa đúng  
+A. Lớp đệm vẫn còn nguyên khi mang quỹ đi đầu tư  
 B. Tháo lớp bảo vệ trước khi biết sự cố  
 C. Việc làm cho đủ điều kiện được Passed  
 D. Cách dùng thay cho việc trả nợ quá hạn  
@@ -825,7 +825,7 @@ D. Tiền vừa vay nóng để kịp một đợt góp
 Core: không
 
 **q10.** Cảm xúc sợ lỡ cơ hội được dùng thế nào?  
-A. Dữ liệu được quyền cầm lái trong tháng này  
+A. Cảm xúc được quyền cầm lái trong tháng này  
 B. Dữ liệu cần quản, không phải lệnh bỏ cổng  
 C. Lý do đủ để xin hạ ngưỡng số tháng  
 D. Thay được cho danh sách nợ trong tháng  
@@ -894,7 +894,7 @@ Liệt kê tài sản chính và nghĩa vụ kèm theo, rồi hẹn một buổi
 ### Câu hỏi
 
 **q1.** Bài này nói di sản và thừa kế nên được xử lý thế nào?  
-A. Thiết kế mặc định, khi có việc rồi hãy tính  
+A. Để mặc định, khi có việc rồi hãy tính  
 B. Thiết kế có ý, không để mặc định cho người ở lại đoán  
 C. Bàn khi tranh chấp đã nổ ra rồi  
 D. Để người khác quyết thay cho mình  
@@ -902,7 +902,7 @@ D. Để người khác quyết thay cho mình
 Core: có
 
 **q2.** Im lặng về ý nguyện thường dẫn tới gì?  
-A. Người thừa kế sau đó sẽ tự biến mất  
+A. Việc thừa kế sau đó tự biến mất  
 B. Người ở lại phải đoán trong lúc đang lo tang  
 C. Giấy tờ rồi sẽ tự có hiệu lực  
 D. Nợ gắn với tài sản rồi tự được xóa  
@@ -918,7 +918,7 @@ D. Đổi tên sổ sang người khác ngay lập tức
 Core: có
 
 **q4.** Bước làm được trước khi có giấy hoàn chỉnh là gì?  
-A. Liệt kê một mẫu trên mạng rồi coi là xong  
+A. Chép một mẫu trên mạng và coi như đã xong  
 B. Liệt kê tài sản, nợ, và nói về chăm sóc  
 C. Đưa hết cho một người trong tuần  
 D. Hứa miệng cho mỗi người một kiểu khác nhau  
@@ -942,7 +942,7 @@ D. Áp dụng như nhau ở mọi tỉnh, không cần người nghề, mẫu tr
 Core: có
 
 **q7.** Anh Nam nên làm gì trước?  
-A. Nói tiếp không nói, vì sợ nói ra sẽ xui  
+A. Cứ im, vì sợ nói ra sẽ xui cho cả nhà  
 B. Nói với vợ về chỗ ở, chăm sóc, nợ, rồi gặp người hành nghề  
 C. Tự viết một tờ chia nhà rồi cất ngăn kéo  
 D. Chuyển nhà cho một người ngay để cho xong việc, khỏi cần nói với vợ  
@@ -1006,16 +1006,41 @@ Core: không
 
 Sẵn sàng gửi CoS.
 
-## Bảng tự kiểm v1.6
+## Bảng câu đã sửa v1.7
 
-| Node | Hạng độ dài đáp án đúng | Số cặp trùng độ dài | Từ mở đầu chỉ ở phương án sai, lặp quá 2 |
-|---|---|---:|---|
-| N01-06 | 3/3/3/3 | 0 | không |
-| N02-03 | 3/3/3/3 | 0 | không |
-| N02-04 | 3/3/3/3 | 0 | không |
-| N02-05 | 3/3/3/3 | 0 | không |
-| N02-06 | 3/3/3/3 | 0 | không |
-| N02-07 | 3/3/3/3 | 0 | không |
-| N04-05 | 3/3/3/3 | 0 | không |
+| Id câu | Sửa gì |
+|---|---|
+| q106-04 | C bỏ «Giữ không viết», thành câu phủ định trọn |
+| q106-05 | A không mở bằng «An», nói rõ tăng trưởng làm trước |
+| q106-08 | A không mở bằng «Quỹ», giữ ý câu cũ là chưa đủ |
+| q106-10 | B không mở bằng «Đời», nói so với người quanh |
+| q203-02 | A, C không mở bằng «Lớp», bỏ «lớp lời» |
+| q203-03 | C bỏ «Dễ tách quỹ là việc trái», nói tách sổ bị cấm |
+| q203-05 | A viết trọn «mọi khoản lãi bị cấm» |
+| q203-10 | B không mở bằng «Không,», vẫn là tháo đệm |
+| q204-10 | Bốn phương án không còn cùng mở bằng «Còn» |
+| q205-04 | B viết trọn «rồi hãy bàn tiếp»; A bỏ «đưa qua… đang còn» |
+| q205-05 | A không mở bằng «Còn nên» |
+| q205-06 | A bỏ «Năng lực có, vì tên ưu đãi» |
+| q206-01 | A bỏ «Dư một câu hứa» |
+| q206-03 | A thành «Rút quỹ ra để đóng nhanh hơn», sai rõ |
+| q206-06 | A bỏ «Lãi suất có với mọi hộ» |
+| q206-07 | A thành rút quỹ đóng sạch thẻ, không vừa giữ vừa rút |
+| q206-08 | A bỏ lặp «tháng đó… trong tháng này» |
+| q206-09 | A là xem dư nợ, ngắn; B là giá vàng và tỷ giá |
+| q207-01 | A không mở bằng «Quỹ» |
+| q207-04 | A thành mang quỹ đi đầu tư vẫn còn lớp đệm, sai rõ |
+| q207-10 | A bỏ «Dữ liệu được quyền cầm lái» |
+| q405-01 | A bỏ «Thiết kế mặc định» |
+| q405-02 | A không nói người thừa kế tự biến mất |
+| q405-04 | A là chép mẫu, không «liệt kê một mẫu» |
+| q405-07 | A bỏ «Nói tiếp không nói» |
+| q206-01 | A thành «Chỉ cần hứa sẽ cố gắng trả trong tháng», không mở bằng «Một» |
+| q206-03 | A thành «Có, cứ rút quỹ ra để đóng cho nhanh», không mở bằng «Rút» |
+| q206-07 | A thành «Lấy 10 triệu trong quỹ đóng sạch thẻ ngay tháng này», không mở bằng «Rút» |
+| q206-08 | A thành «Thôi trả hẳn khoản đó trong tháng này cho nhẹ», không mở bằng «Ngừng» |
+| q203-10 | B (đáp án đúng) thành «Không, vì như thế là tháo đệm sớm», trả lời thẳng câu có/không |
+| q204-10 | B (đáp án đúng) thành «Bài không hứa, còn tùy lãi và dư nợ»; C thành «Có, đúng nếu chọn cách dư nợ nhỏ trước» |
+| q206-09 | A (đáp án đúng) thành «Xem nợ giảm chưa, tháng sau dồn bao nhiêu», viết trọn câu |
 
-Hạng dài nhất / thứ 2 / thứ 3 / ngắn nhất, đếm số ký tự thật. Đáp án đúng, chữ cái và câu trọng tâm giữ nguyên v1.5. Không đổi Hard Deny, TARGET_MONTHS, gate_months, Pre-Rule, Lifetime, bảng giá. Cổng An Toàn vẫn ≥ 3 tháng chi tiêu thiết yếu.
+Đáp án đúng, chữ cái và câu trọng tâm giữ nguyên v1.6, trừ q206-09 đổi lời đáp án A sang nội dung đúng, q205-04 viết trọn câu B, q203-10 và q204-10 viết lại đáp án đúng để trả lời thẳng câu hỏi có/không. Không đổi Hard Deny, TARGET_MONTHS, gate_months, Pre-Rule, Lifetime, bảng giá. Cổng An Toàn vẫn ≥ 3 tháng chi tiêu thiết yếu.

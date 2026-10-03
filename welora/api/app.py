@@ -687,13 +687,15 @@ async def _lifespan(_app: FastAPI):
     if _ignored:
         logging.getLogger("welora.auth").critical(
             "production: test-only auth flags are set and IGNORED: %s — remove them from the env", ",".join(_ignored))
-    # follow-up item 3: OTP codes are HMAC'd with WELORA_OTP_HMAC_KEY — missing / short key → logged
-    # (CRITICAL in production; the derived fallback keeps the service up, /health shows the source)
-    try:
-        from welora import otp_hash
+    # OTP codes are HMAC'd with WELORA_OTP_HMAC_KEY. Production refuses to start without it (key
+    # source dev / derived → OtpKeyError, uvicorn exits with the message); staging / dev log a
+    # WARNING and keep the derived key (/health shows the source). Short key → logged.
+    from welora import otp_hash
 
+    otp_hash.require_production_key()
+    try:
         otp_hash.startup_check()
-    except Exception:  # pragma: no cover - never blocks startup
+    except Exception:  # pragma: no cover - logging only
         pass
     # WELORA_ADMIN_EMAILS: promote verified listed users / demote unlisted admins (audited, never raises)
     admin_bootstrap.startup_sync()

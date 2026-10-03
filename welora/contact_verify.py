@@ -222,8 +222,7 @@ def _code_hash(challenge_id: str, code: str) -> str:
 
 
 def _code_matches(challenge_id: str, stored: str, code: str) -> bool:
-    """Current ``hmac256:`` codes, and ``sha256:`` codes issued before the HMAC deploy (until they
-    expire — TTL ≤ 1 h, same attempt limits)."""
+    """``hmac256:`` only — an old-format row (sha256:) fails like a wrong code."""
     from welora import otp_hash
 
     return otp_hash.matches(_DOMAIN, challenge_id, stored, code)

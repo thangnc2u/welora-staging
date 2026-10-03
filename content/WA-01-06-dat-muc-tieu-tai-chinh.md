@@ -2,7 +2,7 @@
 
 **principle_key:** GOAL-01 · Bài liên kết: WP-01-07
 
-**Mục tiêu (khóa 2026-10-02):** Biến mong muốn chung thành mục tiêu có số, thời hạn, lý do và mốc kiểm tra, để tháng này biết việc phải làm.
+**Mục tiêu:** Biến mong muốn chung thành mục tiêu có số, thời hạn, lý do và mốc kiểm tra, để tháng này biết việc phải làm.
 
 ## Nội dung
 

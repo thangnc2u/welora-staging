@@ -2,7 +2,7 @@
 
 **principle_key:** DEBT-01 · Bài liên kết: WP-02-06
 
-**Mục tiêu (khóa 2026-10-02):** Phân biệt nợ xây được năng lực hoặc gắn tài sản với nợ làm hộ yếu đi, để biết khoản nào phải xử lý trước.
+**Mục tiêu:** Phân biệt nợ xây được năng lực hoặc gắn tài sản với nợ làm hộ yếu đi, để biết khoản nào phải xử lý trước.
 
 ## Nội dung
 

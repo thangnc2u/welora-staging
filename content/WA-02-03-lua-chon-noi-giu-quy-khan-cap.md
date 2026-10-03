@@ -2,7 +2,7 @@
 
 **principle_key:** SAFE-03 · Bài liên kết: WP-02-04
 
-**Mục tiêu (khóa 2026-10-02):** Chọn nơi giữ quỹ thanh khoản cao và tách khỏi tiền tiêu, vì quỹ là lớp bảo vệ chứ không phải chỗ sinh lời.
+**Mục tiêu:** Chọn nơi giữ quỹ thanh khoản cao và tách khỏi tiền tiêu, vì quỹ là lớp bảo vệ chứ không phải chỗ sinh lời.
 
 ## Nội dung
 

@@ -38,13 +38,18 @@ Cũng không đặt `WELORA_CHECKOUT_ENABLED` (checkout OFF).
 
 ## 2. Neon production (Founder chạy)
 
-1. Trên https://console.neon.tech tạo **project hoặc branch production riêng** (không dùng DB / branch của staging).
-2. Lấy connection string (`?sslmode=require`) và đặt vào `WELORA_DB_URL` của `welora-prod`. Không dán vào repo, ticket hay chat.
-3. **Sao lưu trước khi migrate**: với DB đã có dữ liệu, tạo branch / snapshot sao lưu trên Neon trước. DB mới trống thì vẫn nên tạo một mốc khôi phục.
-4. Chạy migration từ máy có repo ở commit sẽ deploy (hoặc Render Shell của `welora-prod`):
+Đã tạo (ticket, 04/10 08:16): project Neon `welora-prod` (Singapore, Postgres 17), DB `neondb`, branch `production`.
+Project mới, tách hẳn khỏi staging, không chép dữ liệu staging, chưa migrate.
+
+1. Chuỗi kết nối (pooled, `?sslmode=require`) Founder giữ và dán thẳng vào `WELORA_DB_URL` của `welora-prod`.
+   Không dán vào repo, ticket hay chat.
+2. **Sao lưu trước khi migrate**: trước lần migrate đầu tiên tạo branch sao lưu `pre-cutover-YYYYMMDD` từ `production`
+   trên https://console.neon.tech (không tự xóa). Làm lại bước này trước mỗi lần migrate sau.
+3. Chạy migration từ máy có repo ở đúng commit sẽ deploy (hoặc Render Shell của `welora-prod`):
    `WELORA_DB_URL='<DSN prod>' PYTHONPATH=. python -m welora.db.migrate`
    Lệnh áp các file `welora/db/migrations/postgres/*.sql` theo thứ tự tên (hiện có `001_init` … `021_verify_snooze`),
    rồi in `OK migrate` / `OK up-to-date` và danh sách version. PR này **không** thêm migration.
+   Nếu lệnh lỗi qua chuỗi pooled, chạy lại bằng chuỗi direct (không pooled) của cùng branch `production`.
    (App cũng tự áp migration còn thiếu khi dùng DB lần đầu; chạy tay trước giúp thấy lỗi trước khi mở cho người dùng.)
 
 ## 3. Render `welora-prod`

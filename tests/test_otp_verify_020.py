@@ -53,7 +53,7 @@ ENV_KEYS = (
     "WELORA_RL_VERIFY_SEND_IP_MAX", "WELORA_RL_VERIFY_CONFIRM_USER_MAX", "WELORA_RL_VERIFY_CONFIRM_IP_MAX",
     "WELORA_VERIFY_OTP_TTL_S", "WELORA_VERIFY_MAX_ATTEMPTS", "WELORA_VERIFY_RESEND_COOLDOWN_S",
     "WELORA_SMS_PROVIDER", "WELORA_MAIL_PROVIDER", "WELORA_DEMO_AUTOSEED", "WELORA_CHECKOUT_ENABLED",
-    "WELORA_VERIFY_DAILY_SEND_MAX", "WELORA_VERIFY_DAILY_FAIL_MAX",
+    "WELORA_VERIFY_DAILY_SEND_MAX", "WELORA_VERIFY_DAILY_FAIL_MAX", "WELORA_ADMIN_TOTP_SECRETS", "WELORA_PUBLIC_BASE_URL",
 )
 CODE_RE = re.compile(r"\b(\d{6})\b")
 
@@ -625,20 +625,34 @@ class TestProdGuard(_Base):
     def test_production_refuses_otp_echo_fixed_and_reset_echo(self):
         os.environ.update({"WELORA_OTP_ECHO": "1", "WELORA_OTP_FIXED": "1", "WELORA_RESET_ECHO": "1"})
         self.assertTrue(auth_svc.otp_echo_enabled() and auth_svc.otp_fixed_enabled() and auth_svc.reset_echo_enabled())
-        # production needs WELORA_OTP_HMAC_KEY to start at all (follow-up sau #246/#247 item 4)
-        os.environ.update({"WELORA_ENV": "production", "WELORA_GUEST_DEMO": "0", "WELORA_OTP_HMAC_KEY": "p" * 48})
+        # production needs WELORA_OTP_HMAC_KEY (+ admin TOTP secrets, https base URL) to start at all
+        os.environ.update({"WELORA_ENV": "production", "WELORA_GUEST_DEMO": "0", "WELORA_OTP_HMAC_KEY": "p" * 48,
+                           "WELORA_ADMIN_TOTP_SECRETS": "admin@example.test:JBSWY3DPEHPK3PXP",
+                           "WELORA_PUBLIC_BASE_URL": "https://app4.welora.vn"})
+        # code layer: the flags are ignored in production whatever the env says
         self.assertFalse(auth_svc.otp_echo_enabled())
         self.assertFalse(auth_svc.otp_fixed_enabled())
         self.assertFalse(auth_svc.reset_echo_enabled())
         self.assertEqual(auth_svc.unsafe_auth_flags_ignored(), ["WELORA_OTP_ECHO", "WELORA_OTP_FIXED", "WELORA_RESET_ECHO"])
+        # boot layer (cutover app4, LỆNH Forge 04/10): production refuses to START with them set
+        from welora.prod_config import ProdConfigError
+
         with self.assertLogs("welora.auth", level="CRITICAL") as logs:
-            with TestClient(create_app()) as c:
-                health = c.get("/health").json()
-                ch = c.post("/auth/otp/request", json={"phone": "0920000111"}, headers=self.ip()).json()
-                fp = c.post("/auth/forgot-password", json={"email": "x@example.test"}, headers=self.ip()).json()
+            with self.assertRaises(ProdConfigError) as e:
+                with TestClient(create_app()):
+                    pass
         self.assertIn("WELORA_OTP_ECHO", "\n".join(logs.output))
+        for name in ("WELORA_OTP_ECHO", "WELORA_OTP_FIXED", "WELORA_RESET_ECHO"):
+            self.assertIn(name, str(e.exception))
+        for name in ("WELORA_OTP_ECHO", "WELORA_OTP_FIXED", "WELORA_RESET_ECHO"):
+            os.environ.pop(name)
+        with TestClient(create_app()) as c:
+            health = c.get("/health").json()
+            ch = c.post("/auth/otp/request", json={"phone": "0920000111"}, headers=self.ip()).json()
+            fp = c.post("/auth/forgot-password", json={"email": "x@example.test"}, headers=self.ip()).json()
+        self.assertEqual((health["env"], health["otp_hmac_key"]), ("production", "env"))
         self.assertEqual((health["otp_echo"], health["otp_fixed"], health["reset_echo"]), (False, False, False))
-        self.assertEqual(health["auth_test_flags_ignored"], ["WELORA_OTP_ECHO", "WELORA_OTP_FIXED", "WELORA_RESET_ECHO"])
+        self.assertEqual(health["auth_test_flags_ignored"], [])
         self.assertNotIn("pilot_code", ch)
         self.assertFalse(ch["otp_echo"])
         stored = self.q("SELECT code FROM otp_challenges WHERE challenge_id=?", (ch["challenge_id"],))[0]["code"]

@@ -515,7 +515,8 @@ class PushUnsubscribeBody(BaseModel):
 
 
 class AdminConfirmWebhookBody(BaseModel):
-    webhook_url: str = Field(..., min_length=8)
+    # Empty → WELORA_PUBLIC_BASE_URL + /api/checkout/v1/webhook/payos (cutover app4).
+    webhook_url: str = ""
 
 
 def _bearer_uid(authorization: Optional[str]) -> Optional[str]:
@@ -693,6 +694,11 @@ async def _lifespan(_app: FastAPI):
     from welora import otp_hash
 
     otp_hash.require_production_key()
+    # Cutover app4 (LỆNH Forge 04/10): production also refuses to start with OTP echo, guest demo on,
+    # no admin TOTP secrets, test-only flags, or no https WELORA_PUBLIC_BASE_URL (all listed at once).
+    from welora import prod_config
+
+    prod_config.require_production_config()
     try:
         otp_hash.startup_check()
     except Exception:  # pragma: no cover - logging only
@@ -737,11 +743,15 @@ class EntitlementPlanChangePreviewBody(BaseModel):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Welora API", version="0.2.0", lifespan=_lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    from welora import prod_config
+
+    # Origins from env (WELORA_CORS_ORIGINS + WELORA_PUBLIC_BASE_URL); production never uses "*".
+    app.add_middleware(CORSMiddleware, allow_origins=prod_config.cors_origins(), allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(SecurityHeadersMiddleware)
     from welora.api.session_context import RequestSessionMiddleware
 
     app.add_middleware(RequestSessionMiddleware)  # follow-up #244/#245 item 14 (demo-session gate)
+    app.add_middleware(prod_config.AllowedHostsMiddleware)  # WELORA_ALLOWED_HOSTS (unset → no check)
     static_dir = Path(__file__).resolve().parent / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -1957,7 +1967,13 @@ def create_app() -> FastAPI:
         from welora.payments import ProviderError, get_provider
 
         try:
-            return get_provider().confirm_webhook(body.webhook_url)
+            from welora import prod_config
+
+            url = (body.webhook_url or "").strip() or prod_config.payos_webhook_url()
+            if not url.startswith(("https://", "http://")) or len(url) < 8:
+                raise HTTPException(status_code=422, detail={"error_code": "WEBHOOK_URL_REQUIRED",
+                                                             "message": "Cần webhook_url hoặc WELORA_PUBLIC_BASE_URL"})
+            return get_provider().confirm_webhook(url)
         except (ProviderError, NotImplementedError) as e:
             raise HTTPException(status_code=502, detail={"error_code": "CONFIRM_WEBHOOK_FAILED", "message": str(e)})
 

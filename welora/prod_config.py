@@ -147,6 +147,10 @@ def production_boot_errors() -> list[str]:
     flags = [n for n in TEST_FLAGS if _env(n)] + _rl_disabled()
     if flags:
         errs.append("test-only flags are set: " + ", ".join(flags) + " — remove them")
+    from welora import entitlements
+
+    if entitlements.checkout_runtime_enabled():  # same truthy rule as the runtime switch (read only)
+        errs.append("WELORA_CHECKOUT_ENABLED is on — checkout stays OFF in production")
     base = public_base_url()
     o = _origin(base)
     if not base:

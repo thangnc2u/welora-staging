@@ -4,7 +4,7 @@ no server cookies, client IP behind the Render proxy, and the production boot gu
 Production (WELORA_ENV=production) must refuse to START when: WELORA_OTP_ECHO is set; WELORA_GUEST_DEMO
 is not 0; WELORA_OTP_HMAC_KEY is missing; WELORA_ADMIN_TOTP_SECRETS is missing; a test-only flag is on
 (WELORA_OTP_FIXED / WELORA_RESET_ECHO / WELORA_CHECKOUT_TEST_HOOKS, any WELORA_RL_* ≤ 0). It also needs
-an https WELORA_PUBLIC_BASE_URL (PR risk: prod does not come up without it)."""
+an https WELORA_PUBLIC_BASE_URL (6th guard) and refuses WELORA_CHECKOUT_ENABLED on (7th guard, PR #250 r2)."""
 
 from __future__ import annotations
 
@@ -225,6 +225,9 @@ class TestProductionBoot(_Env):
             ({"WELORA_RL_WINDOW_S": "-5"}, "WELORA_RL_WINDOW_S"),
             ({"WELORA_PUBLIC_BASE_URL": "http://app4.welora.vn"}, "WELORA_PUBLIC_BASE_URL"),
             ({"WELORA_PUBLIC_BASE_URL": BASE + "/app"}, "WELORA_PUBLIC_BASE_URL"),
+            ({"WELORA_CHECKOUT_ENABLED": "1"}, "WELORA_CHECKOUT_ENABLED"),
+            ({"WELORA_CHECKOUT_ENABLED": "true"}, "WELORA_CHECKOUT_ENABLED"),
+            ({"WELORA_CHECKOUT_ENABLED": "On"}, "WELORA_CHECKOUT_ENABLED"),
         ]
         for extra, name in cases:
             with self.subTest(extra=extra):
@@ -252,8 +255,17 @@ class TestProductionBoot(_Env):
         for name in ("WELORA_OTP_ECHO", "WELORA_GUEST_DEMO", "WELORA_ADMIN_TOTP_SECRETS", "WELORA_PUBLIC_BASE_URL"):
             self.assertIn(name, errs)
 
+    def test_checkout_off_values_boot(self):
+        for v in ("0", "false", "off", ""):
+            with self.subTest(value=v):
+                self.prod(WELORA_CHECKOUT_ENABLED=v)
+                self.assertEqual(prod_config.production_boot_errors(), [])
+        self.prod(WELORA_CHECKOUT_ENABLED="yes")
+        self.assertIn("WELORA_CHECKOUT_ENABLED", " ".join(prod_config.production_boot_errors()))
+
     def test_staging_never_fails(self):
-        os.environ.update({"WELORA_ENV": "staging", "WELORA_OTP_ECHO": "1", "WELORA_RL_IP_MAX": "0"})
+        os.environ.update({"WELORA_ENV": "staging", "WELORA_OTP_ECHO": "1", "WELORA_RL_IP_MAX": "0",
+                           "WELORA_CHECKOUT_ENABLED": "1"})
         self.assertEqual(prod_config.production_boot_errors(), [])
         self.assertEqual(self.boot_error(), "")
 
@@ -264,9 +276,11 @@ class TestRunbook(unittest.TestCase):
         text = (ROOT / "docs" / "runbook" / "cutover-app4.md").read_text(encoding="utf-8")
         for name in ("WELORA_ENV", "WELORA_PUBLIC_BASE_URL", "WELORA_OTP_HMAC_KEY", "WELORA_GUEST_DEMO",
                      "WELORA_ADMIN_TOTP_SECRETS", "WELORA_ADMIN_EMAILS", "WELORA_DB_URL", "WELORA_CORS_ORIGINS",
-                     "WELORA_ALLOWED_HOSTS", "RESEND_API_KEY", "WELORA_MAIL_FROM"):
+                     "WELORA_ALLOWED_HOSTS", "RESEND_API_KEY", "WELORA_MAIL_FROM", "WELORA_TRIAL_OTP_STUB",
+                     "WELORA_CHECKOUT_ENABLED"):
             self.assertIn(f"`{name}`", text, name)
-        for word in ("welora-prod", "Neon", "python -m welora.db.migrate", "Smoke", "https://app4.welora.vn"):
+        for word in ("welora-prod", "Neon", "python -m welora.db.migrate", "Smoke", "https://app4.welora.vn",
+                     "pre-cutover-YYYYMMDD", "OK migrate", "OK up-to-date", "Starter", "Singapore", "Hạn chế đã biết"):
             self.assertIn(word, text, word)
         self.assertNotRegex(text, r"re_[A-Za-z0-9]{16,}")  # no Resend key
         self.assertNotRegex(text, r"postgres(ql)?://[^<\s`]*:[^<\s`@]+@")  # no DSN with a password

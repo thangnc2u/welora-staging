@@ -24,6 +24,7 @@ Giá trị trong bảng là **mẫu / chỗ trống**. Secret thật chỉ đặ
 | `WELORA_MAIL_PROVIDER` | Bắt buộc (mail OTP thật) | `resend` | |
 | `RESEND_API_KEY` | Bắt buộc (mail OTP thật) | `<re_… secret>` | Domain `welora.vn` phải xác minh xong trên Resend. |
 | `WELORA_MAIL_FROM` | Bắt buộc (mail OTP thật) | `Welora <…@welora.vn>` | Địa chỉ gửi trên domain đã xác minh. Thiếu → sender thử của Resend, chỉ gửi được cho chủ tài khoản Resend. |
+| `WELORA_TRIAL_OTP_STUB` | Bắt buộc | `0` | Mặc định trong code là bật (stub OTP dùng thử ACA). Production đặt `0`. PR không đổi code này. |
 | `WELORA_CORS_ORIGINS` | Tùy chọn | (để trống) | Danh sách origin, dấu phẩy. Production: chỉ các origin này + `WELORA_PUBLIC_BASE_URL`; `*` bị bỏ qua. App cùng origin nên không cần thêm. |
 | `WELORA_ALLOWED_HOSTS` | Tùy chọn | `app4.welora.vn` | Đặt → Host khác bị 400 (trừ `/health`, `/healthz`). Nếu muốn smoke qua `welora-prod.onrender.com` thì thêm host đó, hoặc để trống. |
 | `WELORA_LLM_PROVIDER` / `WELORA_LLM_API_KEY` | Tùy chọn | như staging / `<secret>` | Không đặt → `stub`. |
@@ -33,30 +34,47 @@ Giá trị trong bảng là **mẫu / chỗ trống**. Secret thật chỉ đặ
 | `WELORA_VAPID_PUBLIC_KEY` / `WELORA_VAPID_PRIVATE_KEY` / `WELORA_VAPID_SUBJECT`, `WELORA_PUSH_PROVIDER` | Chưa cần cho demo | `<secret>` / `mailto:…` / `webpush` | Chỉ liệt kê. Không đặt → push chỉ ghi log. |
 
 **Không bao giờ đặt trên production** (đặt là chặn khởi động): `WELORA_OTP_ECHO` (bất kỳ giá trị nào),
-`WELORA_OTP_FIXED`, `WELORA_RESET_ECHO`, `WELORA_CHECKOUT_TEST_HOOKS`, và mọi `WELORA_RL_*` ≤ 0 (tắt giới hạn lượt).
-Cũng không đặt `WELORA_CHECKOUT_ENABLED` (checkout OFF).
+`WELORA_OTP_FIXED`, `WELORA_RESET_ECHO`, `WELORA_CHECKOUT_TEST_HOOKS`, mọi `WELORA_RL_*` ≤ 0 (tắt giới hạn lượt), và
+`WELORA_CHECKOUT_ENABLED` (checkout giữ OFF; bật `1` / `true` / `yes` / `on` thì app từ chối khởi động).
+
+7 chốt chặn khởi động production: (1) `WELORA_OTP_ECHO` được đặt; (2) `WELORA_GUEST_DEMO` khác `0`; (3) thiếu
+`WELORA_OTP_HMAC_KEY`; (4) thiếu `WELORA_ADMIN_TOTP_SECRETS`; (5) còn cờ test / OTP cố định; (6) `WELORA_PUBLIC_BASE_URL`
+thiếu hoặc không phải origin https; (7) `WELORA_CHECKOUT_ENABLED` bật.
 
 ## 2. Neon production (Founder chạy)
 
 Đã tạo (ticket, 04/10 08:16): project Neon `welora-prod` (Singapore, Postgres 17), DB `neondb`, branch `production`.
 Project mới, tách hẳn khỏi staging, không chép dữ liệu staging, chưa migrate.
 
-1. Chuỗi kết nối (pooled, `?sslmode=require`) Founder giữ và dán thẳng vào `WELORA_DB_URL` của `welora-prod`.
+1. Chuỗi kết nối **pooled** (`?sslmode=require`) chỉ dùng cho app: Founder dán thẳng vào `WELORA_DB_URL` của `welora-prod`.
    Không dán vào repo, ticket hay chat.
 2. **Sao lưu trước khi migrate**: trước lần migrate đầu tiên tạo branch sao lưu `pre-cutover-YYYYMMDD` từ `production`
    trên https://console.neon.tech (không tự xóa). Làm lại bước này trước mỗi lần migrate sau.
-3. Chạy migration từ máy có repo ở đúng commit sẽ deploy (hoặc Render Shell của `welora-prod`):
-   `WELORA_DB_URL='<DSN prod>' PYTHONPATH=. python -m welora.db.migrate`
-   Lệnh áp các file `welora/db/migrations/postgres/*.sql` theo thứ tự tên (hiện có `001_init` … `021_verify_snooze`),
-   rồi in `OK migrate` / `OK up-to-date` và danh sách version. PR này **không** thêm migration.
-   Nếu lệnh lỗi qua chuỗi pooled, chạy lại bằng chuỗi direct (không pooled) của cùng branch `production`.
+3. Migrate bằng chuỗi **direct (không pooler)** của branch `production`, từ máy có repo ở đúng commit sẽ deploy:
+   ```
+   pip install -r requirements.txt
+   WELORA_DB_URL='<direct>?sslmode=require' PYTHONPATH=. python -m welora.db.migrate
+   ```
+   Lệnh áp 21 file `welora/db/migrations/postgres/*.sql` theo thứ tự tên (`001_init` … `021_verify_snooze`), rồi bước dữ liệu
+   `014_phone_e164_data` — tổng **22 version** (`019`/`020`/`021` dạng Python bị bỏ qua vì file SQL cùng tên đã áp).
+   Kết quả lần đầu (đã chạy thử trên Postgres 17 trống):
+   ```
+   DB (postgres): [DSN from WELORA_DB_URL]
+   Already applied: (none)
+   Newly applied: ['001_init', …, '021_verify_snooze', '014_phone_e164_data']   (22 mục)
+   Current: [22 version, xếp theo tên]
+   OK migrate
+   ```
+   Chạy lại lần hai: `Newly applied: (none)` và `OK up-to-date`. Có thể thấy một dòng `RuntimeWarning: 'welora.db.migrate' found in
+   sys.modules …` trên stderr — vô hại. PR này **không** thêm migration.
    (App cũng tự áp migration còn thiếu khi dùng DB lần đầu; chạy tay trước giúp thấy lỗi trước khi mở cho người dùng.)
 
 ## 3. Render `welora-prod`
 
-1. Tạo Web Service mới tên **`welora-prod`** từ repo `thangnc2u/welora-staging`, branch `main`, runtime Python, build như
-   `render.yaml` (`pip install --no-cache-dir --only-binary=:all: -r requirements.txt`), start `bash start.sh`,
-   health check path `/health`. **Tắt Auto-Deploy** (chỉ Manual Deploy sau khi Founder merge).
+1. Tạo Web Service mới tên **`welora-prod`** từ repo `thangnc2u/welora-staging`, deploy từ branch `main`, runtime Python,
+   region **Singapore**, instance **Starter** (Founder chốt, không dùng Free). Build như `render.yaml`
+   (`pip install --no-cache-dir --only-binary=:all: -r requirements.txt`), start `bash start.sh`, health check path `/health`.
+   **Auto-Deploy OFF** (chỉ Manual Deploy sau khi Founder merge).
 2. Đặt env theo bảng mục 1.
 3. Settings → Custom Domains → thêm `app4.welora.vn`. Render hiển thị host đích cho CNAME.
 4. Chờ Render cấp HTTPS cho `app4.welora.vn` xong rồi mới smoke.
@@ -64,12 +82,13 @@ Project mới, tách hẳn khỏi staging, không chép dữ liệu staging, ch�
 ## 4. DNS
 
 CNAME `app4` → đúng host Render hiển thị ở bước 3.3 (không đoán). Không sửa bản ghi `www`, `app2`, `app3`.
+Nếu DNS `welora.vn` nằm trên Cloudflare: để bản ghi `app4` ở chế độ **DNS only (mây xám)** cho tới khi Render cấp xong chứng chỉ HTTPS.
 
 ## 5. Seed demo đối tác
 
 Không seed trên production. Các lệnh seed hiện có (`welora.partner_demo_seed`, `python -m welora.seed_db`, `POST /auth/demo/seed`)
 là của staging/demo: production với `WELORA_GUEST_DEMO=0` tắt tài khoản demo P1–P6, không tự seed lúc khởi động, và
-`/auth/demo/seed` trả 404. Không chạy `python -m welora.seed_db` vào DB production. Tài khoản demo đối tác trên prod = đăng ký thật.
+`/auth/demo/seed` trả 404. Không chạy `python -m welora.seed_db` vào DB production. Demo đối tác với 6 persona (P1–P6) vẫn chạy trên **staging**. Trên app4 mỗi đối tác dùng **một tài khoản đăng ký thật**.
 
 ## 6. Smoke sau Manual Deploy
 
@@ -83,7 +102,20 @@ là của staging/demo: production với `WELORA_GUEST_DEMO=0` tắt tài khoả
 5. Đọc 1 bài Academy.
 6. Nếu process không lên: xem log Render — dòng `production refuses to start: …` liệt kê đủ biến thiếu / sai.
 
-## 7. Sau smoke
+## 7. DoD
+
+- `https://app4.welora.vn` phục vụ app Production GP.
+- `/health` PASS (mục 6.1).
+- **Đăng ký thật bằng email + OTP PASS** (thay cho «login demo PASS» trước đây — production không có tài khoản demo).
+- 1 script UAT tối thiểu PASS trên prod.
+
+## 8. Hạn chế đã biết
+
+- **Quên mật khẩu** vẫn là stub: chưa gửi được mail đặt lại. Trong giai đoạn demo, Founder đặt lại mật khẩu thủ công cho người cần.
+  Phải làm xong luồng gửi mail đặt lại trước khi mở công khai (ticket riêng do CoS tạo).
+- **CORS `*` trên production**: bị bỏ qua và chỉ ghi log CRITICAL (không chặn khởi động) — đủ cho giai đoạn này.
+
+## 9. Sau smoke
 
 Báo CoS. CoS kiểm trực tiếp, rồi GP UAT chạy lại trên https://app4.welora.vn.
 Dọn tài khoản rác (mục A ticket) và policy SIM swap / squatting (mục C) không nằm trong PR này.
